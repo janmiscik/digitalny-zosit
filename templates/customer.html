@@ -35,14 +35,6 @@
     <div class="topbar-actions">
 
 
-        <a
-            href="/"
-            class="back-button"
-        >
-            ← Zákazníci
-        </a>
-
-
         <button
             type="button"
             class="theme-button"
@@ -52,6 +44,14 @@
         >
             🌙
         </button>
+
+
+        <a
+            href="/"
+            class="back-button"
+        >
+            ← Zákazníci
+        </a>
 
 
     </div>
@@ -65,56 +65,92 @@
     <section class="customer-detail">
 
 
+        <!-- =====================================
+             ZÁKAZNÍK
+             ===================================== -->
+
+
         <div class="customer-detail-header">
 
 
-            <div class="customer-icon large">
-                👤
+            <div class="customer-detail-top">
+
+
+                <div class="customer-icon large">
+                    👤
+                </div>
+
+
+                <div class="customer-detail-title">
+
+
+                    <h1>
+                        {{ customer.name }}
+                    </h1>
+
+
+                    <a
+                        href="/customers/{{ customer.id }}/edit"
+                        class="edit-customer-button"
+                    >
+                        ✏️ Upraviť zákazníka
+                    </a>
+
+
+                </div>
+
+
             </div>
 
 
-            <h1>
-                {{ customer.name }}
-            </h1>
+            <div class="customer-contact-info">
 
 
-            {% if customer.phone %}
+                {% if customer.phone %}
 
-                <p>
-                    📞 {{ customer.phone }}
-                </p>
+                    <p>
+                        📞 {{ customer.phone }}
+                    </p>
 
-            {% endif %}
-
-
-            {% if customer.email %}
-
-                <p>
-                    ✉️ {{ customer.email }}
-                </p>
-
-            {% endif %}
+                {% endif %}
 
 
-            {% if customer.address %}
+                {% if customer.email %}
 
-                <p>
-                    📍 {{ customer.address }}
-                </p>
+                    <p>
+                        ✉️ {{ customer.email }}
+                    </p>
 
-            {% endif %}
+                {% endif %}
 
 
-            {% if customer.note %}
+                {% if customer.address %}
 
-                <p>
-                    📝 {{ customer.note }}
-                </p>
+                    <p>
+                        📍 {{ customer.address }}
+                    </p>
 
-            {% endif %}
+                {% endif %}
+
+
+                {% if customer.note %}
+
+                    <p>
+                        📝 {{ customer.note }}
+                    </p>
+
+                {% endif %}
+
+
+            </div>
 
 
         </div>
+
+
+        <!-- =====================================
+             ZÁKAZKY
+             ===================================== -->
 
 
         <div class="jobs-header">
@@ -187,7 +223,7 @@
                             <select
                                 name="status"
                                 onchange="this.form.submit()"
-                                class="job-status"
+                                class="job-status status-{{ job.status | lower | replace(' ', '-') }}"
                             >
 
 
@@ -298,9 +334,9 @@
 </main>
 
 
-<!-- =========================================
-     NOVÁ ZÁKAZKA
-     ========================================= -->
+<!-- =====================================
+     FORMULÁR NOVEJ ZÁKAZKY
+     ===================================== -->
 
 
 <div
@@ -377,25 +413,31 @@
 
             <select name="status">
 
+
                 <option value="Nová">
                     Nová
                 </option>
+
 
                 <option value="Dohodnutá">
                     Dohodnutá
                 </option>
 
+
                 <option value="Prebieha">
                     Prebieha
                 </option>
+
 
                 <option value="Čaká na materiál">
                     Čaká na materiál
                 </option>
 
+
                 <option value="Hotová">
                     Hotová
                 </option>
+
 
             </select>
 
@@ -434,9 +476,10 @@
 
 <script>
 
-/* =========================================
-   FORMULÁR ZÁKAZKY
-   ========================================= */
+
+/* =====================================
+   ZÁKAZKA
+   ===================================== */
 
 
 function openJobForm() {
@@ -473,9 +516,9 @@ document
     );
 
 
-/* =========================================
+/* =====================================
    TÉMA
-   ========================================= */
+   ===================================== */
 
 
 function applyTheme(theme) {
@@ -526,11 +569,6 @@ function toggleTheme() {
     applyTheme(newTheme);
 
 }
-
-
-/* =========================================
-   NAČÍTANIE TÉMY
-   ========================================= */
 
 
 const savedTheme =

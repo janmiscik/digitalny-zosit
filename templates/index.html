@@ -2,6 +2,7 @@
 <html lang="sk">
 
 <head>
+
     <meta charset="UTF-8">
 
     <meta
@@ -15,16 +16,19 @@
         rel="stylesheet"
         href="{{ url_for('static', path='style.css') }}"
     >
+
 </head>
 
 
 <body>
+
 
 <header class="topbar">
 
     <div class="logo">
         📒 Digitálny zošit
     </div>
+
 
     <div class="topbar-actions">
 
@@ -37,6 +41,7 @@
         >
             🌙
         </button>
+
 
         <button
             type="button"
@@ -53,127 +58,472 @@
 
 <main class="container">
 
-    <div class="page-header">
 
-        <div>
+    <!-- =====================================
+         DASHBOARD
+         ===================================== -->
+
+    <section class="dashboard">
+
+
+        <div class="page-header">
 
             <h1>
-                Zákazníci
+                Dobrý deň 👋
             </h1>
 
             <p>
-                Prehľad vašich zákazníkov
+                Tu je váš pracovný prehľad.
             </p>
 
         </div>
 
-    </div>
+
+        <div class="dashboard-cards">
 
 
-    <section class="customers">
+            <div class="dashboard-card">
 
-        {% if customers %}
-
-            {% for customer in customers %}
-
-                <div class="customer-card">
-
-                    <div class="customer-icon">
-                        👤
-                    </div>
-
-                    <div class="customer-info">
-
-                        <h2>
-
-                            <a
-                                href="/customers/{{ customer.id }}"
-                                class="customer-link"
-                            >
-                                {{ customer.name }}
-                            </a>
-
-                        </h2>
-
-                        {% if customer.phone %}
-
-                            <p>
-                                📞 {{ customer.phone }}
-                            </p>
-
-                        {% endif %}
-
-                        {% if customer.email %}
-
-                            <p>
-                                ✉️ {{ customer.email }}
-                            </p>
-
-                        {% endif %}
-
-                        {% if customer.address %}
-
-                            <p>
-                                📍 {{ customer.address }}
-                            </p>
-
-                        {% endif %}
-
-                    </div>
-
+                <div class="dashboard-number">
+                    {{ new_jobs }}
                 </div>
 
-            {% endfor %}
-
-        {% else %}
-
-            <div class="empty-state">
-
-                <div class="empty-icon">
-                    📒
+                <div class="dashboard-label">
+                    Nové zákazky
                 </div>
-
-                <h2>
-                    Zatiaľ nemáte žiadnych zákazníkov
-                </h2>
-
-                <p>
-                    Pridajte prvého zákazníka.
-                </p>
-
-                <button
-                    type="button"
-                    class="new-customer-button"
-                    onclick="openCustomerForm()"
-                >
-                    + Pridať zákazníka
-                </button>
 
             </div>
 
-        {% endif %}
+
+            <div class="dashboard-card">
+
+                <div class="dashboard-number">
+                    {{ active_jobs }}
+                </div>
+
+                <div class="dashboard-label">
+                    Prebieha
+                </div>
+
+            </div>
+
+
+            <div class="dashboard-card">
+
+                <div class="dashboard-number">
+                    {{ total_jobs }}
+                </div>
+
+                <div class="dashboard-label">
+                    Zákazky celkom
+                </div>
+
+            </div>
+
+
+        </div>
+
 
     </section>
+
+
+    <!-- =====================================
+         POSLEDNÉ ZÁKAZKY
+         ===================================== -->
+
+    <section class="dashboard-jobs">
+
+
+        <div class="section-heading">
+
+            <div>
+
+                <h2>
+                    Posledné zákazky
+                </h2>
+
+                <p>
+                    Rýchly prehľad vašej práce
+                </p>
+
+            </div>
+
+        </div>
+
+
+        {% if jobs %}
+
+
+            <div class="jobs">
+
+
+                {% for job in jobs[:5] %}
+
+
+                    {% for customer in customers %}
+
+
+                        {% if customer.id == job.customer_id %}
+
+
+                            <div class="job-card job-card-clickable">
+
+
+                                <a
+                                    href="/customers/{{ customer.id }}"
+                                    class="job-card-link"
+                                >
+
+
+                                    <div class="job-info">
+
+
+                                        <h3>
+                                            {{ job.title }}
+                                        </h3>
+
+
+                                        {% if job.description %}
+
+                                            <p>
+                                                {{ job.description }}
+                                            </p>
+
+                                        {% endif %}
+
+
+                                    </div>
+
+
+                                    <div class="job-dashboard-right">
+
+
+                                        <div class="job-customer">
+
+                                            {{ customer.name }}
+
+                                        </div>
+
+
+                                        <span class="job-status-label">
+
+                                            {{ job.status }}
+
+                                        </span>
+
+
+                                        <span class="job-open">
+
+                                            Otvoriť →
+
+                                        </span>
+
+
+                                    </div>
+
+
+                                </a>
+
+
+                            </div>
+
+
+                        {% endif %}
+
+
+                    {% endfor %}
+
+
+                {% endfor %}
+
+
+            </div>
+
+
+        {% else %}
+
+
+            <div class="empty-state">
+
+
+                <div class="empty-icon">
+                    🔧
+                </div>
+
+
+                <h2>
+                    Zatiaľ nemáte žiadne zákazky
+                </h2>
+
+
+                <p>
+                    Zákazky sa zobrazia po ich vytvorení.
+                </p>
+
+
+            </div>
+
+
+        {% endif %}
+
+
+    </section>
+
+
+    <!-- =====================================
+         ZÁKAZNÍCI
+         ===================================== -->
+
+    <section class="customers-section">
+
+
+        <div class="section-heading">
+
+
+            <div>
+
+                <h2>
+                    Zákazníci
+                </h2>
+
+                <p>
+                    Prehľad vašich zákazníkov
+                </p>
+
+            </div>
+
+
+            <button
+                type="button"
+                class="new-customer-button"
+                onclick="openCustomerForm()"
+            >
+                + Nový zákazník
+            </button>
+
+
+        </div>
+
+
+        <!-- =====================================
+             VYHĽADÁVANIE
+             ===================================== -->
+
+        <div class="customer-search">
+
+            <input
+                type="search"
+                id="customerSearch"
+                placeholder="🔎  Hľadať zákazníka..."
+                autocomplete="off"
+            >
+
+        </div>
+
+
+        <section
+            class="customers"
+            id="customersList"
+        >
+
+
+            {% if customers %}
+
+
+                {% for customer in customers %}
+
+
+                    {% set customer_job_count = namespace(value=0) %}
+
+
+                    {% for job in jobs %}
+
+                        {% if job.customer_id == customer.id %}
+
+                            {% set customer_job_count.value = customer_job_count.value + 1 %}
+
+                        {% endif %}
+
+                    {% endfor %}
+
+
+                    <div
+                        class="customer-card"
+                        data-customer-name="{{ customer.name | lower }}"
+                        data-customer-phone="{{ customer.phone | default('', true) | lower }}"
+                        data-customer-email="{{ customer.email | default('', true) | lower }}"
+                        data-customer-address="{{ customer.address | default('', true) | lower }}"
+                    >
+
+
+                        <div class="customer-icon">
+                            👤
+                        </div>
+
+
+                        <div class="customer-info">
+
+
+                            <h2>
+
+                                <a
+                                    href="/customers/{{ customer.id }}"
+                                    class="customer-link"
+                                >
+                                    {{ customer.name }}
+                                </a>
+
+                            </h2>
+
+
+                            {% if customer.phone %}
+
+                                <p>
+                                    📞 {{ customer.phone }}
+                                </p>
+
+                            {% endif %}
+
+
+                            {% if customer.email %}
+
+                                <p>
+                                    ✉️ {{ customer.email }}
+                                </p>
+
+                            {% endif %}
+
+
+                            {% if customer.address %}
+
+                                <p>
+                                    📍 {{ customer.address }}
+                                </p>
+
+                            {% endif %}
+
+
+                        </div>
+
+
+                        <div class="customer-job-count">
+
+
+                            <span class="customer-job-count-number">
+
+                                {{ customer_job_count.value }}
+
+                            </span>
+
+
+                            <span class="customer-job-count-label">
+
+                                {% if customer_job_count.value == 1 %}
+                                    zákazka
+                                {% elif customer_job_count.value >= 2 and customer_job_count.value <= 4 %}
+                                    zákazky
+                                {% else %}
+                                    zákaziek
+                                {% endif %}
+
+                            </span>
+
+
+                        </div>
+
+
+                    </div>
+
+
+                {% endfor %}
+
+
+                <div
+                    id="noSearchResults"
+                    class="empty-state search-empty-state"
+                    style="display: none;"
+                >
+
+                    <div class="empty-icon">
+                        🔎
+                    </div>
+
+                    <h2>
+                        Zákazník sa nenašiel
+                    </h2>
+
+                    <p>
+                        Skúste vyhľadať iné meno, telefón alebo email.
+                    </p>
+
+                </div>
+
+
+            {% else %}
+
+
+                <div class="empty-state">
+
+
+                    <div class="empty-icon">
+                        📒
+                    </div>
+
+
+                    <h2>
+                        Zatiaľ nemáte žiadnych zákazníkov
+                    </h2>
+
+
+                    <p>
+                        Pridajte prvého zákazníka.
+                    </p>
+
+
+                    <button
+                        type="button"
+                        class="new-customer-button"
+                        onclick="openCustomerForm()"
+                    >
+                        + Pridať zákazníka
+                    </button>
+
+
+                </div>
+
+
+            {% endif %}
+
+
+        </section>
+
+
+    </section>
+
 
 </main>
 
 
-<!-- =========================================
-     NOVÝ ZÁKAZNÍK
-     ========================================= -->
+<!-- =====================================
+     FORMULÁR NOVÉHO ZÁKAZNÍKA
+     ===================================== -->
 
 <div
     id="customerModal"
     class="modal"
 >
 
+
     <div class="modal-content">
 
+
         <div class="modal-header">
+
 
             <h2>
                 Nový zákazník
             </h2>
+
 
             <button
                 type="button"
@@ -183,6 +533,7 @@
                 ×
             </button>
 
+
         </div>
 
 
@@ -191,9 +542,11 @@
             method="post"
         >
 
+
             <label>
                 Meno *
             </label>
+
 
             <input
                 type="text"
@@ -206,6 +559,7 @@
                 Telefón
             </label>
 
+
             <input
                 type="text"
                 name="phone"
@@ -215,6 +569,7 @@
             <label>
                 Email
             </label>
+
 
             <input
                 type="email"
@@ -226,6 +581,7 @@
                 Adresa
             </label>
 
+
             <input
                 type="text"
                 name="address"
@@ -236,6 +592,7 @@
                 Poznámka
             </label>
 
+
             <textarea
                 name="note"
                 rows="4"
@@ -243,6 +600,7 @@
 
 
             <div class="form-buttons">
+
 
                 <button
                     type="button"
@@ -252,6 +610,7 @@
                     Zrušiť
                 </button>
 
+
                 <button
                     type="submit"
                     class="save-button"
@@ -259,20 +618,25 @@
                     Uložiť zákazníka
                 </button>
 
+
             </div>
+
 
         </form>
 
+
     </div>
+
 
 </div>
 
 
 <script>
 
-/* =========================================
+/* =====================================
    FORMULÁR ZÁKAZNÍKA
-   ========================================= */
+   ===================================== */
+
 
 function openCustomerForm() {
 
@@ -308,9 +672,10 @@ document
     );
 
 
-/* =========================================
+/* =====================================
    TÉMA
-   ========================================= */
+   ===================================== */
+
 
 function applyTheme(theme) {
 
@@ -362,10 +727,6 @@ function toggleTheme() {
 }
 
 
-/* =========================================
-   NAČÍTANIE ULOŽENEJ TÉMY
-   ========================================= */
-
 const savedTheme =
     localStorage.getItem(
         "digitalnyZositTheme"
@@ -379,6 +740,119 @@ if (savedTheme === "dark") {
 } else {
 
     applyTheme("light");
+
+}
+
+
+/* =====================================
+   VYHĽADÁVANIE ZÁKAZNÍKOV
+   ===================================== */
+
+
+const customerSearch =
+    document.getElementById(
+        "customerSearch"
+    );
+
+
+if (customerSearch) {
+
+    customerSearch.addEventListener(
+        "input",
+        function() {
+
+
+            const searchText =
+                this.value
+                    .toLowerCase()
+                    .trim();
+
+
+            const customerCards =
+                document.querySelectorAll(
+                    ".customer-card"
+                );
+
+
+            const noResults =
+                document.getElementById(
+                    "noSearchResults"
+                );
+
+
+            let visibleCustomers = 0;
+
+
+            customerCards.forEach(
+                function(card) {
+
+
+                    const name =
+                        card.dataset.customerName || "";
+
+
+                    const phone =
+                        card.dataset.customerPhone || "";
+
+
+                    const email =
+                        card.dataset.customerEmail || "";
+
+
+                    const address =
+                        card.dataset.customerAddress || "";
+
+
+                    const searchableText =
+                        name +
+                        " " +
+                        phone +
+                        " " +
+                        email +
+                        " " +
+                        address;
+
+
+                    if (
+                        searchableText.includes(
+                            searchText
+                        )
+                    ) {
+
+                        card.style.display =
+                            "flex";
+
+                        visibleCustomers++;
+
+                    } else {
+
+                        card.style.display =
+                            "none";
+
+                    }
+
+                }
+            );
+
+
+            if (
+                noResults &&
+                visibleCustomers === 0 &&
+                searchText !== ""
+            ) {
+
+                noResults.style.display =
+                    "block";
+
+            } else if (noResults) {
+
+                noResults.style.display =
+                    "none";
+
+            }
+
+        }
+    );
 
 }
 

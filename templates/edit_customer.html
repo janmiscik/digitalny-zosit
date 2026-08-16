@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="sk">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        Upraviť {{ customer.name }} - Digitálny zošit
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', path='style.css') }}"
+    >
+
+</head>
+
+
+<body>
+
+
+<header class="topbar">
+
+    <div class="logo">
+        📒 Digitálny zošit
+    </div>
+
+
+    <div class="topbar-actions">
+
+        <button
+            type="button"
+            class="theme-button"
+            id="themeButton"
+            onclick="toggleTheme()"
+            title="Prepnúť tému"
+        >
+            🌙
+        </button>
+
+
+        <a
+            href="/customers/{{ customer.id }}"
+            class="back-button"
+        >
+            ← Späť
+        </a>
+
+    </div>
+
+</header>
+
+
+<main class="container">
+
+
+    <section class="edit-customer-page">
+
+
+        <div class="page-header">
+
+            <h1>
+                Upraviť zákazníka
+            </h1>
+
+            <p>
+                Zmeňte údaje zákazníka.
+            </p>
+
+        </div>
+
+
+        <div class="edit-customer-card">
+
+
+            <form
+                action="/customers/{{ customer.id }}/edit"
+                method="post"
+            >
+
+
+                <label>
+                    Meno *
+                </label>
+
+
+                <input
+                    type="text"
+                    name="name"
+                    value="{{ customer.name }}"
+                    required
+                >
+
+
+                <label>
+                    Telefón
+                </label>
+
+
+                <input
+                    type="text"
+                    name="phone"
+                    value="{{ customer.phone or '' }}"
+                >
+
+
+                <label>
+                    Email
+                </label>
+
+
+                <input
+                    type="email"
+                    name="email"
+                    value="{{ customer.email or '' }}"
+                >
+
+
+                <label>
+                    Adresa
+                </label>
+
+
+                <input
+                    type="text"
+                    name="address"
+                    value="{{ customer.address or '' }}"
+                >
+
+
+                <label>
+                    Poznámka
+                </label>
+
+
+                <textarea
+                    name="note"
+                    rows="5"
+                >{{ customer.note or '' }}</textarea>
+
+
+                <div class="form-buttons">
+
+
+                    <a
+                        href="/customers/{{ customer.id }}"
+                        class="cancel-button edit-cancel-link"
+                    >
+                        Zrušiť
+                    </a>
+
+
+                    <button
+                        type="submit"
+                        class="save-button"
+                    >
+                        Uložiť zmeny
+                    </button>
+
+
+                </div>
+
+
+            </form>
+
+
+        </div>
+
+
+    </section>
+
+
+</main>
+
+
+<script>
+
+/* =====================================
+   TÉMA
+   ===================================== */
+
+
+function applyTheme(theme) {
+
+    document.documentElement.setAttribute(
+        "data-theme",
+        theme
+    );
+
+
+    const button =
+        document.getElementById("themeButton");
+
+
+    if (theme === "dark") {
+
+        button.textContent = "☀️";
+
+    } else {
+
+        button.textContent = "🌙";
+
+    }
+
+}
+
+
+function toggleTheme() {
+
+    const currentTheme =
+        document.documentElement.getAttribute(
+            "data-theme"
+        );
+
+
+    const newTheme =
+        currentTheme === "dark"
+            ? "light"
+            : "dark";
+
+
+    localStorage.setItem(
+        "digitalnyZositTheme",
+        newTheme
+    );
+
+
+    applyTheme(newTheme);
+
+}
+
+
+const savedTheme =
+    localStorage.getItem(
+        "digitalnyZositTheme"
+    );
+
+
+if (savedTheme === "dark") {
+
+    applyTheme("dark");
+
+} else {
+
+    applyTheme("light");
+
+}
+
+</script>
+
+
+</body>
+
+</html>
