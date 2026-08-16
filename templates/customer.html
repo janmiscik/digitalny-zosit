@@ -31,12 +31,30 @@
         📒 Digitálny zošit
     </div>
 
-    <a
-        href="/"
-        class="back-button"
-    >
-        ← Zákazníci
-    </a>
+
+    <div class="topbar-actions">
+
+
+        <a
+            href="/"
+            class="back-button"
+        >
+            ← Zákazníci
+        </a>
+
+
+        <button
+            type="button"
+            class="theme-button"
+            id="themeButton"
+            onclick="toggleTheme()"
+            title="Prepnúť tému"
+        >
+            🌙
+        </button>
+
+
+    </div>
 
 </header>
 
@@ -87,6 +105,15 @@
             {% endif %}
 
 
+            {% if customer.note %}
+
+                <p>
+                    📝 {{ customer.note }}
+                </p>
+
+            {% endif %}
+
+
         </div>
 
 
@@ -107,6 +134,7 @@
 
 
             <button
+                type="button"
                 class="new-customer-button"
                 onclick="openJobForm()"
             >
@@ -159,7 +187,7 @@
                             <select
                                 name="status"
                                 onchange="this.form.submit()"
-                                class="job-status status-{{ job.status | lower | replace(' ', '-') }}"
+                                class="job-status"
                             >
 
 
@@ -247,6 +275,7 @@
 
 
                     <button
+                        type="button"
                         class="new-customer-button"
                         onclick="openJobForm()"
                     >
@@ -269,9 +298,9 @@
 </main>
 
 
-<!-- ================================= -->
-<!-- FORMULÁR ZÁKAZKY -->
-<!-- ================================= -->
+<!-- =========================================
+     NOVÁ ZÁKAZKA
+     ========================================= -->
 
 
 <div
@@ -292,6 +321,7 @@
 
 
             <button
+                type="button"
                 class="close-button"
                 onclick="closeJobForm()"
             >
@@ -404,6 +434,10 @@
 
 <script>
 
+/* =========================================
+   FORMULÁR ZÁKAZKY
+   ========================================= */
+
 
 function openJobForm() {
 
@@ -438,6 +472,82 @@ document
         }
     );
 
+
+/* =========================================
+   TÉMA
+   ========================================= */
+
+
+function applyTheme(theme) {
+
+    document.documentElement.setAttribute(
+        "data-theme",
+        theme
+    );
+
+
+    const button =
+        document.getElementById("themeButton");
+
+
+    if (theme === "dark") {
+
+        button.textContent = "☀️";
+
+    } else {
+
+        button.textContent = "🌙";
+
+    }
+
+}
+
+
+function toggleTheme() {
+
+    const currentTheme =
+        document.documentElement.getAttribute(
+            "data-theme"
+        );
+
+
+    const newTheme =
+        currentTheme === "dark"
+            ? "light"
+            : "dark";
+
+
+    localStorage.setItem(
+        "digitalnyZositTheme",
+        newTheme
+    );
+
+
+    applyTheme(newTheme);
+
+}
+
+
+/* =========================================
+   NAČÍTANIE TÉMY
+   ========================================= */
+
+
+const savedTheme =
+    localStorage.getItem(
+        "digitalnyZositTheme"
+    );
+
+
+if (savedTheme === "dark") {
+
+    applyTheme("dark");
+
+} else {
+
+    applyTheme("light");
+
+}
 
 </script>
 

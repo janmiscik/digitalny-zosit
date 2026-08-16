@@ -2,7 +2,6 @@
 <html lang="sk">
 
 <head>
-
     <meta charset="UTF-8">
 
     <meta
@@ -16,12 +15,10 @@
         rel="stylesheet"
         href="{{ url_for('static', path='style.css') }}"
     >
-
 </head>
 
 
 <body>
-
 
 <header class="topbar">
 
@@ -29,18 +26,32 @@
         📒 Digitálny zošit
     </div>
 
-    <button
-        class="new-customer-button"
-        onclick="openCustomerForm()"
-    >
-        + Nový zákazník
-    </button>
+    <div class="topbar-actions">
+
+        <button
+            type="button"
+            class="theme-button"
+            id="themeButton"
+            onclick="toggleTheme()"
+            title="Prepnúť tému"
+        >
+            🌙
+        </button>
+
+        <button
+            type="button"
+            class="new-customer-button"
+            onclick="openCustomerForm()"
+        >
+            + Nový zákazník
+        </button>
+
+    </div>
 
 </header>
 
 
 <main class="container">
-
 
     <div class="page-header">
 
@@ -61,23 +72,17 @@
 
     <section class="customers">
 
-
         {% if customers %}
-
 
             {% for customer in customers %}
 
-
                 <div class="customer-card">
-
 
                     <div class="customer-icon">
                         👤
                     </div>
 
-
                     <div class="customer-info">
-
 
                         <h2>
 
@@ -90,7 +95,6 @@
 
                         </h2>
 
-
                         {% if customer.phone %}
 
                             <p>
@@ -98,7 +102,6 @@
                             </p>
 
                         {% endif %}
-
 
                         {% if customer.email %}
 
@@ -108,7 +111,6 @@
 
                         {% endif %}
 
-
                         {% if customer.address %}
 
                             <p>
@@ -117,86 +119,69 @@
 
                         {% endif %}
 
-
                     </div>
-
 
                 </div>
 
-
             {% endfor %}
-
 
         {% else %}
 
-
             <div class="empty-state">
-
 
                 <div class="empty-icon">
                     📒
                 </div>
 
-
                 <h2>
                     Zatiaľ nemáte žiadnych zákazníkov
                 </h2>
-
 
                 <p>
                     Pridajte prvého zákazníka.
                 </p>
 
-
                 <button
+                    type="button"
                     class="new-customer-button"
                     onclick="openCustomerForm()"
                 >
                     + Pridať zákazníka
                 </button>
 
-
             </div>
-
 
         {% endif %}
 
-
     </section>
-
 
 </main>
 
 
-<!-- ================================= -->
-<!-- FORMULÁR NOVÉHO ZÁKAZNÍKA -->
-<!-- ================================= -->
-
+<!-- =========================================
+     NOVÝ ZÁKAZNÍK
+     ========================================= -->
 
 <div
     id="customerModal"
     class="modal"
 >
 
-
     <div class="modal-content">
 
-
         <div class="modal-header">
-
 
             <h2>
                 Nový zákazník
             </h2>
 
-
             <button
+                type="button"
                 class="close-button"
                 onclick="closeCustomerForm()"
             >
                 ×
             </button>
-
 
         </div>
 
@@ -206,11 +191,9 @@
             method="post"
         >
 
-
             <label>
                 Meno *
             </label>
-
 
             <input
                 type="text"
@@ -223,7 +206,6 @@
                 Telefón
             </label>
 
-
             <input
                 type="text"
                 name="phone"
@@ -233,7 +215,6 @@
             <label>
                 Email
             </label>
-
 
             <input
                 type="email"
@@ -245,7 +226,6 @@
                 Adresa
             </label>
 
-
             <input
                 type="text"
                 name="address"
@@ -256,7 +236,6 @@
                 Poznámka
             </label>
 
-
             <textarea
                 name="note"
                 rows="4"
@@ -264,7 +243,6 @@
 
 
             <div class="form-buttons">
-
 
                 <button
                     type="button"
@@ -274,7 +252,6 @@
                     Zrušiť
                 </button>
 
-
                 <button
                     type="submit"
                     class="save-button"
@@ -282,21 +259,20 @@
                     Uložiť zákazníka
                 </button>
 
-
             </div>
-
 
         </form>
 
-
     </div>
-
 
 </div>
 
 
 <script>
 
+/* =========================================
+   FORMULÁR ZÁKAZNÍKA
+   ========================================= */
 
 function openCustomerForm() {
 
@@ -331,6 +307,80 @@ document
         }
     );
 
+
+/* =========================================
+   TÉMA
+   ========================================= */
+
+function applyTheme(theme) {
+
+    document.documentElement.setAttribute(
+        "data-theme",
+        theme
+    );
+
+
+    const button =
+        document.getElementById("themeButton");
+
+
+    if (theme === "dark") {
+
+        button.textContent = "☀️";
+
+    } else {
+
+        button.textContent = "🌙";
+
+    }
+
+}
+
+
+function toggleTheme() {
+
+    const currentTheme =
+        document.documentElement.getAttribute(
+            "data-theme"
+        );
+
+
+    const newTheme =
+        currentTheme === "dark"
+            ? "light"
+            : "dark";
+
+
+    localStorage.setItem(
+        "digitalnyZositTheme",
+        newTheme
+    );
+
+
+    applyTheme(newTheme);
+
+}
+
+
+/* =========================================
+   NAČÍTANIE ULOŽENEJ TÉMY
+   ========================================= */
+
+const savedTheme =
+    localStorage.getItem(
+        "digitalnyZositTheme"
+    );
+
+
+if (savedTheme === "dark") {
+
+    applyTheme("dark");
+
+} else {
+
+    applyTheme("light");
+
+}
 
 </script>
 
