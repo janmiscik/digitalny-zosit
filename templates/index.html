@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="sk">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,23 +13,33 @@
 <body>
 
     <header class="topbar">
+
         <div class="logo">
             📒 Digitálny zošit
         </div>
 
-        <button class="new-customer-button">
+        <button
+            class="new-customer-button"
+            onclick="openCustomerForm()"
+        >
             + Nový zákazník
         </button>
+
     </header>
 
 
     <main class="container">
 
         <div class="page-header">
+
             <div>
                 <h1>Zákazníci</h1>
-                <p>Prehľad vašich zákazníkov</p>
+
+                <p>
+                    Prehľad vašich zákazníkov
+                </p>
             </div>
+
         </div>
 
 
@@ -46,18 +57,26 @@
 
                         <div class="customer-info">
 
-                            <h2>{{ customer.name }}</h2>
+                            <h2>
+                                {{ customer.name }}
+                            </h2>
 
                             {% if customer.phone %}
-                                <p>📞 {{ customer.phone }}</p>
+                                <p>
+                                    📞 {{ customer.phone }}
+                                </p>
                             {% endif %}
 
                             {% if customer.email %}
-                                <p>✉️ {{ customer.email }}</p>
+                                <p>
+                                    ✉️ {{ customer.email }}
+                                </p>
                             {% endif %}
 
                             {% if customer.address %}
-                                <p>📍 {{ customer.address }}</p>
+                                <p>
+                                    📍 {{ customer.address }}
+                                </p>
                             {% endif %}
 
                         </div>
@@ -69,18 +88,26 @@
             {% else %}
 
                 <div class="empty-state">
-                    <div class="empty-icon">📒</div>
 
-                    <h2>Zatiaľ nemáte žiadnych zákazníkov</h2>
+                    <div class="empty-icon">
+                        📒
+                    </div>
+
+                    <h2>
+                        Zatiaľ nemáte žiadnych zákazníkov
+                    </h2>
 
                     <p>
-                        Pridajte prvého zákazníka a začnite si viesť
-                        Digitálny zošit.
+                        Pridajte prvého zákazníka.
                     </p>
 
-                    <button class="new-customer-button">
+                    <button
+                        class="new-customer-button"
+                        onclick="openCustomerForm()"
+                    >
                         + Pridať zákazníka
                     </button>
+
                 </div>
 
             {% endif %}
@@ -89,5 +116,142 @@
 
     </main>
 
+
+    <!-- FORMULÁR -->
+
+    <div
+        id="customerModal"
+        class="modal"
+    >
+
+        <div class="modal-content">
+
+            <div class="modal-header">
+
+                <h2>
+                    Nový zákazník
+                </h2>
+
+                <button
+                    class="close-button"
+                    onclick="closeCustomerForm()"
+                >
+                    ×
+                </button>
+
+            </div>
+
+
+            <form
+                action="/customers"
+                method="post"
+            >
+
+                <label>
+                    Meno *
+                </label>
+
+                <input
+                    type="text"
+                    name="name"
+                    required
+                >
+
+
+                <label>
+                    Telefón
+                </label>
+
+                <input
+                    type="text"
+                    name="phone"
+                >
+
+
+                <label>
+                    Email
+                </label>
+
+                <input
+                    type="email"
+                    name="email"
+                >
+
+
+                <label>
+                    Adresa
+                </label>
+
+                <input
+                    type="text"
+                    name="address"
+                >
+
+
+                <label>
+                    Poznámka
+                </label>
+
+                <textarea
+                    name="note"
+                    rows="4"
+                ></textarea>
+
+
+                <div class="form-buttons">
+
+                    <button
+                        type="button"
+                        class="cancel-button"
+                        onclick="closeCustomerForm()"
+                    >
+                        Zrušiť
+                    </button>
+
+                    <button
+                        type="submit"
+                        class="save-button"
+                    >
+                        Uložiť zákazníka
+                    </button>
+
+                </div>
+
+            </form>
+
+        </div>
+
+    </div>
+
+
+    <script>
+
+        function openCustomerForm() {
+            document
+                .getElementById("customerModal")
+                .classList.add("active");
+        }
+
+
+        function closeCustomerForm() {
+            document
+                .getElementById("customerModal")
+                .classList.remove("active");
+        }
+
+
+        document
+            .getElementById("customerModal")
+            .addEventListener("click", function(event) {
+
+                if (event.target === this) {
+                    closeCustomerForm();
+                }
+
+            });
+
+    </script>
+
 </body>
+
 </html>

@@ -4,14 +4,19 @@
     padding: 0;
 }
 
+
 body {
     font-family: Arial, sans-serif;
     background: #f5f6f8;
     color: #222;
 }
 
+
+/* TOPBAR */
+
 .topbar {
     height: 70px;
+
     background: white;
     border-bottom: 1px solid #e5e5e5;
 
@@ -22,110 +27,298 @@ body {
     padding: 0 40px;
 }
 
+
 .logo {
     font-size: 22px;
     font-weight: 700;
 }
 
+
+/* BUTTONS */
+
 .new-customer-button {
     border: none;
+
     background: #222;
     color: white;
 
     padding: 11px 18px;
+
     border-radius: 8px;
 
     font-size: 15px;
+
     cursor: pointer;
 }
+
 
 .new-customer-button:hover {
     background: #444;
 }
 
+
+/* CONTENT */
+
 .container {
     max-width: 1000px;
+
     margin: 0 auto;
+
     padding: 40px 20px;
 }
+
 
 .page-header {
     margin-bottom: 30px;
 }
 
+
 .page-header h1 {
     font-size: 32px;
+
     margin-bottom: 8px;
 }
+
 
 .page-header p {
     color: #777;
 }
 
+
+/* CUSTOMERS */
+
 .customers {
     display: grid;
+
     gap: 15px;
 }
 
+
 .customer-card {
     background: white;
+
     border: 1px solid #e5e5e5;
+
     border-radius: 12px;
 
     padding: 20px;
 
     display: flex;
+
     align-items: center;
+
     gap: 18px;
 }
+
 
 .customer-icon {
     width: 50px;
     height: 50px;
 
     background: #f0f0f0;
+
     border-radius: 50%;
 
     display: flex;
+
     align-items: center;
     justify-content: center;
 
     font-size: 22px;
 }
 
+
 .customer-info h2 {
     font-size: 18px;
+
     margin-bottom: 8px;
 }
 
+
 .customer-info p {
     color: #666;
+
     margin-top: 4px;
 }
 
+
+/* EMPTY */
+
 .empty-state {
     background: white;
+
     border: 1px solid #e5e5e5;
+
     border-radius: 12px;
 
     padding: 60px 20px;
+
     text-align: center;
 }
 
+
 .empty-icon {
     font-size: 50px;
+
     margin-bottom: 20px;
 }
+
 
 .empty-state h2 {
     margin-bottom: 10px;
 }
 
+
 .empty-state p {
     color: #777;
+
     margin-bottom: 25px;
 }
 
+
+/* MODAL */
+
+.modal {
+    display: none;
+
+    position: fixed;
+
+    inset: 0;
+
+    background: rgba(0, 0, 0, 0.45);
+
+    align-items: center;
+    justify-content: center;
+
+    padding: 20px;
+}
+
+
+.modal.active {
+    display: flex;
+}
+
+
+.modal-content {
+    width: 100%;
+
+    max-width: 500px;
+
+    background: white;
+
+    border-radius: 14px;
+
+    padding: 25px;
+
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+}
+
+
+.modal-header {
+    display: flex;
+
+    align-items: center;
+    justify-content: space-between;
+
+    margin-bottom: 25px;
+}
+
+
+.modal-header h2 {
+    font-size: 24px;
+}
+
+
+.close-button {
+    border: none;
+
+    background: transparent;
+
+    font-size: 30px;
+
+    color: #777;
+
+    cursor: pointer;
+}
+
+
+.modal-content label {
+    display: block;
+
+    font-size: 14px;
+
+    font-weight: 600;
+
+    margin-bottom: 6px;
+
+    margin-top: 16px;
+}
+
+
+.modal-content input,
+.modal-content textarea {
+    width: 100%;
+
+    border: 1px solid #d8d8d8;
+
+    border-radius: 8px;
+
+    padding: 11px;
+
+    font-size: 15px;
+
+    font-family: inherit;
+}
+
+
+.modal-content input:focus,
+.modal-content textarea:focus {
+    outline: none;
+
+    border-color: #555;
+}
+
+
+.form-buttons {
+    display: flex;
+
+    justify-content: flex-end;
+
+    gap: 10px;
+
+    margin-top: 25px;
+}
+
+
+.cancel-button,
+.save-button {
+    border: none;
+
+    padding: 11px 18px;
+
+    border-radius: 8px;
+
+    font-size: 14px;
+
+    cursor: pointer;
+}
+
+
+.cancel-button {
+    background: #eeeeee;
+
+    color: #333;
+}
+
+
+.save-button {
+    background: #222;
+
+    color: white;
+}
+
+
+/* MOBILE */
 
 @media (max-width: 600px) {
 
@@ -133,21 +326,31 @@ body {
         padding: 0 15px;
     }
 
+
     .logo {
         font-size: 18px;
     }
 
+
     .new-customer-button {
         padding: 9px 12px;
+
         font-size: 13px;
     }
+
 
     .container {
         padding: 25px 15px;
     }
 
+
     .page-header h1 {
         font-size: 26px;
+    }
+
+
+    .modal-content {
+        padding: 20px;
     }
 
 }

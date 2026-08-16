@@ -1,6 +1,7 @@
-from fastapi import FastAPI, Depends, Request
+from fastapi import FastAPI, Depends, Request, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from database import Base, engine, SessionLocal
@@ -41,22 +42,28 @@ def home(request: Request, db: Session = Depends(get_db)):
 
 @app.post("/customers")
 def create_customer(
-    customer: CustomerCreate,
+    name: str = Form(...),
+    phone: str = Form(""),
+    email: str = Form(""),
+    address: str = Form(""),
+    note: str = Form(""),
     db: Session = Depends(get_db)
 ):
     new_customer = Customer(
-        name=customer.name,
-        phone=customer.phone,
-        email=customer.email,
-        address=customer.address,
-        note=customer.note
+        name=name,
+        phone=phone,
+        email=email,
+        address=address,
+        note=note
     )
 
     db.add(new_customer)
     db.commit()
-    db.refresh(new_customer)
 
-    return new_customer
+    return RedirectResponse(
+        url="/",
+        status_code=303
+    )
 
 
 @app.get("/customers")
