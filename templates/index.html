@@ -10,7 +10,9 @@
         content="width=device-width, initial-scale=1.0"
     >
 
-    <title>Digitálny zošit</title>
+    <title>
+        Digitálny zošit
+    </title>
 
     <link
         rel="stylesheet"
@@ -25,12 +27,14 @@
 
 <header class="topbar">
 
+
     <div class="logo">
         📒 Digitálny zošit
     </div>
 
 
     <div class="topbar-actions">
+
 
         <button
             type="button"
@@ -51,7 +55,9 @@
             + Nový zákazník
         </button>
 
+
     </div>
+
 
 </header>
 
@@ -63,18 +69,22 @@
          DASHBOARD
          ===================================== -->
 
+
     <section class="dashboard">
 
 
         <div class="page-header">
 
+
             <h1>
                 Dobrý deň 👋
             </h1>
 
+
             <p>
                 Tu je váš pracovný prehľad.
             </p>
+
 
         </div>
 
@@ -128,13 +138,316 @@
 
 
     <!-- =====================================
+         TERMÍNY
+         ===================================== -->
+
+
+    <section class="schedule-section">
+
+
+        <div class="section-heading">
+
+
+            <div>
+
+                <h2>
+                    📅 Termíny
+                </h2>
+
+                <p>
+                    Čo vás čaká najbližšie
+                </p>
+
+            </div>
+
+
+        </div>
+
+
+        {% if overdue_jobs %}
+
+
+            <div class="schedule-group">
+
+
+                <div class="schedule-group-title overdue-title">
+
+                    🔴 Po termíne
+
+                </div>
+
+
+                {% for job in overdue_jobs %}
+
+
+                    {% for customer in customers %}
+
+
+                        {% if customer.id == job.customer_id %}
+
+
+                            <a
+                                href="/customers/{{ customer.id }}"
+                                class="schedule-card overdue-card"
+                            >
+
+
+                                <div class="schedule-main">
+
+
+                                    <strong>
+                                        {{ job.title }}
+                                    </strong>
+
+
+                                    <span>
+                                        👤 {{ customer.name }}
+                                    </span>
+
+
+                                </div>
+
+
+                                <div class="schedule-right">
+
+
+                                    <span class="schedule-date">
+
+                                        {{ job.due_date.strftime("%d.%m.%Y") }}
+
+                                    </span>
+
+
+                                    <span class="job-status-label">
+
+                                        {{ job.status }}
+
+                                    </span>
+
+
+                                </div>
+
+
+                            </a>
+
+
+                        {% endif %}
+
+
+                    {% endfor %}
+
+
+                {% endfor %}
+
+
+            </div>
+
+
+        {% endif %}
+
+
+        {% if today_jobs %}
+
+
+            <div class="schedule-group">
+
+
+                <div class="schedule-group-title today-title">
+
+                    🟠 Dnes
+
+                </div>
+
+
+                {% for job in today_jobs %}
+
+
+                    {% for customer in customers %}
+
+
+                        {% if customer.id == job.customer_id %}
+
+
+                            <a
+                                href="/customers/{{ customer.id }}"
+                                class="schedule-card today-card"
+                            >
+
+
+                                <div class="schedule-main">
+
+
+                                    <strong>
+                                        {{ job.title }}
+                                    </strong>
+
+
+                                    <span>
+                                        👤 {{ customer.name }}
+                                    </span>
+
+
+                                </div>
+
+
+                                <div class="schedule-right">
+
+
+                                    <span class="schedule-date">
+                                        Dnes
+                                    </span>
+
+
+                                    <span class="job-status-label">
+
+                                        {{ job.status }}
+
+                                    </span>
+
+
+                            </div>
+
+
+                            </a>
+
+
+                        {% endif %}
+
+
+                    {% endfor %}
+
+
+                {% endfor %}
+
+
+            </div>
+
+
+        {% endif %}
+
+
+        {% if upcoming_jobs %}
+
+
+            <div class="schedule-group">
+
+
+                <div class="schedule-group-title upcoming-title">
+
+                    🔵 Najbližšie
+
+                </div>
+
+
+                {% for job in upcoming_jobs %}
+
+
+                    {% for customer in customers %}
+
+
+                        {% if customer.id == job.customer_id %}
+
+
+                            <a
+                                href="/customers/{{ customer.id }}"
+                                class="schedule-card"
+                            >
+
+
+                                <div class="schedule-main">
+
+
+                                    <strong>
+                                        {{ job.title }}
+                                    </strong>
+
+
+                                    <span>
+                                        👤 {{ customer.name }}
+                                    </span>
+
+
+                                </div>
+
+
+                                <div class="schedule-right">
+
+
+                                    <span class="schedule-date">
+
+                                        {{ job.due_date.strftime("%d.%m.%Y") }}
+
+                                    </span>
+
+
+                                    <span class="job-status-label">
+
+                                        {{ job.status }}
+
+                                    </span>
+
+
+                                </div>
+
+
+                            </a>
+
+
+                        {% endif %}
+
+
+                    {% endfor %}
+
+
+                {% endfor %}
+
+
+            </div>
+
+
+        {% endif %}
+
+
+        {% if not overdue_jobs and not today_jobs and not upcoming_jobs %}
+
+
+            <div class="schedule-empty">
+
+
+                <div>
+                    📅
+                </div>
+
+
+                <h3>
+                    Žiadne naplánované zákazky
+                </h3>
+
+
+                <p>
+                    Keď zákazke nastavíte termín, zobrazí sa tu.
+                </p>
+
+
+            </div>
+
+
+        {% endif %}
+
+
+    </section>
+
+
+    <!-- =====================================
          POSLEDNÉ ZÁKAZKY
          ===================================== -->
+
 
     <section class="dashboard-jobs">
 
 
         <div class="section-heading">
+
 
             <div>
 
@@ -147,6 +460,7 @@
                 </p>
 
             </div>
+
 
         </div>
 
@@ -188,6 +502,18 @@
                                             <p>
                                                 {{ job.description }}
                                             </p>
+
+                                        {% endif %}
+
+
+                                        {% if job.due_date %}
+
+                                            <div class="job-due-date">
+
+                                                📅
+                                                {{ job.due_date.strftime("%d.%m.%Y") }}
+
+                                            </div>
 
                                         {% endif %}
 
@@ -274,6 +600,7 @@
          ZÁKAZNÍCI
          ===================================== -->
 
+
     <section class="customers-section">
 
 
@@ -309,7 +636,9 @@
              VYHĽADÁVANIE
              ===================================== -->
 
+
         <div class="customer-search">
+
 
             <input
                 type="search"
@@ -317,6 +646,7 @@
                 placeholder="🔎  Hľadať zákazníka..."
                 autocomplete="off"
             >
+
 
         </div>
 
@@ -366,12 +696,14 @@
 
                             <h2>
 
+
                                 <a
                                     href="/customers/{{ customer.id }}"
                                     class="customer-link"
                                 >
                                     {{ customer.name }}
                                 </a>
+
 
                             </h2>
 
@@ -418,13 +750,21 @@
 
                             <span class="customer-job-count-label">
 
+
                                 {% if customer_job_count.value == 1 %}
+
                                     zákazka
+
                                 {% elif customer_job_count.value >= 2 and customer_job_count.value <= 4 %}
+
                                     zákazky
+
                                 {% else %}
+
                                     zákaziek
+
                                 {% endif %}
+
 
                             </span>
 
@@ -444,17 +784,21 @@
                     style="display: none;"
                 >
 
+
                     <div class="empty-icon">
                         🔎
                     </div>
+
 
                     <h2>
                         Zákazník sa nenašiel
                     </h2>
 
+
                     <p>
                         Skúste vyhľadať iné meno, telefón alebo email.
                     </p>
+
 
                 </div>
 
@@ -507,6 +851,7 @@
 <!-- =====================================
      FORMULÁR NOVÉHO ZÁKAZNÍKA
      ===================================== -->
+
 
 <div
     id="customerModal"
@@ -632,6 +977,7 @@
 
 
 <script>
+
 
 /* =====================================
    FORMULÁR ZÁKAZNÍKA

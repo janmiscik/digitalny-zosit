@@ -69,11 +69,17 @@ def home(
         .all()
     )
 
+
     jobs = (
         db
         .query(Job)
         .all()
     )
+
+
+    # =====================================
+    # ZÁKLADNÉ ŠTATISTIKY
+    # =====================================
 
     new_jobs = sum(
         1
@@ -81,13 +87,84 @@ def home(
         if job.status == "Nová"
     )
 
+
     active_jobs = sum(
         1
         for job in jobs
         if job.status == "Prebieha"
     )
 
+
     total_jobs = len(jobs)
+
+
+    # =====================================
+    # TERMÍNY
+    # =====================================
+
+    today = date.today()
+
+
+    overdue_jobs = []
+
+    today_jobs = []
+
+    upcoming_jobs = []
+
+
+    for job in jobs:
+
+        if job.due_date is None:
+            continue
+
+
+        # Hotové zákazky už nechceme
+        # zobrazovať medzi termínmi.
+
+        if job.status == "Hotová":
+            continue
+
+
+        if job.due_date < today:
+
+            overdue_jobs.append(job)
+
+
+        elif job.due_date == today:
+
+            today_jobs.append(job)
+
+
+        else:
+
+            upcoming_jobs.append(job)
+
+
+    # =====================================
+    # ZORADENIE
+    # =====================================
+
+    overdue_jobs.sort(
+        key=lambda job: job.due_date
+    )
+
+
+    today_jobs.sort(
+        key=lambda job: job.due_date
+    )
+
+
+    upcoming_jobs.sort(
+        key=lambda job: job.due_date
+    )
+
+
+    # =====================================
+    # NAJBLIŽŠIE ZÁKAZKY
+    # =====================================
+
+    upcoming_jobs = upcoming_jobs[:5]
+
 
     return templates.TemplateResponse(
 
@@ -105,7 +182,15 @@ def home(
 
             "active_jobs": active_jobs,
 
-            "total_jobs": total_jobs
+            "total_jobs": total_jobs,
+
+            "overdue_jobs": overdue_jobs,
+
+            "today_jobs": today_jobs,
+
+            "upcoming_jobs": upcoming_jobs,
+
+            "today": today
 
         }
 
@@ -147,9 +232,11 @@ def create_customer(
 
     )
 
+
     db.add(new_customer)
 
     db.commit()
+
 
     return RedirectResponse(
 
@@ -186,11 +273,13 @@ def customer_detail(
 
     )
 
+
     if customer is None:
 
         return {
             "error": "Zákazník neexistuje"
         }
+
 
     jobs = (
 
@@ -202,6 +291,7 @@ def customer_detail(
         .all()
 
     )
+
 
     return templates.TemplateResponse(
 
@@ -246,11 +336,13 @@ def edit_customer_form(
 
     )
 
+
     if customer is None:
 
         return {
             "error": "Zákazník neexistuje"
         }
+
 
     return templates.TemplateResponse(
 
@@ -301,11 +393,13 @@ def update_customer(
 
     )
 
+
     if customer is None:
 
         return {
             "error": "Zákazník neexistuje"
         }
+
 
     customer.name = name
 
@@ -317,7 +411,9 @@ def update_customer(
 
     customer.note = note
 
+
     db.commit()
+
 
     return RedirectResponse(
 
@@ -360,19 +456,23 @@ def create_job(
 
     )
 
+
     if customer is None:
 
         return {
             "error": "Zákazník neexistuje"
         }
 
+
     parsed_due_date = None
+
 
     if due_date:
 
         parsed_due_date = date.fromisoformat(
             due_date
         )
+
 
     new_job = Job(
 
@@ -388,9 +488,11 @@ def create_job(
 
     )
 
+
     db.add(new_job)
 
     db.commit()
+
 
     return RedirectResponse(
 
@@ -427,11 +529,13 @@ def edit_job_form(
 
     )
 
+
     if job is None:
 
         return {
             "error": "Zákazka neexistuje"
         }
+
 
     return templates.TemplateResponse(
 
@@ -480,19 +584,23 @@ def update_job(
 
     )
 
+
     if job is None:
 
         return {
             "error": "Zákazka neexistuje"
         }
 
+
     parsed_due_date = None
+
 
     if due_date:
 
         parsed_due_date = date.fromisoformat(
             due_date
         )
+
 
     job.title = title
 
@@ -502,7 +610,9 @@ def update_job(
 
     job.due_date = parsed_due_date
 
+
     db.commit()
+
 
     return RedirectResponse(
 
@@ -539,15 +649,19 @@ def update_job_status(
 
     )
 
+
     if job is None:
 
         return {
             "error": "Zákazka neexistuje"
         }
 
+
     job.status = status
 
+
     db.commit()
+
 
     return RedirectResponse(
 
