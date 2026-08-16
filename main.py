@@ -1,4 +1,6 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Request
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from database import Base, engine, SessionLocal
@@ -9,6 +11,10 @@ from schemas import CustomerCreate
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+templates = Jinja2Templates(directory="templates")
 
 
 def get_db():
@@ -21,8 +27,16 @@ def get_db():
 
 
 @app.get("/")
-def home():
-    return {"message": "Digitálny zošit funguje!"}
+def home(request: Request, db: Session = Depends(get_db)):
+    customers = db.query(Customer).all()
+
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html",
+        context={
+            "customers": customers
+        }
+    )
 
 
 @app.post("/customers")

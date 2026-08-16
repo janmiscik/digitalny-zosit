@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Digitálny zošit</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+</head>
+
+<body>
+
+    <header class="topbar">
+        <div class="logo">
+            📒 Digitálny zošit
+        </div>
+
+        <button class="new-customer-button">
+            + Nový zákazník
+        </button>
+    </header>
+
+
+    <main class="container">
+
+        <div class="page-header">
+            <div>
+                <h1>Zákazníci</h1>
+                <p>Prehľad vašich zákazníkov</p>
+            </div>
+        </div>
+
+
+        <section class="customers">
+
+            {% if customers %}
+
+                {% for customer in customers %}
+
+                    <div class="customer-card">
+
+                        <div class="customer-icon">
+                            👤
+                        </div>
+
+                        <div class="customer-info">
+
+                            <h2>{{ customer.name }}</h2>
+
+                            {% if customer.phone %}
+                                <p>📞 {{ customer.phone }}</p>
+                            {% endif %}
+
+                            {% if customer.email %}
+                                <p>✉️ {{ customer.email }}</p>
+                            {% endif %}
+
+                            {% if customer.address %}
+                                <p>📍 {{ customer.address }}</p>
+                            {% endif %}
+
+                        </div>
+
+                    </div>
+
+                {% endfor %}
+
+            {% else %}
+
+                <div class="empty-state">
+                    <div class="empty-icon">📒</div>
+
+                    <h2>Zatiaľ nemáte žiadnych zákazníkov</h2>
+
+                    <p>
+                        Pridajte prvého zákazníka a začnite si viesť
+                        Digitálny zošit.
+                    </p>
+
+                    <button class="new-customer-button">
+                        + Pridať zákazníka
+                    </button>
+                </div>
+
+            {% endif %}
+
+        </section>
+
+    </main>
+
+</body>
+</html>
