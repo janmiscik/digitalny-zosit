@@ -2,255 +2,338 @@
 <html lang="sk">
 
 <head>
+
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
 
     <title>Digitálny zošit</title>
 
-    <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', path='style.css') }}"
+    >
+
 </head>
+
 
 <body>
 
-    <header class="topbar">
 
-        <div class="logo">
-            📒 Digitálny zošit
-        </div>
+<header class="topbar">
 
-        <button
-            class="new-customer-button"
-            onclick="openCustomerForm()"
-        >
-            + Nový zákazník
-        </button>
+    <div class="logo">
+        📒 Digitálny zošit
+    </div>
 
-    </header>
-
-
-    <main class="container">
-
-        <div class="page-header">
-
-            <div>
-                <h1>Zákazníci</h1>
-
-                <p>
-                    Prehľad vašich zákazníkov
-                </p>
-            </div>
-
-        </div>
-
-
-        <section class="customers">
-
-            {% if customers %}
-
-                {% for customer in customers %}
-
-                    <div class="customer-card">
-
-                        <div class="customer-icon">
-                            👤
-                        </div>
-
-                        <div class="customer-info">
-
-                            <h2>
-                                {{ customer.name }}
-                            </h2>
-
-                            {% if customer.phone %}
-                                <p>
-                                    📞 {{ customer.phone }}
-                                </p>
-                            {% endif %}
-
-                            {% if customer.email %}
-                                <p>
-                                    ✉️ {{ customer.email }}
-                                </p>
-                            {% endif %}
-
-                            {% if customer.address %}
-                                <p>
-                                    📍 {{ customer.address }}
-                                </p>
-                            {% endif %}
-
-                        </div>
-
-                    </div>
-
-                {% endfor %}
-
-            {% else %}
-
-                <div class="empty-state">
-
-                    <div class="empty-icon">
-                        📒
-                    </div>
-
-                    <h2>
-                        Zatiaľ nemáte žiadnych zákazníkov
-                    </h2>
-
-                    <p>
-                        Pridajte prvého zákazníka.
-                    </p>
-
-                    <button
-                        class="new-customer-button"
-                        onclick="openCustomerForm()"
-                    >
-                        + Pridať zákazníka
-                    </button>
-
-                </div>
-
-            {% endif %}
-
-        </section>
-
-    </main>
-
-
-    <!-- FORMULÁR -->
-
-    <div
-        id="customerModal"
-        class="modal"
+    <button
+        class="new-customer-button"
+        onclick="openCustomerForm()"
     >
+        + Nový zákazník
+    </button>
 
-        <div class="modal-content">
-
-            <div class="modal-header">
-
-                <h2>
-                    Nový zákazník
-                </h2>
-
-                <button
-                    class="close-button"
-                    onclick="closeCustomerForm()"
-                >
-                    ×
-                </button>
-
-            </div>
+</header>
 
 
-            <form
-                action="/customers"
-                method="post"
-            >
-
-                <label>
-                    Meno *
-                </label>
-
-                <input
-                    type="text"
-                    name="name"
-                    required
-                >
+<main class="container">
 
 
-                <label>
-                    Telefón
-                </label>
+    <div class="page-header">
 
-                <input
-                    type="text"
-                    name="phone"
-                >
+        <div>
 
+            <h1>
+                Zákazníci
+            </h1>
 
-                <label>
-                    Email
-                </label>
-
-                <input
-                    type="email"
-                    name="email"
-                >
-
-
-                <label>
-                    Adresa
-                </label>
-
-                <input
-                    type="text"
-                    name="address"
-                >
-
-
-                <label>
-                    Poznámka
-                </label>
-
-                <textarea
-                    name="note"
-                    rows="4"
-                ></textarea>
-
-
-                <div class="form-buttons">
-
-                    <button
-                        type="button"
-                        class="cancel-button"
-                        onclick="closeCustomerForm()"
-                    >
-                        Zrušiť
-                    </button>
-
-                    <button
-                        type="submit"
-                        class="save-button"
-                    >
-                        Uložiť zákazníka
-                    </button>
-
-                </div>
-
-            </form>
+            <p>
+                Prehľad vašich zákazníkov
+            </p>
 
         </div>
 
     </div>
 
 
-    <script>
+    <section class="customers">
 
-        function openCustomerForm() {
-            document
-                .getElementById("customerModal")
-                .classList.add("active");
+
+        {% if customers %}
+
+
+            {% for customer in customers %}
+
+
+                <div class="customer-card">
+
+
+                    <div class="customer-icon">
+                        👤
+                    </div>
+
+
+                    <div class="customer-info">
+
+
+                        <h2>
+
+                            <a
+                                href="/customers/{{ customer.id }}"
+                                class="customer-link"
+                            >
+                                {{ customer.name }}
+                            </a>
+
+                        </h2>
+
+
+                        {% if customer.phone %}
+
+                            <p>
+                                📞 {{ customer.phone }}
+                            </p>
+
+                        {% endif %}
+
+
+                        {% if customer.email %}
+
+                            <p>
+                                ✉️ {{ customer.email }}
+                            </p>
+
+                        {% endif %}
+
+
+                        {% if customer.address %}
+
+                            <p>
+                                📍 {{ customer.address }}
+                            </p>
+
+                        {% endif %}
+
+
+                    </div>
+
+
+                </div>
+
+
+            {% endfor %}
+
+
+        {% else %}
+
+
+            <div class="empty-state">
+
+
+                <div class="empty-icon">
+                    📒
+                </div>
+
+
+                <h2>
+                    Zatiaľ nemáte žiadnych zákazníkov
+                </h2>
+
+
+                <p>
+                    Pridajte prvého zákazníka.
+                </p>
+
+
+                <button
+                    class="new-customer-button"
+                    onclick="openCustomerForm()"
+                >
+                    + Pridať zákazníka
+                </button>
+
+
+            </div>
+
+
+        {% endif %}
+
+
+    </section>
+
+
+</main>
+
+
+<!-- ================================= -->
+<!-- FORMULÁR NOVÉHO ZÁKAZNÍKA -->
+<!-- ================================= -->
+
+
+<div
+    id="customerModal"
+    class="modal"
+>
+
+
+    <div class="modal-content">
+
+
+        <div class="modal-header">
+
+
+            <h2>
+                Nový zákazník
+            </h2>
+
+
+            <button
+                class="close-button"
+                onclick="closeCustomerForm()"
+            >
+                ×
+            </button>
+
+
+        </div>
+
+
+        <form
+            action="/customers"
+            method="post"
+        >
+
+
+            <label>
+                Meno *
+            </label>
+
+
+            <input
+                type="text"
+                name="name"
+                required
+            >
+
+
+            <label>
+                Telefón
+            </label>
+
+
+            <input
+                type="text"
+                name="phone"
+            >
+
+
+            <label>
+                Email
+            </label>
+
+
+            <input
+                type="email"
+                name="email"
+            >
+
+
+            <label>
+                Adresa
+            </label>
+
+
+            <input
+                type="text"
+                name="address"
+            >
+
+
+            <label>
+                Poznámka
+            </label>
+
+
+            <textarea
+                name="note"
+                rows="4"
+            ></textarea>
+
+
+            <div class="form-buttons">
+
+
+                <button
+                    type="button"
+                    class="cancel-button"
+                    onclick="closeCustomerForm()"
+                >
+                    Zrušiť
+                </button>
+
+
+                <button
+                    type="submit"
+                    class="save-button"
+                >
+                    Uložiť zákazníka
+                </button>
+
+
+            </div>
+
+
+        </form>
+
+
+    </div>
+
+
+</div>
+
+
+<script>
+
+
+function openCustomerForm() {
+
+    document
+        .getElementById("customerModal")
+        .classList.add("active");
+
+}
+
+
+function closeCustomerForm() {
+
+    document
+        .getElementById("customerModal")
+        .classList.remove("active");
+
+}
+
+
+document
+    .getElementById("customerModal")
+    .addEventListener(
+        "click",
+        function(event) {
+
+            if (event.target === this) {
+
+                closeCustomerForm();
+
+            }
+
         }
+    );
 
 
-        function closeCustomerForm() {
-            document
-                .getElementById("customerModal")
-                .classList.remove("active");
-        }
+</script>
 
-
-        document
-            .getElementById("customerModal")
-            .addEventListener("click", function(event) {
-
-                if (event.target === this) {
-                    closeCustomerForm();
-                }
-
-            });
-
-    </script>
 
 </body>
 

@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="sk">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>{{ customer.name }} - Digitálny zošit</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', path='style.css') }}"
+    >
+
+</head>
+
+
+<body>
+
+
+<header class="topbar">
+
+    <div class="logo">
+        📒 Digitálny zošit
+    </div>
+
+    <a
+        href="/"
+        class="back-button"
+    >
+        ← Zákazníci
+    </a>
+
+</header>
+
+
+<main class="container">
+
+
+    <section class="customer-detail">
+
+        <div class="customer-detail-header">
+
+            <div>
+
+                <div class="customer-icon large">
+                    👤
+                </div>
+
+                <h1>
+                    {{ customer.name }}
+                </h1>
+
+                {% if customer.phone %}
+                    <p>
+                        📞 {{ customer.phone }}
+                    </p>
+                {% endif %}
+
+                {% if customer.email %}
+                    <p>
+                        ✉️ {{ customer.email }}
+                    </p>
+                {% endif %}
+
+                {% if customer.address %}
+                    <p>
+                        📍 {{ customer.address }}
+                    </p>
+                {% endif %}
+
+            </div>
+
+        </div>
+
+
+        <div class="jobs-header">
+
+            <div>
+
+                <h2>
+                    Zákazky
+                </h2>
+
+                <p>
+                    Práca pre tohto zákazníka
+                </p>
+
+            </div>
+
+            <button
+                class="new-customer-button"
+                onclick="openJobForm()"
+            >
+                + Nová zákazka
+            </button>
+
+        </div>
+
+
+        <section class="jobs">
+
+
+            {% if jobs %}
+
+
+                {% for job in jobs %}
+
+                    <div class="job-card">
+
+                        <div>
+
+                            <h3>
+                                {{ job.title }}
+                            </h3>
+
+                            {% if job.description %}
+
+                                <p>
+                                    {{ job.description }}
+                                </p>
+
+                            {% endif %}
+
+                        </div>
+
+
+                        <span class="job-status">
+
+                            {{ job.status }}
+
+                        </span>
+
+                    </div>
+
+                {% endfor %}
+
+
+            {% else %}
+
+
+                <div class="empty-state">
+
+                    <div class="empty-icon">
+                        🔧
+                    </div>
+
+                    <h2>
+                        Zatiaľ žiadne zákazky
+                    </h2>
+
+                    <p>
+                        Pridajte prvú zákazku pre tohto zákazníka.
+                    </p>
+
+                    <button
+                        class="new-customer-button"
+                        onclick="openJobForm()"
+                    >
+                        + Pridať zákazku
+                    </button>
+
+                </div>
+
+
+            {% endif %}
+
+
+        </section>
+
+
+    </section>
+
+
+</main>
+
+
+<!-- FORMULÁR ZÁKAZKY -->
+
+
+<div
+    id="jobModal"
+    class="modal"
+>
+
+
+    <div class="modal-content">
+
+
+        <div class="modal-header">
+
+            <h2>
+                Nová zákazka
+            </h2>
+
+            <button
+                class="close-button"
+                onclick="closeJobForm()"
+            >
+                ×
+            </button>
+
+        </div>
+
+
+        <form
+            action="/jobs"
+            method="post"
+        >
+
+
+            <input
+                type="hidden"
+                name="customer_id"
+                value="{{ customer.id }}"
+            >
+
+
+            <label>
+                Názov zákazky *
+            </label>
+
+            <input
+                type="text"
+                name="title"
+                placeholder="Napr. Oprava kotla"
+                required
+            >
+
+
+            <label>
+                Popis
+            </label>
+
+            <textarea
+                name="description"
+                rows="4"
+                placeholder="Čo treba urobiť?"
+            ></textarea>
+
+
+            <label>
+                Stav
+            </label>
+
+            <select
+                name="status"
+            >
+
+                <option value="Nová">
+                    Nová
+                </option>
+
+                <option value="Dohodnutá">
+                    Dohodnutá
+                </option>
+
+                <option value="Prebieha">
+                    Prebieha
+                </option>
+
+                <option value="Čaká na materiál">
+                    Čaká na materiál
+                </option>
+
+                <option value="Hotová">
+                    Hotová
+                </option>
+
+            </select>
+
+
+            <div class="form-buttons">
+
+                <button
+                    type="button"
+                    class="cancel-button"
+                    onclick="closeJobForm()"
+                >
+                    Zrušiť
+                </button>
+
+                <button
+                    type="submit"
+                    class="save-button"
+                >
+                    Uložiť zákazku
+                </button>
+
+            </div>
+
+
+        </form>
+
+
+    </div>
+
+
+</div>
+
+
+<script>
+
+
+function openJobForm() {
+
+    document
+        .getElementById("jobModal")
+        .classList.add("active");
+
+}
+
+
+function closeJobForm() {
+
+    document
+        .getElementById("jobModal")
+        .classList.remove("active");
+
+}
+
+
+document
+    .getElementById("jobModal")
+    .addEventListener(
+        "click",
+        function(event) {
+
+            if (event.target === this) {
+
+                closeJobForm();
+
+            }
+
+        }
+    );
+
+
+</script>
+
+
+</body>
+
+</html>

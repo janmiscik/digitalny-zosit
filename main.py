@@ -5,8 +5,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from database import Base, engine, SessionLocal
-from models import Customer
-from schemas import CustomerCreate
+from models import Customer, Job
 
 
 Base.metadata.create_all(bind=engine)
@@ -66,8 +65,73 @@ def create_customer(
     )
 
 
+@app.get("/customers/{customer_id}")
+def customer_detail(
+    customer_id: int,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    customer = db.query(Customer).filter(
+        Customer.id == customer_id
+    ).first()
+
+    if customer is None:
+        return {"error": "Zákazník neexistuje"}
+
+    jobs = db.query(Job).filter(
+        Job.customer_id == customer_id
+    ).all()
+
+    return templates.TemplateResponse(
+        request=request,
+        name="customer.html",
+        context={
+            "customer": customer,
+            "jobs": jobs
+        }
+    )
+
+
+@app.post("/jobs")
+def create_job(
+    title: str = Form(...),
+    description: str = Form(""),
+    status: str = Form("Nová"),
+    customer_id: int = Form(...),
+    db: Session = Depends(get_db)
+):
+    customer = db.query(Customer).filter(
+        Customer.id == customer_id
+    ).first()
+
+    if customer is None:
+        return {"error": "Zákazník neexistuje"}
+
+    new_job = Job(
+        title=title,
+        description=description,
+        status=status,
+        customer_id=customer_id
+    )
+
+    db.add(new_job)
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/customers/{customer_id}",
+        status_code=303
+    )
+
+
 @app.get("/customers")
 def get_customers(db: Session = Depends(get_db)):
     customers = db.query(Customer).all()
 
     return customers
+
+
+@app.get("/jobs")
+def get_jobs(db: Session = Depends(get_db)):
+    jobs = db.query(Job).all()
+
+    return jobs
