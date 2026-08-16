@@ -5,10 +5,14 @@
 
     <meta charset="UTF-8">
 
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1.0">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
 
-    <title>{{ customer.name }} - Digitálny zošit</title>
+    <title>
+        {{ customer.name }} - Digitálny zošit
+    </title>
 
     <link
         rel="stylesheet"
@@ -42,42 +46,52 @@
 
     <section class="customer-detail">
 
+
         <div class="customer-detail-header">
 
-            <div>
 
-                <div class="customer-icon large">
-                    👤
-                </div>
-
-                <h1>
-                    {{ customer.name }}
-                </h1>
-
-                {% if customer.phone %}
-                    <p>
-                        📞 {{ customer.phone }}
-                    </p>
-                {% endif %}
-
-                {% if customer.email %}
-                    <p>
-                        ✉️ {{ customer.email }}
-                    </p>
-                {% endif %}
-
-                {% if customer.address %}
-                    <p>
-                        📍 {{ customer.address }}
-                    </p>
-                {% endif %}
-
+            <div class="customer-icon large">
+                👤
             </div>
+
+
+            <h1>
+                {{ customer.name }}
+            </h1>
+
+
+            {% if customer.phone %}
+
+                <p>
+                    📞 {{ customer.phone }}
+                </p>
+
+            {% endif %}
+
+
+            {% if customer.email %}
+
+                <p>
+                    ✉️ {{ customer.email }}
+                </p>
+
+            {% endif %}
+
+
+            {% if customer.address %}
+
+                <p>
+                    📍 {{ customer.address }}
+                </p>
+
+            {% endif %}
+
 
         </div>
 
 
         <div class="jobs-header">
+
 
             <div>
 
@@ -91,12 +105,14 @@
 
             </div>
 
+
             <button
                 class="new-customer-button"
                 onclick="openJobForm()"
             >
                 + Nová zákazka
             </button>
+
 
         </div>
 
@@ -109,13 +125,17 @@
 
                 {% for job in jobs %}
 
+
                     <div class="job-card">
 
-                        <div>
+
+                        <div class="job-info">
+
 
                             <h3>
                                 {{ job.title }}
                             </h3>
+
 
                             {% if job.description %}
 
@@ -125,16 +145,82 @@
 
                             {% endif %}
 
+
                         </div>
 
 
-                        <span class="job-status">
+                        <form
+                            action="/jobs/{{ job.id }}/status"
+                            method="post"
+                            class="status-form"
+                        >
 
-                            {{ job.status }}
 
-                        </span>
+                            <select
+                                name="status"
+                                onchange="this.form.submit()"
+                                class="job-status status-{{ job.status | lower | replace(' ', '-') }}"
+                            >
+
+
+                                <option
+                                    value="Nová"
+                                    {% if job.status == "Nová" %}
+                                        selected
+                                    {% endif %}
+                                >
+                                    Nová
+                                </option>
+
+
+                                <option
+                                    value="Dohodnutá"
+                                    {% if job.status == "Dohodnutá" %}
+                                        selected
+                                    {% endif %}
+                                >
+                                    Dohodnutá
+                                </option>
+
+
+                                <option
+                                    value="Prebieha"
+                                    {% if job.status == "Prebieha" %}
+                                        selected
+                                    {% endif %}
+                                >
+                                    Prebieha
+                                </option>
+
+
+                                <option
+                                    value="Čaká na materiál"
+                                    {% if job.status == "Čaká na materiál" %}
+                                        selected
+                                    {% endif %}
+                                >
+                                    Čaká na materiál
+                                </option>
+
+
+                                <option
+                                    value="Hotová"
+                                    {% if job.status == "Hotová" %}
+                                        selected
+                                    {% endif %}
+                                >
+                                    Hotová
+                                </option>
+
+
+                            </select>
+
+
+                        </form>
+
 
                     </div>
+
 
                 {% endfor %}
 
@@ -144,17 +230,21 @@
 
                 <div class="empty-state">
 
+
                     <div class="empty-icon">
                         🔧
                     </div>
+
 
                     <h2>
                         Zatiaľ žiadne zákazky
                     </h2>
 
+
                     <p>
                         Pridajte prvú zákazku pre tohto zákazníka.
                     </p>
+
 
                     <button
                         class="new-customer-button"
@@ -162,6 +252,7 @@
                     >
                         + Pridať zákazku
                     </button>
+
 
                 </div>
 
@@ -178,7 +269,9 @@
 </main>
 
 
+<!-- ================================= -->
 <!-- FORMULÁR ZÁKAZKY -->
+<!-- ================================= -->
 
 
 <div
@@ -192,9 +285,11 @@
 
         <div class="modal-header">
 
+
             <h2>
                 Nová zákazka
             </h2>
+
 
             <button
                 class="close-button"
@@ -202,6 +297,7 @@
             >
                 ×
             </button>
+
 
         </div>
 
@@ -223,6 +319,7 @@
                 Názov zákazky *
             </label>
 
+
             <input
                 type="text"
                 name="title"
@@ -235,6 +332,7 @@
                 Popis
             </label>
 
+
             <textarea
                 name="description"
                 rows="4"
@@ -246,9 +344,8 @@
                 Stav
             </label>
 
-            <select
-                name="status"
-            >
+
+            <select name="status">
 
                 <option value="Nová">
                     Nová
@@ -275,6 +372,7 @@
 
             <div class="form-buttons">
 
+
                 <button
                     type="button"
                     class="cancel-button"
@@ -283,12 +381,14 @@
                     Zrušiť
                 </button>
 
+
                 <button
                     type="submit"
                     class="save-button"
                 >
                     Uložiť zákazku
                 </button>
+
 
             </div>
 

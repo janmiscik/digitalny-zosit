@@ -123,6 +123,29 @@ def create_job(
     )
 
 
+@app.post("/jobs/{job_id}/status")
+def update_job_status(
+    job_id: int,
+    status: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    job = db.query(Job).filter(
+        Job.id == job_id
+    ).first()
+
+    if job is None:
+        return {"error": "Zákazka neexistuje"}
+
+    job.status = status
+
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/customers/{job.customer_id}",
+        status_code=303
+    )
+
+
 @app.get("/customers")
 def get_customers(db: Session = Depends(get_db)):
     customers = db.query(Customer).all()
