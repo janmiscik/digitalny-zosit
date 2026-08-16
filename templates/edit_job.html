@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="sk">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        Upraviť zákazku - Digitálny zošit
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', path='style.css') }}"
+    >
+
+</head>
+
+
+<body>
+
+
+<header class="topbar">
+
+    <div class="logo">
+        📒 Digitálny zošit
+    </div>
+
+
+    <div class="topbar-actions">
+
+
+        <button
+            type="button"
+            class="theme-button"
+            id="themeButton"
+            onclick="toggleTheme()"
+            title="Prepnúť tému"
+        >
+            🌙
+        </button>
+
+
+        <a
+            href="/customers/{{ job.customer_id }}"
+            class="back-button"
+        >
+            ← Späť
+        </a>
+
+
+    </div>
+
+</header>
+
+
+<main class="container">
+
+
+    <section class="edit-customer-page">
+
+
+        <div class="page-header">
+
+            <h1>
+                Upraviť zákazku
+            </h1>
+
+            <p>
+                Upravte údaje zákazky.
+            </p>
+
+        </div>
+
+
+        <div class="edit-customer-card">
+
+
+            <form
+                action="/jobs/{{ job.id }}/edit"
+                method="post"
+            >
+
+
+                <label>
+                    Názov zákazky *
+                </label>
+
+
+                <input
+                    type="text"
+                    name="title"
+                    value="{{ job.title }}"
+                    required
+                >
+
+
+                <label>
+                    Popis
+                </label>
+
+
+                <textarea
+                    name="description"
+                    rows="6"
+                >{{ job.description or '' }}</textarea>
+
+
+                <label>
+                    Stav
+                </label>
+
+
+                <select
+                    name="status"
+                    class="job-status-select"
+                >
+
+
+                    <option
+                        value="Nová"
+                        {% if job.status == "Nová" %}
+                            selected
+                        {% endif %}
+                    >
+                        Nová
+                    </option>
+
+
+                    <option
+                        value="Dohodnutá"
+                        {% if job.status == "Dohodnutá" %}
+                            selected
+                        {% endif %}
+                    >
+                        Dohodnutá
+                    </option>
+
+
+                    <option
+                        value="Prebieha"
+                        {% if job.status == "Prebieha" %}
+                            selected
+                        {% endif %}
+                    >
+                        Prebieha
+                    </option>
+
+
+                    <option
+                        value="Čaká na materiál"
+                        {% if job.status == "Čaká na materiál" %}
+                            selected
+                        {% endif %}
+                    >
+                        Čaká na materiál
+                    </option>
+
+
+                    <option
+                        value="Hotová"
+                        {% if job.status == "Hotová" %}
+                            selected
+                        {% endif %}
+                    >
+                        Hotová
+                    </option>
+
+
+                </select>
+
+
+                <div class="form-buttons">
+
+
+                    <a
+                        href="/customers/{{ job.customer_id }}"
+                        class="cancel-button edit-cancel-link"
+                    >
+                        Zrušiť
+                    </a>
+
+
+                    <button
+                        type="submit"
+                        class="save-button"
+                    >
+                        Uložiť zmeny
+                    </button>
+
+
+                </div>
+
+
+            </form>
+
+
+        </div>
+
+
+    </section>
+
+
+</main>
+
+
+<script>
+
+
+/* =====================================
+   TÉMA
+   ===================================== */
+
+
+function applyTheme(theme) {
+
+    document.documentElement.setAttribute(
+        "data-theme",
+        theme
+    );
+
+
+    const button =
+        document.getElementById("themeButton");
+
+
+    if (theme === "dark") {
+
+        button.textContent = "☀️";
+
+    } else {
+
+        button.textContent = "🌙";
+
+    }
+
+}
+
+
+function toggleTheme() {
+
+    const currentTheme =
+        document.documentElement.getAttribute(
+            "data-theme"
+        );
+
+
+    const newTheme =
+        currentTheme === "dark"
+            ? "light"
+            : "dark";
+
+
+    localStorage.setItem(
+        "digitalnyZositTheme",
+        newTheme
+    );
+
+
+    applyTheme(newTheme);
+
+}
+
+
+const savedTheme =
+    localStorage.getItem(
+        "digitalnyZositTheme"
+    );
+
+
+if (savedTheme === "dark") {
+
+    applyTheme("dark");
+
+} else {
+
+    applyTheme("light");
+
+}
+
+</script>
+
+
+</body>
+
+</html>

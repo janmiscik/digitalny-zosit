@@ -408,6 +408,112 @@ def create_job(
 
 
 # =========================================
+# EDIT JOB - FORM
+# =========================================
+
+@app.get("/jobs/{job_id}/edit")
+def edit_job_form(
+
+    job_id: int,
+
+    request: Request,
+
+    db: Session = Depends(get_db)
+
+):
+
+    job = (
+
+        db
+        .query(Job)
+        .filter(
+            Job.id == job_id
+        )
+        .first()
+
+    )
+
+
+    if job is None:
+
+        return {
+            "error": "Zákazka neexistuje"
+        }
+
+
+    return templates.TemplateResponse(
+
+        request=request,
+
+        name="edit_job.html",
+
+        context={
+
+            "job": job
+
+        }
+
+    )
+
+
+# =========================================
+# EDIT JOB - SAVE
+# =========================================
+
+@app.post("/jobs/{job_id}/edit")
+def update_job(
+
+    job_id: int,
+
+    title: str = Form(...),
+
+    description: str = Form(""),
+
+    status: str = Form("Nová"),
+
+    db: Session = Depends(get_db)
+
+):
+
+    job = (
+
+        db
+        .query(Job)
+        .filter(
+            Job.id == job_id
+        )
+        .first()
+
+    )
+
+
+    if job is None:
+
+        return {
+            "error": "Zákazka neexistuje"
+        }
+
+
+    job.title = title
+
+    job.description = description
+
+    job.status = status
+
+
+    db.commit()
+
+
+    return RedirectResponse(
+
+        url=f"/customers/{job.customer_id}",
+
+        status_code=303
+
+    )
+
+
+# =========================================
 # UPDATE JOB STATUS
 # =========================================
 

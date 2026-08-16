@@ -213,74 +213,88 @@
                         </div>
 
 
-                        <form
-                            action="/jobs/{{ job.id }}/status"
-                            method="post"
-                            class="status-form"
-                        >
+                        <div class="job-actions">
 
 
-                            <select
-                                name="status"
-                                onchange="this.form.submit()"
-                                class="job-status status-{{ job.status | lower | replace(' ', '-') }}"
+                            <form
+                                action="/jobs/{{ job.id }}/status"
+                                method="post"
+                                class="status-form"
                             >
 
 
-                                <option
-                                    value="Nová"
-                                    {% if job.status == "Nová" %}
-                                        selected
-                                    {% endif %}
+                                <select
+                                    name="status"
+                                    onchange="this.form.submit()"
+                                    class="job-status status-{{ job.status | lower | replace(' ', '-') }}"
                                 >
-                                    Nová
-                                </option>
 
 
-                                <option
-                                    value="Dohodnutá"
-                                    {% if job.status == "Dohodnutá" %}
-                                        selected
-                                    {% endif %}
-                                >
-                                    Dohodnutá
-                                </option>
+                                    <option
+                                        value="Nová"
+                                        {% if job.status == "Nová" %}
+                                            selected
+                                        {% endif %}
+                                    >
+                                        Nová
+                                    </option>
 
 
-                                <option
-                                    value="Prebieha"
-                                    {% if job.status == "Prebieha" %}
-                                        selected
-                                    {% endif %}
-                                >
-                                    Prebieha
-                                </option>
+                                    <option
+                                        value="Dohodnutá"
+                                        {% if job.status == "Dohodnutá" %}
+                                            selected
+                                        {% endif %}
+                                    >
+                                        Dohodnutá
+                                    </option>
 
 
-                                <option
-                                    value="Čaká na materiál"
-                                    {% if job.status == "Čaká na materiál" %}
-                                        selected
-                                    {% endif %}
-                                >
-                                    Čaká na materiál
-                                </option>
+                                    <option
+                                        value="Prebieha"
+                                        {% if job.status == "Prebieha" %}
+                                            selected
+                                        {% endif %}
+                                    >
+                                        Prebieha
+                                    </option>
 
 
-                                <option
-                                    value="Hotová"
-                                    {% if job.status == "Hotová" %}
-                                        selected
-                                    {% endif %}
-                                >
-                                    Hotová
-                                </option>
+                                    <option
+                                        value="Čaká na materiál"
+                                        {% if job.status == "Čaká na materiál" %}
+                                            selected
+                                        {% endif %}
+                                    >
+                                        Čaká na materiál
+                                    </option>
 
 
-                            </select>
+                                    <option
+                                        value="Hotová"
+                                        {% if job.status == "Hotová" %}
+                                            selected
+                                        {% endif %}
+                                    >
+                                        Hotová
+                                    </option>
 
 
-                        </form>
+                                </select>
+
+
+                            </form>
+
+
+                            <a
+                                href="/jobs/{{ job.id }}/edit"
+                                class="edit-job-button"
+                            >
+                                ✏️ Upraviť
+                            </a>
+
+
+                        </div>
 
 
                     </div>
