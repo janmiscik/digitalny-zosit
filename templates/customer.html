@@ -34,7 +34,6 @@
 
     <div class="topbar-actions">
 
-
         <button
             type="button"
             class="theme-button"
@@ -52,7 +51,6 @@
         >
             ← Zákazníci
         </a>
-
 
     </div>
 
@@ -210,6 +208,18 @@
                             {% endif %}
 
 
+                            {% if job.due_date %}
+
+                                <div class="job-due-date">
+
+                                    📅
+                                    {{ job.due_date.strftime("%d.%m.%Y") }}
+
+                                </div>
+
+                            {% endif %}
+
+
                         </div>
 
 
@@ -349,7 +359,7 @@
 
 
 <!-- =====================================
-     FORMULÁR NOVEJ ZÁKAZKY
+     NOVÁ ZÁKAZKA
      ===================================== -->
 
 
@@ -421,37 +431,42 @@
 
 
             <label>
+                Termín
+            </label>
+
+
+            <input
+                type="date"
+                name="due_date"
+            >
+
+
+            <label>
                 Stav
             </label>
 
 
             <select name="status">
 
-
                 <option value="Nová">
                     Nová
                 </option>
-
 
                 <option value="Dohodnutá">
                     Dohodnutá
                 </option>
 
-
                 <option value="Prebieha">
                     Prebieha
                 </option>
-
 
                 <option value="Čaká na materiál">
                     Čaká na materiál
                 </option>
 
-
                 <option value="Hotová">
                     Hotová
                 </option>
-
 
             </select>
 
@@ -491,11 +506,6 @@
 <script>
 
 
-/* =====================================
-   ZÁKAZKA
-   ===================================== */
-
-
 function openJobForm() {
 
     document
@@ -528,11 +538,6 @@ document
 
         }
     );
-
-
-/* =====================================
-   TÉMA
-   ===================================== */
 
 
 function applyTheme(theme) {

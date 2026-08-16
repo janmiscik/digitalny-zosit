@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import FastAPI, Depends, Request, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -67,13 +69,11 @@ def home(
         .all()
     )
 
-
     jobs = (
         db
         .query(Job)
         .all()
     )
-
 
     new_jobs = sum(
         1
@@ -81,16 +81,13 @@ def home(
         if job.status == "Nová"
     )
 
-
     active_jobs = sum(
         1
         for job in jobs
         if job.status == "Prebieha"
     )
 
-
     total_jobs = len(jobs)
-
 
     return templates.TemplateResponse(
 
@@ -150,11 +147,9 @@ def create_customer(
 
     )
 
-
     db.add(new_customer)
 
     db.commit()
-
 
     return RedirectResponse(
 
@@ -191,13 +186,11 @@ def customer_detail(
 
     )
 
-
     if customer is None:
 
         return {
             "error": "Zákazník neexistuje"
         }
-
 
     jobs = (
 
@@ -209,7 +202,6 @@ def customer_detail(
         .all()
 
     )
-
 
     return templates.TemplateResponse(
 
@@ -254,13 +246,11 @@ def edit_customer_form(
 
     )
 
-
     if customer is None:
 
         return {
             "error": "Zákazník neexistuje"
         }
-
 
     return templates.TemplateResponse(
 
@@ -311,13 +301,11 @@ def update_customer(
 
     )
 
-
     if customer is None:
 
         return {
             "error": "Zákazník neexistuje"
         }
-
 
     customer.name = name
 
@@ -329,9 +317,7 @@ def update_customer(
 
     customer.note = note
 
-
     db.commit()
-
 
     return RedirectResponse(
 
@@ -355,6 +341,8 @@ def create_job(
 
     status: str = Form("Nová"),
 
+    due_date: str = Form(""),
+
     customer_id: int = Form(...),
 
     db: Session = Depends(get_db)
@@ -372,13 +360,19 @@ def create_job(
 
     )
 
-
     if customer is None:
 
         return {
             "error": "Zákazník neexistuje"
         }
 
+    parsed_due_date = None
+
+    if due_date:
+
+        parsed_due_date = date.fromisoformat(
+            due_date
+        )
 
     new_job = Job(
 
@@ -388,15 +382,15 @@ def create_job(
 
         status=status,
 
+        due_date=parsed_due_date,
+
         customer_id=customer_id
 
     )
 
-
     db.add(new_job)
 
     db.commit()
-
 
     return RedirectResponse(
 
@@ -433,13 +427,11 @@ def edit_job_form(
 
     )
 
-
     if job is None:
 
         return {
             "error": "Zákazka neexistuje"
         }
-
 
     return templates.TemplateResponse(
 
@@ -471,6 +463,8 @@ def update_job(
 
     status: str = Form("Nová"),
 
+    due_date: str = Form(""),
+
     db: Session = Depends(get_db)
 
 ):
@@ -486,13 +480,19 @@ def update_job(
 
     )
 
-
     if job is None:
 
         return {
             "error": "Zákazka neexistuje"
         }
 
+    parsed_due_date = None
+
+    if due_date:
+
+        parsed_due_date = date.fromisoformat(
+            due_date
+        )
 
     job.title = title
 
@@ -500,9 +500,9 @@ def update_job(
 
     job.status = status
 
+    job.due_date = parsed_due_date
 
     db.commit()
-
 
     return RedirectResponse(
 
@@ -539,18 +539,15 @@ def update_job_status(
 
     )
 
-
     if job is None:
 
         return {
             "error": "Zákazka neexistuje"
         }
 
-
     job.status = status
 
     db.commit()
-
 
     return RedirectResponse(
 

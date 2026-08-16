@@ -40,7 +40,6 @@
             class="theme-button"
             id="themeButton"
             onclick="toggleTheme()"
-            title="Prepnúť tému"
         >
             🌙
         </button>
@@ -67,13 +66,16 @@
 
         <div class="page-header">
 
+
             <h1>
                 Upraviť zákazku
             </h1>
 
+
             <p>
                 Upravte údaje zákazky.
             </p>
+
 
         </div>
 
@@ -109,6 +111,18 @@
                     name="description"
                     rows="6"
                 >{{ job.description or '' }}</textarea>
+
+
+                <label>
+                    Termín
+                </label>
+
+
+                <input
+                    type="date"
+                    name="due_date"
+                    value="{% if job.due_date %}{{ job.due_date.strftime('%Y-%m-%d') }}{% endif %}"
+                >
 
 
                 <label>
@@ -210,11 +224,6 @@
 
 
 <script>
-
-
-/* =====================================
-   TÉMA
-   ===================================== */
 
 
 function applyTheme(theme) {
