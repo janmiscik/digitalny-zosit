@@ -1,6 +1,6 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, Form, Request, Query
+from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -280,6 +280,10 @@ def get_jobs(
         default=None
     ),
 
+    customer_id: int | None = Query(
+        default=None
+    ),
+
     db: Session = Depends(get_db)
 
 ):
@@ -291,6 +295,13 @@ def get_jobs(
 
         query = query.filter(
             Job.status == status
+        )
+
+
+    if customer_id is not None:
+
+        query = query.filter(
+            Job.customer_id == customer_id
         )
 
 

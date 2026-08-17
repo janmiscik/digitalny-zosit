@@ -299,3 +299,32 @@ def test_get_jobs_by_status():
     for job in jobs:
 
         assert job["status"] == "Hotová"
+
+def test_get_jobs_by_customer():
+
+    response = client.get(
+        "/jobs?customer_id=1"
+    )
+
+    assert response.status_code == 200
+
+    jobs = response.json()
+
+    for job in jobs:
+
+        assert job["customer_id"] == 1
+
+def test_get_jobs_by_customer_and_status():
+
+    response = client.get(
+        "/jobs?customer_id=1&status=Hotová"
+    )
+
+    assert response.status_code == 200
+
+    jobs = response.json()
+
+    for job in jobs:
+
+        assert job["customer_id"] == 1
+        assert job["status"] == "Hotová"
