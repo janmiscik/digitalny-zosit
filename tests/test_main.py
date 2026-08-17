@@ -126,3 +126,16 @@ def test_update_job():
 
     assert response.status_code == 303
     assert response.headers["location"] == "/customers/1"
+
+def test_update_job_status():
+
+    response = client.post(
+        "/jobs/1/status",
+        data={
+            "status": "Hotová"
+        },
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/customers/1"
