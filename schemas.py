@@ -1,6 +1,6 @@
 from datetime import date
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 # =========================================
@@ -34,8 +34,9 @@ class CustomerRead(BaseModel):
     address: str | None = None
     note: str | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(
+        from_attributes=True
+    )
 
 
 # =========================================
@@ -68,5 +69,6 @@ class JobRead(BaseModel):
     customer_id: int
     due_date: date | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(
+        from_attributes=True
+    )
