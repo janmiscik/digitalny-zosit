@@ -67,3 +67,20 @@ def test_create_customer():
 
     assert response.status_code == 303
     assert response.headers["location"] == "/"
+
+def test_create_job():
+
+    response = client.post(
+        "/jobs",
+        data={
+            "title": "Testovacia zákazka",
+            "description": "Testovací popis",
+            "status": "Nová",
+            "due_date": "2026-08-20",
+            "customer_id": 1
+        },
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/customers/1"
