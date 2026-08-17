@@ -1,6 +1,19 @@
 from datetime import date
+from enum import Enum
 
 from pydantic import BaseModel, ConfigDict
+
+
+# =========================================
+# JOB STATUS
+# =========================================
+
+class JobStatus(str, Enum):
+
+    NEW = "Nová"
+    AGREED = "Dohodnutá"
+    IN_PROGRESS = "Prebieha"
+    DONE = "Hotová"
 
 
 # =========================================
@@ -47,7 +60,7 @@ class JobCreate(BaseModel):
 
     title: str
     description: str | None = None
-    status: str = "Nová"
+    status: JobStatus = JobStatus.NEW
     customer_id: int
     due_date: date | None = None
 
@@ -56,7 +69,7 @@ class JobUpdate(BaseModel):
 
     title: str
     description: str | None = None
-    status: str = "Nová"
+    status: JobStatus = JobStatus.NEW
     due_date: date | None = None
 
 
@@ -65,7 +78,7 @@ class JobRead(BaseModel):
     id: int
     title: str
     description: str | None = None
-    status: str
+    status: JobStatus
     customer_id: int
     due_date: date | None = None
 
