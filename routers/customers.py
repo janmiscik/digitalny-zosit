@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -257,9 +258,13 @@ def get_customers(
 
     if search is not None:
 
+        search_value = f"%{search}%"
+
         query = query.filter(
-            Customer.name.ilike(
-                f"%{search}%"
+            or_(
+                Customer.name.ilike(search_value),
+                Customer.phone.ilike(search_value),
+                Customer.email.ilike(search_value)
             )
         )
 
