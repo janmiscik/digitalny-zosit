@@ -201,3 +201,37 @@ def test_create_job_agreed():
 
     assert response.status_code == 303
     assert response.headers["location"] == "/customers/1"
+
+def test_update_job():
+
+    response = client.post(
+        "/jobs/1/edit",
+        data={
+            "title": "Upravená zákazka",
+            "description": "Upravený popis",
+            "status": "Prebieha",
+            "due_date": "2026-08-30"
+        },
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/customers/1"
+
+def test_update_customer_not_found():
+
+    response = client.post(
+        "/customers/999999/edit",
+        data={
+            "name": "Neexistujúci zákazník",
+            "phone": "0900111222",
+            "email": "none@example.com",
+            "address": "Nikde 1",
+            "note": "Test"
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "error": "Zákazník neexistuje"
+    }
