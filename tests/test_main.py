@@ -235,3 +235,44 @@ def test_update_customer_not_found():
     assert response.json() == {
         "error": "Zákazník neexistuje"
     }
+
+def test_update_job_status():
+
+    response = client.post(
+        "/jobs/1/status",
+        data={
+            "status": "Hotová"
+        },
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/customers/1"
+
+    response = client.get("/jobs")
+
+    assert response.status_code == 200
+
+    jobs = response.json()
+
+    job = next(
+        job
+        for job in jobs
+        if job["id"] == 1
+    )
+
+    assert job["status"] == "Hotová"
+
+def test_update_job_status_not_found():
+
+    response = client.post(
+        "/jobs/999999/status",
+        data={
+            "status": "Hotová"
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "error": "Zákazka neexistuje"
+    }
