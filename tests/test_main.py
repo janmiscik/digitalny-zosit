@@ -93,3 +93,20 @@ def test_job_not_found():
     assert response.json() == {
         "error": "Zákazka neexistuje"
     }
+
+def test_update_customer():
+
+    response = client.post(
+        "/customers/1/edit",
+        data={
+            "name": "Upravený zákazník",
+            "phone": "0911222333",
+            "email": "upraveny@example.com",
+            "address": "Nová adresa 5",
+            "note": "Upravená poznámka"
+        },
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/customers/1"
