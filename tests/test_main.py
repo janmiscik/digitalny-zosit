@@ -276,3 +276,12 @@ def test_update_job_status_not_found():
     assert response.json() == {
         "error": "Zákazka neexistuje"
     }
+
+def test_job_status_enum():
+
+    from schemas import JobStatus
+
+    assert JobStatus.NEW.value == "Nová"
+    assert JobStatus.AGREED.value == "Dohodnutá"
+    assert JobStatus.IN_PROGRESS.value == "Prebieha"
+    assert JobStatus.DONE.value == "Hotová"
