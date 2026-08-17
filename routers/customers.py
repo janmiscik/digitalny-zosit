@@ -264,4 +264,6 @@ def get_customers(
         )
 
 
-    return query.all()
+    return query.order_by(
+        Customer.name.asc()
+    ).all()

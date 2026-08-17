@@ -358,3 +358,18 @@ def test_get_customers_by_search():
     for customer in customers:
 
         assert "testovací" in customer["name"].lower()
+
+def test_get_customers_sorted_by_name():
+
+    response = client.get("/customers")
+
+    assert response.status_code == 200
+
+    customers = response.json()
+
+    names = [
+        customer["name"]
+        for customer in customers
+    ]
+
+    assert names == sorted(names)
