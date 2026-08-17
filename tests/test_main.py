@@ -344,3 +344,17 @@ def test_get_jobs_sorted_by_due_date():
     ]
 
     assert dates == sorted(dates)
+
+def test_get_customers_by_search():
+
+    response = client.get(
+        "/customers?search=Testovací"
+    )
+
+    assert response.status_code == 200
+
+    customers = response.json()
+
+    for customer in customers:
+
+        assert "testovací" in customer["name"].lower()

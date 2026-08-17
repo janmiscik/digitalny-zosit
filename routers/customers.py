@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import Customer
 from schemas import CustomerRead
+
 
 router = APIRouter()
 
@@ -243,12 +244,24 @@ def update_customer(
 )
 def get_customers(
 
+    search: str | None = Query(
+        default=None
+    ),
+
     db: Session = Depends(get_db)
 
 ):
 
-    return (
-        db
-        .query(Customer)
-        .all()
-    )
+    query = db.query(Customer)
+
+
+    if search is not None:
+
+        query = query.filter(
+            Customer.name.ilike(
+                f"%{search}%"
+            )
+        )
+
+
+    return query.all()
