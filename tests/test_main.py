@@ -328,3 +328,19 @@ def test_get_jobs_by_customer_and_status():
 
         assert job["customer_id"] == 1
         assert job["status"] == "Hotová"
+
+def test_get_jobs_sorted_by_due_date():
+
+    response = client.get("/jobs")
+
+    assert response.status_code == 200
+
+    jobs = response.json()
+
+    dates = [
+        job["due_date"]
+        for job in jobs
+        if job["due_date"] is not None
+    ]
+
+    assert dates == sorted(dates)

@@ -305,4 +305,6 @@ def get_jobs(
         )
 
 
-    return query.all()
+    return query.order_by(
+        Job.due_date.asc()
+    ).all()
