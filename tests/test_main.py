@@ -167,3 +167,37 @@ def test_edit_job_not_found():
     assert response.json() == {
         "error": "Zákazka neexistuje"
     }
+
+def test_invalid_job_status():
+
+    response = client.get("/jobs")
+
+    assert response.status_code == 200
+
+    jobs = response.json()
+
+    for job in jobs:
+
+        assert job["status"] in {
+            "Nová",
+            "Dohodnutá",
+            "Prebieha",
+            "Hotová"
+        }
+
+def test_create_job_agreed():
+
+    response = client.post(
+        "/jobs",
+        data={
+            "title": "Dohodnutá zákazka",
+            "description": "Test",
+            "status": "Dohodnutá",
+            "due_date": "2026-08-25",
+            "customer_id": 1
+        },
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/customers/1"
