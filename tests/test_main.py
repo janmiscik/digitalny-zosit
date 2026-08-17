@@ -84,3 +84,12 @@ def test_create_job():
 
     assert response.status_code == 303
     assert response.headers["location"] == "/customers/1"
+
+def test_job_not_found():
+
+    response = client.get("/jobs/999999/edit")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "error": "Zákazka neexistuje"
+    }
