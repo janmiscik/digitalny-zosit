@@ -285,3 +285,17 @@ def test_job_status_enum():
     assert JobStatus.AGREED.value == "Dohodnutá"
     assert JobStatus.IN_PROGRESS.value == "Prebieha"
     assert JobStatus.DONE.value == "Hotová"
+
+def test_get_jobs_by_status():
+
+    response = client.get(
+        "/jobs?status=Hotová"
+    )
+
+    assert response.status_code == 200
+
+    jobs = response.json()
+
+    for job in jobs:
+
+        assert job["status"] == "Hotová"

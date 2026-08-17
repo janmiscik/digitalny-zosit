@@ -1,6 +1,6 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, Request, Query
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -276,12 +276,22 @@ def update_job_status(
 )
 def get_jobs(
 
+    status: str | None = Query(
+        default=None
+    ),
+
     db: Session = Depends(get_db)
 
 ):
 
-    return (
-        db
-        .query(Job)
-        .all()
-    )
+    query = db.query(Job)
+
+
+    if status is not None:
+
+        query = query.filter(
+            Job.status == status
+        )
+
+
+    return query.all()
