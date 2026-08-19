@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="sk">
 
@@ -64,7 +65,7 @@
 
 
         <!-- =====================================
-             ZÁKAZNÍK
+             HLAVIČKA ZÁKAZNÍKA
              ===================================== -->
 
 
@@ -81,7 +82,6 @@
 
                 <div class="customer-detail-title">
 
-
                     <h1>
                         {{ customer.name }}
                     </h1>
@@ -93,7 +93,6 @@
                     >
                         ✏️ Upraviť zákazníka
                     </a>
-
 
                 </div>
 
@@ -188,15 +187,19 @@
                 {% for job in jobs %}
 
 
-                    <div class="job-card">
+                    <div class="job-card customer-job-card">
 
 
                         <div class="job-info">
 
 
-                            <h3>
-                                {{ job.title }}
-                            </h3>
+                            <div class="customer-job-title-row">
+
+                                <h3>
+                                    {{ job.title }}
+                                </h3>
+
+                            </div>
 
 
                             {% if job.description %}
@@ -612,3 +615,4 @@ if (savedTheme === "dark") {
 </body>
 
 </html>
+```
