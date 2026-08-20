@@ -1,21 +1,39 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, Form, Query, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
-from fastapi.templating import Jinja2Templates
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
+from auth import require_login_api, require_login_page
 from database import get_db
 from models import Customer, Job
-from schemas import JobRead
+from schemas import JobCreate, JobRead, JobStatus, JobUpdate
+from templates_config import templates
 
 
 router = APIRouter()
 
 
-templates = Jinja2Templates(
-    directory="templates"
-)
+def parse_due_date(raw_value: str) -> date | None:
+    """
+    Bezpečne skonvertuje reťazec vo formáte YYYY-MM-DD na date.
+    Vráti None pre prázdny vstup, vyhodí HTTPException 400 pre nevalidný formát.
+    """
+
+    if not raw_value:
+        return None
+
+    try:
+
+        return date.fromisoformat(raw_value)
+
+    except ValueError:
+
+        raise HTTPException(
+            status_code=400,
+            detail="Neplatný formát dátumu (očakávaný formát: RRRR-MM-DD)"
+        )
 
 
 # =========================================
@@ -35,7 +53,9 @@ def create_job(
 
     customer_id: int = Form(...),
 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+
+    user: str = Depends(require_login_page)
 
 ):
 
@@ -53,33 +73,35 @@ def create_job(
 
     if customer is None:
 
-        return {
-            "error": "Zákazník neexistuje"
-        }
+        raise HTTPException(
+            status_code=404,
+            detail="Zákazník neexistuje"
+        )
 
 
-    parsed_due_date = None
+    parsed_due_date = parse_due_date(due_date)
 
 
-    if due_date:
+    try:
 
-        parsed_due_date = date.fromisoformat(
-            due_date
+        job_data = JobCreate(
+            title=title,
+            description=description or None,
+            status=JobStatus(status),
+            due_date=parsed_due_date,
+            customer_id=customer_id
+        )
+
+    except (ValidationError, ValueError) as exc:
+
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc)
         )
 
 
     new_job = Job(
-
-        title=title,
-
-        description=description,
-
-        status=status,
-
-        due_date=parsed_due_date,
-
-        customer_id=customer_id
-
+        **job_data.model_dump()
     )
 
 
@@ -108,7 +130,9 @@ def edit_job_form(
 
     request: Request,
 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+
+    user: str = Depends(require_login_page)
 
 ):
 
@@ -126,9 +150,10 @@ def edit_job_form(
 
     if job is None:
 
-        return {
-            "error": "Zákazka neexistuje"
-        }
+        raise HTTPException(
+            status_code=404,
+            detail="Zákazka neexistuje"
+        )
 
 
     return templates.TemplateResponse(
@@ -163,7 +188,9 @@ def update_job(
 
     due_date: str = Form(""),
 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+
+    user: str = Depends(require_login_page)
 
 ):
 
@@ -181,28 +208,35 @@ def update_job(
 
     if job is None:
 
-        return {
-            "error": "Zákazka neexistuje"
-        }
-
-
-    parsed_due_date = None
-
-
-    if due_date:
-
-        parsed_due_date = date.fromisoformat(
-            due_date
+        raise HTTPException(
+            status_code=404,
+            detail="Zákazka neexistuje"
         )
 
 
-    job.title = title
+    parsed_due_date = parse_due_date(due_date)
 
-    job.description = description
 
-    job.status = status
+    try:
 
-    job.due_date = parsed_due_date
+        job_data = JobUpdate(
+            title=title,
+            description=description or None,
+            status=JobStatus(status),
+            due_date=parsed_due_date
+        )
+
+    except (ValidationError, ValueError) as exc:
+
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc)
+        )
+
+
+    for field, value in job_data.model_dump().items():
+
+        setattr(job, field, value)
 
 
     db.commit()
@@ -228,7 +262,9 @@ def update_job_status(
 
     status: str = Form(...),
 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+
+    user: str = Depends(require_login_page)
 
 ):
 
@@ -246,12 +282,22 @@ def update_job_status(
 
     if job is None:
 
-        return {
-            "error": "Zákazka neexistuje"
-        }
+        raise HTTPException(
+            status_code=404,
+            detail="Zákazka neexistuje"
+        )
 
 
-    job.status = status
+    try:
+
+        job.status = JobStatus(status)
+
+    except ValueError:
+
+        raise HTTPException(
+            status_code=422,
+            detail=f"Neplatný stav zákazky: {status}"
+        )
 
 
     db.commit()
@@ -284,7 +330,9 @@ def get_jobs(
         default=None
     ),
 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+
+    user: str = Depends(require_login_api)
 
 ):
 

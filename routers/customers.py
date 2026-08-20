@@ -1,20 +1,17 @@
-from fastapi import APIRouter, Depends, Form, Query, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
-from fastapi.templating import Jinja2Templates
+from pydantic import ValidationError
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from auth import require_login_api, require_login_page
 from database import get_db
 from models import Customer
-from schemas import CustomerRead
+from schemas import CustomerCreate, CustomerRead, CustomerUpdate
+from templates_config import templates
 
 
 router = APIRouter()
-
-
-templates = Jinja2Templates(
-    directory="templates"
-)
 
 
 # =========================================
@@ -28,7 +25,9 @@ def customer_detail(
 
     request: Request,
 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+
+    user: str = Depends(require_login_page)
 
 ):
 
@@ -46,12 +45,19 @@ def customer_detail(
 
     if customer is None:
 
-        return {
-            "error": "Zákazník neexistuje"
-        }
+        raise HTTPException(
+            status_code=404,
+            detail="Zákazník neexistuje"
+        )
 
 
     jobs = customer.jobs
+
+    invoices = sorted(
+        customer.invoices,
+        key=lambda invoice: invoice.issue_date,
+        reverse=True
+    )
 
 
     return templates.TemplateResponse(
@@ -64,7 +70,9 @@ def customer_detail(
 
             "customer": customer,
 
-            "jobs": jobs
+            "jobs": jobs,
+
+            "invoices": invoices
 
         }
 
@@ -88,22 +96,41 @@ def create_customer(
 
     note: str = Form(""),
 
-    db: Session = Depends(get_db)
+    ico: str = Form(""),
+
+    dic: str = Form(""),
+
+    ic_dph: str = Form(""),
+
+    db: Session = Depends(get_db),
+
+    user: str = Depends(require_login_page)
 
 ):
 
+    try:
+
+        customer_data = CustomerCreate(
+            name=name,
+            phone=phone or None,
+            email=email or None,
+            address=address or None,
+            note=note or None,
+            ico=ico or None,
+            dic=dic or None,
+            ic_dph=ic_dph or None
+        )
+
+    except ValidationError as exc:
+
+        raise HTTPException(
+            status_code=422,
+            detail=exc.errors()
+        )
+
+
     new_customer = Customer(
-
-        name=name,
-
-        phone=phone,
-
-        email=email,
-
-        address=address,
-
-        note=note
-
+        **customer_data.model_dump()
     )
 
 
@@ -132,7 +159,9 @@ def edit_customer_form(
 
     request: Request,
 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+
+    user: str = Depends(require_login_page)
 
 ):
 
@@ -150,9 +179,10 @@ def edit_customer_form(
 
     if customer is None:
 
-        return {
-            "error": "Zákazník neexistuje"
-        }
+        raise HTTPException(
+            status_code=404,
+            detail="Zákazník neexistuje"
+        )
 
 
     return templates.TemplateResponse(
@@ -189,7 +219,15 @@ def update_customer(
 
     note: str = Form(""),
 
-    db: Session = Depends(get_db)
+    ico: str = Form(""),
+
+    dic: str = Form(""),
+
+    ic_dph: str = Form(""),
+
+    db: Session = Depends(get_db),
+
+    user: str = Depends(require_login_page)
 
 ):
 
@@ -207,20 +245,36 @@ def update_customer(
 
     if customer is None:
 
-        return {
-            "error": "Zákazník neexistuje"
-        }
+        raise HTTPException(
+            status_code=404,
+            detail="Zákazník neexistuje"
+        )
 
 
-    customer.name = name
+    try:
 
-    customer.phone = phone
+        customer_data = CustomerUpdate(
+            name=name,
+            phone=phone or None,
+            email=email or None,
+            address=address or None,
+            note=note or None,
+            ico=ico or None,
+            dic=dic or None,
+            ic_dph=ic_dph or None
+        )
 
-    customer.email = email
+    except ValidationError as exc:
 
-    customer.address = address
+        raise HTTPException(
+            status_code=422,
+            detail=exc.errors()
+        )
 
-    customer.note = note
+
+    for field, value in customer_data.model_dump().items():
+
+        setattr(customer, field, value)
 
 
     db.commit()
@@ -249,7 +303,9 @@ def get_customers(
         default=None
     ),
 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+
+    user: str = Depends(require_login_api)
 
 ):
 

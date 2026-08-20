@@ -1,16 +1,23 @@
+import os
 from datetime import date
 
-from fastapi import FastAPI, Depends, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy.orm import Session
 
+from auth import require_login_page
 from database import Base, engine, get_db
 
 from models import Customer, Job
 
+from routers.auth import router as auth_router
+from routers.company import router as company_router
 from routers.customers import router as customers_router
+from routers.invoices import router as invoices_router
 from routers.jobs import router as jobs_router
+
+from templates_config import templates
 
 
 # =========================================
@@ -27,6 +34,21 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI()
 
 
+SECRET_KEY = os.getenv("SECRET_KEY")
+
+if not SECRET_KEY:
+    raise RuntimeError(
+        "SECRET_KEY nie je nastavený v .env - pozri .env.example"
+    )
+
+
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=SECRET_KEY,
+    same_site="lax",
+)
+
+
 app.mount(
     "/static",
     StaticFiles(directory="static"),
@@ -34,15 +56,13 @@ app.mount(
 )
 
 
-templates = Jinja2Templates(
-    directory="templates"
-)
-
-
-
 # =========================================
 # ROUTERS
 # =========================================
+
+app.include_router(
+    auth_router
+)
 
 app.include_router(
     customers_router
@@ -50,6 +70,14 @@ app.include_router(
 
 app.include_router(
     jobs_router
+)
+
+app.include_router(
+    invoices_router
+)
+
+app.include_router(
+    company_router
 )
 
 
@@ -60,7 +88,8 @@ app.include_router(
 @app.get("/")
 def home(
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: str = Depends(require_login_page)
 ):
 
     customers = (

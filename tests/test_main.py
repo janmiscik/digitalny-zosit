@@ -1,12 +1,16 @@
+import os
 import sys
 from datetime import date
 from pathlib import Path
 
-import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+
+# =========================================
+# ENV PREMENNÉ (musia byť nastavené PRED importom main.py)
+# =========================================
+
+os.environ.setdefault("SECRET_KEY", "test-secret-key")
+os.environ.setdefault("ADMIN_USERNAME", "testadmin")
+os.environ.setdefault("ADMIN_PASSWORD_HASH", "")
 
 
 sys.path.insert(
@@ -15,6 +19,13 @@ sys.path.insert(
 )
 
 
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from auth import require_login_api, require_login_page
 from database import Base, get_db
 from main import app
 from models import Customer, Job
@@ -98,7 +109,14 @@ def setup_test_database():
         finally:
             db.close()
 
+    # Testujeme business logiku CRUD operácií, nie samotnú autentifikáciu
+    # (tá má vlastné testy v test_auth.py) - preto login vyžadovanie tu obídeme.
+    def override_login():
+        return "testuser"
+
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[require_login_page] = override_login
+    app.dependency_overrides[require_login_api] = override_login
 
     yield
 
@@ -142,11 +160,8 @@ def test_customer_not_found():
 
     response = client.get("/customers/999999")
 
-    assert response.status_code == 200
-
-    assert response.json() == {
-        "error": "Zákazník neexistuje"
-    }
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Zákazník neexistuje"
 
 
 def test_create_customer():
@@ -165,6 +180,20 @@ def test_create_customer():
 
     assert response.status_code == 303
     assert response.headers["location"] == "/"
+
+
+def test_create_customer_missing_name():
+
+    response = client.post(
+        "/customers",
+        data={
+            "name": "",
+            "phone": "0900111222"
+        },
+        follow_redirects=False
+    )
+
+    assert response.status_code == 422
 
 
 def test_update_customer():
@@ -198,11 +227,8 @@ def test_update_customer_not_found():
         }
     )
 
-    assert response.status_code == 200
-
-    assert response.json() == {
-        "error": "Zákazník neexistuje"
-    }
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Zákazník neexistuje"
 
 
 def test_get_customers_by_search():
@@ -270,11 +296,8 @@ def test_job_not_found():
 
     response = client.get("/jobs/999999/edit")
 
-    assert response.status_code == 200
-
-    assert response.json() == {
-        "error": "Zákazka neexistuje"
-    }
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Zákazka neexistuje"
 
 
 def test_update_job():
@@ -331,11 +354,20 @@ def test_update_job_status_not_found():
         }
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Zákazka neexistuje"
 
-    assert response.json() == {
-        "error": "Zákazka neexistuje"
-    }
+
+def test_update_job_status_invalid():
+
+    response = client.post(
+        "/jobs/1/status",
+        data={
+            "status": "Neexistujúci stav"
+        }
+    )
+
+    assert response.status_code == 422
 
 
 def test_create_job_customer_not_found():
@@ -352,22 +384,33 @@ def test_create_job_customer_not_found():
         follow_redirects=False
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Zákazník neexistuje"
 
-    assert response.json() == {
-        "error": "Zákazník neexistuje"
-    }
+
+def test_create_job_invalid_due_date():
+
+    response = client.post(
+        "/jobs",
+        data={
+            "title": "Zákazka s zlým dátumom",
+            "description": "Test",
+            "status": "Nová",
+            "due_date": "nie je dátum",
+            "customer_id": 1
+        },
+        follow_redirects=False
+    )
+
+    assert response.status_code == 400
 
 
 def test_edit_job_not_found():
 
     response = client.get("/jobs/999999/edit")
 
-    assert response.status_code == 200
-
-    assert response.json() == {
-        "error": "Zákazka neexistuje"
-    }
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Zákazka neexistuje"
 
 
 def test_invalid_job_status():

@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="sk">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        Faktúra č. {{ invoice.invoice_number }} - Digitálny zošit
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', path='style.css') }}"
+    >
+
+    <style>
+
+        .invoice-view-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 12px 0 20px 0;
+        }
+
+        .invoice-view-table th {
+            text-align: left;
+            font-size: 12px;
+            color: var(--text-muted);
+            padding: 8px 6px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .invoice-view-table td {
+            padding: 8px 6px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .invoice-view-table th:not(:first-child),
+        .invoice-view-table td:not(:first-child) {
+            text-align: right;
+        }
+
+        .invoice-total-line {
+            display: flex;
+            justify-content: flex-end;
+            gap: 24px;
+            font-size: 22px;
+            font-weight: 700;
+            margin-top: 8px;
+        }
+
+        .invoice-meta-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .invoice-meta-grid div span {
+            display: block;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .invoice-actions-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+
+<header class="topbar">
+
+    <div class="logo">
+        📒 Digitálny zošit
+    </div>
+
+
+    <div class="topbar-actions">
+
+        <button
+            type="button"
+            class="theme-button"
+            id="themeButton"
+            onclick="toggleTheme()"
+            title="Prepnúť tému"
+        >
+            🌙
+        </button>
+
+
+        <a
+            href="/customers/{{ invoice.customer_id }}"
+            class="back-button"
+        >
+            ← Späť k zákazníkovi
+        </a>
+
+    </div>
+
+</header>
+
+
+<main class="container">
+
+
+    <section class="edit-customer-page">
+
+
+        <div class="page-header">
+
+            <h1>
+                Faktúra č. {{ invoice.invoice_number }}
+            </h1>
+
+            <p>
+                {{ invoice.customer.name }}
+            </p>
+
+        </div>
+
+
+        <div class="edit-customer-card">
+
+
+            <div class="invoice-actions-row">
+
+                <a
+                    href="/invoices/{{ invoice.id }}/pdf"
+                    class="save-button"
+                    target="_blank"
+                >
+                    📄 Stiahnuť PDF
+                </a>
+
+
+                <form
+                    action="/invoices/{{ invoice.id }}/status"
+                    method="post"
+                    style="display: inline-flex; align-items: center; gap: 8px;"
+                >
+
+                    <select
+                        name="status"
+                        onchange="this.form.submit()"
+                        class="job-status status-{{ invoice.status | lower | replace(' ', '-') }}"
+                    >
+
+                        {% for status_option in statuses %}
+
+                            <option
+                                value="{{ status_option.value }}"
+                                {% if invoice.status == status_option.value %}
+                                    selected
+                                {% endif %}
+                            >
+                                {{ status_option.value }}
+                            </option>
+
+                        {% endfor %}
+
+                    </select>
+
+                </form>
+
+
+                {% if invoice.job %}
+
+                    <a
+                        href="/jobs/{{ invoice.job.id }}/edit"
+                        class="edit-job-button"
+                    >
+                        Súvisiaca zákazka: {{ invoice.job.title }}
+                    </a>
+
+                {% endif %}
+
+            </div>
+
+
+            <div class="invoice-meta-grid">
+
+                <div>
+                    <span>Dátum vystavenia</span>
+                    {{ invoice.issue_date.strftime("%d.%m.%Y") }}
+                </div>
+
+                <div>
+                    <span>Dátum dodania</span>
+                    {{ (invoice.delivery_date or invoice.issue_date).strftime("%d.%m.%Y") }}
+                </div>
+
+                <div>
+                    <span>Dátum splatnosti</span>
+                    {{ invoice.due_date.strftime("%d.%m.%Y") }}
+                </div>
+
+                <div>
+                    <span>Variabilný symbol</span>
+                    {{ invoice.variable_symbol or invoice.invoice_number }}
+                </div>
+
+            </div>
+
+
+            <table class="invoice-view-table">
+
+                <thead>
+
+                    <tr>
+
+                        <th>Popis</th>
+                        <th>Množ.</th>
+                        <th>MJ</th>
+                        <th>Cena/MJ</th>
+                        <th>DPH</th>
+                        <th>Spolu</th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
+                    {% for item in invoice.items %}
+
+                        <tr>
+
+                            <td>{{ item.description }}</td>
+                            <td>{{ item.quantity }}</td>
+                            <td>{{ item.unit }}</td>
+                            <td>{{ "%.2f"|format(item.unit_price) }} €</td>
+                            <td>{{ item.vat_rate }} %</td>
+                            <td>{{ "%.2f"|format(item.quantity * item.unit_price) }} €</td>
+
+                        </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+
+            <div style="max-width: 400px; margin-left: auto;">
+
+                {% for row in totals.vat_breakdown %}
+
+                    <div style="display: flex; justify-content: space-between; font-size: 14px; color: var(--text-secondary); margin-bottom: 4px;">
+
+                        <span>DPH {{ row.rate }} % (základ {{ "%.2f"|format(row.base) }} €)</span>
+                        <span>{{ "%.2f"|format(row.vat) }} €</span>
+
+                    </div>
+
+                {% endfor %}
+
+            </div>
+
+
+            <div class="invoice-total-line">
+                Celkom: {{ "%.2f"|format(totals.total_gross) }} €
+            </div>
+
+
+            {% if invoice.note %}
+
+                <div style="margin-top: 24px;">
+
+                    <label>Poznámka</label>
+                    <p>{{ invoice.note }}</p>
+
+                </div>
+
+            {% endif %}
+
+
+        </div>
+
+
+    </section>
+
+
+</main>
+
+
+<script>
+
+function applyTheme(theme) {
+
+    document.documentElement.setAttribute(
+        "data-theme",
+        theme
+    );
+
+    const button =
+        document.getElementById("themeButton");
+
+    if (theme === "dark") {
+
+        button.textContent = "☀️";
+
+    } else {
+
+        button.textContent = "🌙";
+
+    }
+
+}
+
+
+function toggleTheme() {
+
+    const currentTheme =
+        document.documentElement.getAttribute(
+            "data-theme"
+        );
+
+    const newTheme =
+        currentTheme === "dark"
+            ? "light"
+            : "dark";
+
+    localStorage.setItem(
+        "digitalnyZositTheme",
+        newTheme
+    );
+
+    applyTheme(newTheme);
+
+}
+
+
+const savedTheme =
+    localStorage.getItem(
+        "digitalnyZositTheme"
+    );
+
+
+if (savedTheme === "dark") {
+
+    applyTheme("dark");
+
+} else {
+
+    applyTheme("light");
+
+}
+
+</script>
+
+
+</body>
+
+</html>

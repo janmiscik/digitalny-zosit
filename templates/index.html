@@ -1,4 +1,3 @@
-```html
 <!DOCTYPE html>
 <html lang="sk">
 
@@ -48,6 +47,28 @@
         >
             + Nový zákazník
         </button>
+
+        <a
+            href="/settings"
+            class="logout-button"
+            title="Fakturačné údaje firmy"
+        >
+            ⚙️ Nastavenia
+        </a>
+
+        <form
+            action="/logout"
+            method="post"
+            style="display: inline;"
+        >
+            <button
+                type="submit"
+                class="logout-button"
+                title="Odhlásiť sa"
+            >
+                Odhlásiť sa
+            </button>
+        </form>
 
     </div>
 
@@ -968,4 +989,3 @@ if (customerSearch) {
 </body>
 
 </html>
-```

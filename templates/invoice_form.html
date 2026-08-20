@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="sk">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        Nová faktúra - {{ customer.name }} - Digitálny zošit
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', path='style.css') }}"
+    >
+
+    <style>
+
+        .invoice-items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 12px 0 20px 0;
+        }
+
+        .invoice-items-table th {
+            text-align: left;
+            font-size: 12px;
+            color: var(--text-muted);
+            padding: 6px 6px;
+            font-weight: 600;
+        }
+
+        .invoice-items-table td {
+            padding: 4px 6px;
+            vertical-align: top;
+        }
+
+        .invoice-items-table input,
+        .invoice-items-table select {
+            width: 100%;
+            margin: 0;
+        }
+
+        .invoice-item-description {
+            min-width: 180px;
+        }
+
+        .invoice-item-remove {
+            background: none;
+            border: none;
+            color: var(--danger);
+            font-size: 18px;
+            cursor: pointer;
+            padding: 4px 8px;
+        }
+
+        .add-item-button {
+            background: var(--surface-secondary);
+            border: 1px dashed var(--border);
+            border-radius: 9px;
+            padding: 10px 14px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text);
+            cursor: pointer;
+            width: 100%;
+        }
+
+        .invoice-form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 12px;
+        }
+
+        .invoice-form-grid label {
+            margin-top: 0;
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+
+<header class="topbar">
+
+    <div class="logo">
+        📒 Digitálny zošit
+    </div>
+
+
+    <div class="topbar-actions">
+
+        <button
+            type="button"
+            class="theme-button"
+            id="themeButton"
+            onclick="toggleTheme()"
+            title="Prepnúť tému"
+        >
+            🌙
+        </button>
+
+
+        <a
+            href="/customers/{{ customer.id }}"
+            class="back-button"
+        >
+            ← Späť k zákazníkovi
+        </a>
+
+    </div>
+
+</header>
+
+
+<main class="container">
+
+
+    <section class="edit-customer-page">
+
+
+        <div class="page-header">
+
+            <h1>
+                Nová faktúra
+            </h1>
+
+            <p>
+                Zákazník: {{ customer.name }}
+                {% if job %}
+                    · zákazka: {{ job.title }}
+                {% endif %}
+            </p>
+
+        </div>
+
+
+        <div class="edit-customer-card">
+
+
+            <form
+                action="/customers/{{ customer.id }}/invoices"
+                method="post"
+                id="invoiceForm"
+            >
+
+
+                {% if job %}
+
+                    <input
+                        type="hidden"
+                        name="job_id"
+                        value="{{ job.id }}"
+                    >
+
+                {% endif %}
+
+
+                <div class="invoice-form-grid">
+
+
+                    <div>
+
+                        <label>
+                            Dátum vystavenia *
+                        </label>
+
+                        <input
+                            type="date"
+                            name="issue_date"
+                            value="{{ today.isoformat() }}"
+                            required
+                        >
+
+                    </div>
+
+
+                    <div>
+
+                        <label>
+                            Dátum splatnosti *
+                        </label>
+
+                        <input
+                            type="date"
+                            name="due_date"
+                            required
+                        >
+
+                    </div>
+
+
+                    <div>
+
+                        <label>
+                            Dátum dodania
+                        </label>
+
+                        <input
+                            type="date"
+                            name="delivery_date"
+                        >
+
+                    </div>
+
+
+                </div>
+
+
+                <label>
+                    Variabilný symbol <span style="font-weight: 400; color: var(--text-muted);">(ak necháš prázdne, použije sa číslo faktúry)</span>
+                </label>
+
+                <input
+                    type="text"
+                    name="variable_symbol"
+                >
+
+
+                <label>
+                    Položky faktúry *
+                </label>
+
+
+                <table
+                    class="invoice-items-table"
+                    id="itemsTable"
+                >
+
+                    <thead>
+
+                        <tr>
+
+                            <th>Popis</th>
+                            <th style="width: 70px;">Množ.</th>
+                            <th style="width: 70px;">MJ</th>
+                            <th style="width: 100px;">Cena/MJ (€)</th>
+                            <th style="width: 90px;">DPH</th>
+                            <th style="width: 30px;"></th>
+
+                        </tr>
+
+                    </thead>
+
+                    <tbody id="itemsBody">
+
+
+                        <tr class="invoice-item-row">
+
+                            <td class="invoice-item-description">
+                                <input
+                                    type="text"
+                                    name="description"
+                                    placeholder="Napr. Práca, materiál..."
+                                    value="{{ job.title if job else '' }}"
+                                    required
+                                >
+                            </td>
+
+                            <td>
+                                <input
+                                    type="number"
+                                    name="quantity"
+                                    value="1"
+                                    step="0.01"
+                                    min="0.01"
+                                    required
+                                >
+                            </td>
+
+                            <td>
+                                <input
+                                    type="text"
+                                    name="unit"
+                                    value="ks"
+                                >
+                            </td>
+
+                            <td>
+                                <input
+                                    type="number"
+                                    name="unit_price"
+                                    value="0"
+                                    step="0.01"
+                                    min="0"
+                                    required
+                                >
+                            </td>
+
+                            <td>
+
+                                <select name="vat_rate">
+
+                                    <option value="23" selected>23 %</option>
+                                    <option value="19">19 %</option>
+                                    <option value="5">5 %</option>
+                                    <option value="0">0 %</option>
+
+                                </select>
+
+                            </td>
+
+                            <td>
+                                <button
+                                    type="button"
+                                    class="invoice-item-remove"
+                                    onclick="removeItemRow(this)"
+                                    title="Odstrániť položku"
+                                >
+                                    ×
+                                </button>
+                            </td>
+
+                        </tr>
+
+
+                    </tbody>
+
+                </table>
+
+
+                <button
+                    type="button"
+                    class="add-item-button"
+                    onclick="addItemRow()"
+                >
+                    + Pridať položku
+                </button>
+
+
+                <label style="margin-top: 20px;">
+                    Poznámka
+                </label>
+
+                <textarea
+                    name="note"
+                    rows="3"
+                    placeholder="Nepovinná poznámka na faktúre"
+                ></textarea>
+
+
+                <div class="form-buttons">
+
+                    <a
+                        href="/customers/{{ customer.id }}"
+                        class="cancel-button edit-cancel-link"
+                    >
+                        Zrušiť
+                    </a>
+
+                    <button
+                        type="submit"
+                        class="save-button"
+                    >
+                        Vytvoriť faktúru
+                    </button>
+
+                </div>
+
+
+            </form>
+
+
+        </div>
+
+
+    </section>
+
+
+</main>
+
+
+<template id="itemRowTemplate">
+
+    <tr class="invoice-item-row">
+
+        <td class="invoice-item-description">
+            <input
+                type="text"
+                name="description"
+                placeholder="Napr. Práca, materiál..."
+                required
+            >
+        </td>
+
+        <td>
+            <input
+                type="number"
+                name="quantity"
+                value="1"
+                step="0.01"
+                min="0.01"
+                required
+            >
+        </td>
+
+        <td>
+            <input
+                type="text"
+                name="unit"
+                value="ks"
+            >
+        </td>
+
+        <td>
+            <input
+                type="number"
+                name="unit_price"
+                value="0"
+                step="0.01"
+                min="0"
+                required
+            >
+        </td>
+
+        <td>
+
+            <select name="vat_rate">
+
+                <option value="23" selected>23 %</option>
+                <option value="19">19 %</option>
+                <option value="5">5 %</option>
+                <option value="0">0 %</option>
+
+            </select>
+
+        </td>
+
+        <td>
+            <button
+                type="button"
+                class="invoice-item-remove"
+                onclick="removeItemRow(this)"
+                title="Odstrániť položku"
+            >
+                ×
+            </button>
+        </td>
+
+    </tr>
+
+</template>
+
+
+<script>
+
+/* =====================================
+   DÁTUM SPLATNOSTI - predvyplnenie (+14 dní od vystavenia)
+   ===================================== */
+
+(function() {
+
+    const issueInput = document.querySelector('input[name="issue_date"]');
+    const dueInput = document.querySelector('input[name="due_date"]');
+
+    function setDefaultDueDate() {
+
+        if (dueInput.value) {
+            return;
+        }
+
+        const issueValue = issueInput.value;
+
+        if (!issueValue) {
+            return;
+        }
+
+        const issueDate = new Date(issueValue);
+        issueDate.setDate(issueDate.getDate() + 14);
+
+        const yyyy = issueDate.getFullYear();
+        const mm = String(issueDate.getMonth() + 1).padStart(2, "0");
+        const dd = String(issueDate.getDate()).padStart(2, "0");
+
+        dueInput.value = `${yyyy}-${mm}-${dd}`;
+
+    }
+
+    setDefaultDueDate();
+
+    issueInput.addEventListener("change", setDefaultDueDate);
+
+})();
+
+
+/* =====================================
+   DYNAMICKÉ RIADKY POLOŽIEK
+   ===================================== */
+
+function addItemRow() {
+
+    const template =
+        document.getElementById("itemRowTemplate");
+
+    const clone =
+        template.content.cloneNode(true);
+
+    document
+        .getElementById("itemsBody")
+        .appendChild(clone);
+
+}
+
+
+function removeItemRow(button) {
+
+    const rows =
+        document.querySelectorAll(".invoice-item-row");
+
+    if (rows.length <= 1) {
+        return;
+    }
+
+    button
+        .closest("tr")
+        .remove();
+
+}
+
+
+/* =====================================
+   TÉMA
+   ===================================== */
+
+
+function applyTheme(theme) {
+
+    document.documentElement.setAttribute(
+        "data-theme",
+        theme
+    );
+
+    const button =
+        document.getElementById("themeButton");
+
+    if (theme === "dark") {
+
+        button.textContent = "☀️";
+
+    } else {
+
+        button.textContent = "🌙";
+
+    }
+
+}
+
+
+function toggleTheme() {
+
+    const currentTheme =
+        document.documentElement.getAttribute(
+            "data-theme"
+        );
+
+    const newTheme =
+        currentTheme === "dark"
+            ? "light"
+            : "dark";
+
+    localStorage.setItem(
+        "digitalnyZositTheme",
+        newTheme
+    );
+
+    applyTheme(newTheme);
+
+}
+
+
+const savedTheme =
+    localStorage.getItem(
+        "digitalnyZositTheme"
+    );
+
+
+if (savedTheme === "dark") {
+
+    applyTheme("dark");
+
+} else {
+
+    applyTheme("light");
+
+}
+
+</script>
+
+
+</body>
+
+</html>

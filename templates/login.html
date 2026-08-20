@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="sk">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        Prihlásenie - Digitálny zošit
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', path='style.css') }}"
+    >
+
+</head>
+
+
+<body>
+
+
+<header class="topbar">
+
+    <div class="logo">
+        📒 Digitálny zošit
+    </div>
+
+
+    <div class="topbar-actions">
+
+        <button
+            type="button"
+            class="theme-button"
+            id="themeButton"
+            onclick="toggleTheme()"
+            title="Prepnúť tému"
+        >
+            🌙
+        </button>
+
+    </div>
+
+</header>
+
+
+<main class="container">
+
+
+    <section class="edit-customer-page">
+
+
+        <div class="page-header">
+
+            <h1>
+                Prihlásenie
+            </h1>
+
+            <p>
+                Zadajte prihlasovacie údaje.
+            </p>
+
+        </div>
+
+
+        <div class="edit-customer-card">
+
+
+            {% if error %}
+
+            <p style="color: var(--danger); margin-bottom: 16px;">
+                {{ error }}
+            </p>
+
+            {% endif %}
+
+
+            <form
+                action="/login"
+                method="post"
+            >
+
+
+                <label>
+                    Používateľské meno
+                </label>
+
+
+                <input
+                    type="text"
+                    name="username"
+                    required
+                    autofocus
+                >
+
+
+                <label>
+                    Heslo
+                </label>
+
+
+                <input
+                    type="password"
+                    name="password"
+                    required
+                >
+
+
+                <div class="form-buttons">
+
+
+                    <button
+                        type="submit"
+                        class="save-button"
+                    >
+                        Prihlásiť sa
+                    </button>
+
+
+                </div>
+
+
+            </form>
+
+
+        </div>
+
+
+    </section>
+
+
+</main>
+
+
+<script>
+
+/* =====================================
+   TÉMA
+   ===================================== */
+
+
+function applyTheme(theme) {
+
+    document.documentElement.setAttribute(
+        "data-theme",
+        theme
+    );
+
+
+    const button =
+        document.getElementById("themeButton");
+
+
+    if (theme === "dark") {
+
+        button.textContent = "☀️";
+
+    } else {
+
+        button.textContent = "🌙";
+
+    }
+
+}
+
+
+function toggleTheme() {
+
+    const currentTheme =
+        document.documentElement.getAttribute(
+            "data-theme"
+        );
+
+
+    const newTheme =
+        currentTheme === "dark"
+            ? "light"
+            : "dark";
+
+
+    localStorage.setItem(
+        "digitalnyZositTheme",
+        newTheme
+    );
+
+
+    applyTheme(newTheme);
+
+}
+
+
+const savedTheme =
+    localStorage.getItem(
+        "digitalnyZositTheme"
+    );
+
+
+if (savedTheme === "dark") {
+
+    applyTheme("dark");
+
+} else {
+
+    applyTheme("light");
+
+}
+
+</script>
+
+
+</body>
+
+</html>

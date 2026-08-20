@@ -1,4 +1,3 @@
-```css
 /* =========================================
    DIGITÁLNY ZOŠIT
    ========================================= */
@@ -160,6 +159,39 @@ select {
 }
 
 .theme-button:hover {
+    background: var(--surface-secondary);
+    transform: translateY(-1px);
+}
+
+
+/* =========================================
+   ODHLÁSENIE
+   ========================================= */
+
+.logout-button {
+    display: inline-block;
+    text-decoration: none;
+
+    border: 1px solid var(--border);
+    border-radius: 9px;
+
+    background: var(--surface);
+    color: var(--text);
+
+    padding: 11px 16px;
+
+    font-size: 14px;
+    font-family: inherit;
+    font-weight: 600;
+
+    cursor: pointer;
+
+    transition:
+        background-color 0.15s ease,
+        transform 0.15s ease;
+}
+
+.logout-button:hover {
     background: var(--surface-secondary);
     transform: translateY(-1px);
 }
@@ -2165,4 +2197,3 @@ html[data-theme="dark"] .topbar {
     }
 
 }
-```

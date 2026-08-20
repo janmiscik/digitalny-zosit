@@ -2,4 +2,6 @@
 __pycache__/
 *.pyc
 .env
-digitalny-zosit.db
+*.db
+*.db-journal
+.pytest_cache/

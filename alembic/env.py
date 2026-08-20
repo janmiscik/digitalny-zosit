@@ -6,7 +6,7 @@ from sqlalchemy import pool
 from alembic import context
 
 from database import DATABASE_URL, Base
-from models import Customer, Job
+from models import Company, Customer, Invoice, InvoiceItem, Job
 
 
 # Alembic Config objekt

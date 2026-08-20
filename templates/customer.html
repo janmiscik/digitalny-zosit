@@ -1,4 +1,3 @@
-```html
 <!DOCTYPE html>
 <html lang="sk">
 
@@ -134,6 +133,33 @@
 
                     <p>
                         📝 {{ customer.note }}
+                    </p>
+
+                {% endif %}
+
+
+                {% if customer.ico %}
+
+                    <p>
+                        IČO: {{ customer.ico }}
+                    </p>
+
+                {% endif %}
+
+
+                {% if customer.dic %}
+
+                    <p>
+                        DIČ: {{ customer.dic }}
+                    </p>
+
+                {% endif %}
+
+
+                {% if customer.ic_dph %}
+
+                    <p>
+                        IČ DPH: {{ customer.ic_dph }}
                     </p>
 
                 {% endif %}
@@ -307,6 +333,14 @@
                             </a>
 
 
+                            <a
+                                href="/customers/{{ customer.id }}/invoices/new?job_id={{ job.id }}"
+                                class="edit-job-button"
+                            >
+                                🧾 Vyfakturovať
+                            </a>
+
+
                         </div>
 
 
@@ -345,6 +379,118 @@
                         + Pridať zákazku
                     </button>
 
+
+                </div>
+
+
+            {% endif %}
+
+
+        </section>
+
+
+        <!-- =====================================
+             FAKTÚRY
+             ===================================== -->
+
+
+        <div class="jobs-header">
+
+
+            <div>
+
+                <h2>
+                    Faktúry
+                </h2>
+
+                <p>
+                    Vystavené faktúry pre tohto zákazníka
+                </p>
+
+            </div>
+
+
+            <a
+                href="/customers/{{ customer.id }}/invoices/new"
+                class="new-customer-button"
+            >
+                + Nová faktúra
+            </a>
+
+
+        </div>
+
+
+        <section class="jobs">
+
+
+            {% if invoices %}
+
+
+                {% for invoice in invoices %}
+
+
+                    <a
+                        href="/invoices/{{ invoice.id }}"
+                        class="job-card customer-job-card"
+                        style="text-decoration: none; color: inherit; display: flex;"
+                    >
+
+
+                        <div class="job-info">
+
+
+                            <div class="customer-job-title-row">
+
+                                <h3>
+                                    Faktúra č. {{ invoice.invoice_number }}
+                                </h3>
+
+                            </div>
+
+
+                            <p>
+                                Vystavená {{ invoice.issue_date.strftime("%d.%m.%Y") }}
+                                · splatná {{ invoice.due_date.strftime("%d.%m.%Y") }}
+                            </p>
+
+
+                        </div>
+
+
+                        <div class="job-actions">
+
+                            <span
+                                class="job-status status-{{ invoice.status | lower | replace(' ', '-') }}"
+                            >
+                                {{ invoice.status }}
+                            </span>
+
+                        </div>
+
+
+                    </a>
+
+
+                {% endfor %}
+
+
+            {% else %}
+
+
+                <div class="empty-state">
+
+                    <div class="empty-icon">
+                        🧾
+                    </div>
+
+                    <h2>
+                        Zatiaľ žiadne faktúry
+                    </h2>
+
+                    <p>
+                        Vytvorte prvú faktúru pre tohto zákazníka.
+                    </p>
 
                 </div>
 
@@ -615,4 +761,3 @@ if (savedTheme === "dark") {
 </body>
 
 </html>
-```
