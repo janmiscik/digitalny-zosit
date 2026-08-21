@@ -119,6 +119,7 @@ class CompanyBase(BaseModel):
     iban: str | None = None
     email: str | None = None
     phone: str | None = None
+    peppol_scheme_id: str | None = None
 
 
 class CompanyUpdate(CompanyBase):

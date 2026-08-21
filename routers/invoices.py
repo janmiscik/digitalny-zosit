@@ -10,6 +10,7 @@ from database import get_db
 from invoice_pdf import generate_invoice_pdf
 from invoice_utils import calculate_invoice_totals, next_invoice_number
 from models import Company, Customer, Invoice, InvoiceItem, Job
+from peppol_xml import generate_peppol_xml
 from schemas import InvoiceItemCreate, InvoiceRead, InvoiceStatus
 from templates_config import templates
 
@@ -415,6 +416,64 @@ def invoice_pdf(
 
         headers={
             "Content-Disposition": f'inline; filename="faktura-{invoice.invoice_number}.pdf"'
+        }
+
+    )
+
+
+# =========================================
+# PEPPOL XML EXPORT (príprava na e-fakturáciu)
+# =========================================
+
+@router.get("/invoices/{invoice_id}/peppol-xml")
+def invoice_peppol_xml(
+
+    invoice_id: int,
+
+    db: Session = Depends(get_db),
+
+    user: str = Depends(require_login_page)
+
+):
+
+    invoice = (
+
+        db
+        .query(Invoice)
+        .options(
+            joinedload(Invoice.items),
+            joinedload(Invoice.customer)
+        )
+        .filter(
+            Invoice.id == invoice_id
+        )
+        .first()
+
+    )
+
+
+    if invoice is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Faktúra neexistuje"
+        )
+
+
+    company = db.query(Company).first()
+
+
+    xml_bytes = generate_peppol_xml(invoice, company)
+
+
+    return Response(
+
+        content=xml_bytes,
+
+        media_type="application/xml",
+
+        headers={
+            "Content-Disposition": f'attachment; filename="faktura-{invoice.invoice_number}-peppol.xml"'
         }
 
     )

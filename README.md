@@ -92,8 +92,11 @@ V rámci prípravy na povinnú elektronickú fakturáciu (Peppol/eFaktúra, ktor
 4. **Číslovanie** – faktúry sa číslujú automaticky v tvare `RRRRPPP` (napr. `2026001`), samostatne pre každý rok.
 5. **PDF export** – na detaile faktúry je tlačidlo "Stiahnuť PDF", ktoré vygeneruje faktúru na stiahnutie/tlač (podporuje slovenskú diakritiku).
 6. **Stav faktúry** – Návrh / Odoslaná / Uhradená / Po splatnosti / Stornovaná.
+7. **Peppol XML export** – na detaile faktúry je tlačidlo "Peppol XML (návrh)", ktoré vygeneruje faktúru vo formáte UBL 2.1 / Peppol BIS Billing 3.0 (rovnaká štruktúra, akú vyžaduje pripravovaná povinná e-fakturácia).
 
-**Dôležité:** appka zatiaľ negeneruje Peppol BIS XML formát ani sa nenapája na Digitálneho poštára – to je plánovaná ďalšia fáza. Dátový model (IČO/DIČ/IČ DPH, štruktúrované položky, presné sadzby DPH) je ale navrhnutý tak, aby bol na túto fázu pripravený.
+**Dôležité o Peppol XML exporte:** appka sama neposiela faktúry cez Peppol sieť (to si vyžaduje registráciu cez certifikovaného poskytovateľa, tzv. Digitálny poštár). Vygenerovaný XML je **návrh/príprava dát** v správnej štruktúre – priamo ho môžeš odovzdať svojmu poskytovateľovi pri jeho zapájaní. Pred ostrým používaním si u poskytovateľa over najmä:
+- presný **Peppol scheme ID** kód (pole "Peppol schéma ID" v Nastaveniach – nechaj prázdne, kým ti ho nepridelí)
+- či XML prejde ich validátorom (Peppol má prísne validačné pravidlá, tzv. Schematron)
 
 ---
 
@@ -141,12 +144,13 @@ digitalny-zosit/
 ├── tests/
 │   ├── test_main.py      # CRUD, validácia
 │   ├── test_auth.py      # prihlásenie, odhlásenie
-│   └── test_invoices.py  # fakturácia, PDF, číslovanie
+│   └── test_invoices.py  # fakturácia, PDF, Peppol XML, číslovanie
 │
 ├── auth.py                # hashovanie hesla, session dependencies
 ├── database.py
 ├── invoice_pdf.py         # generovanie PDF faktúr
 ├── invoice_utils.py       # číslovanie faktúr, výpočet DPH
+├── peppol_xml.py          # export do Peppol BIS 3.0 XML formátu
 ├── main.py
 ├── models.py
 ├── schemas.py              # Pydantic modely (validácia)

@@ -201,6 +201,17 @@ class Company(Base):
         nullable=True
     )
 
+    # =====================================
+    # PEPPOL (fáza 2 - príprava na e-fakturáciu)
+    # Presný kód schémy ti pridelí/potvrdí tvoj poskytovateľ
+    # (Digitálny poštár) pri registrácii na Peppol sieť.
+    # =====================================
+
+    peppol_scheme_id = Column(
+        String,
+        nullable=True
+    )
+
 
 class Invoice(Base):
 

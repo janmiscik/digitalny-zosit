@@ -199,6 +199,22 @@
                 >
 
 
+                <label>
+                    Peppol schéma ID <span style="font-weight: 400; color: var(--text-muted);">(nepovinné - vyplň, ak ti ho už pridelil poskytovateľ)</span>
+                </label>
+
+                <input
+                    type="text"
+                    name="peppol_scheme_id"
+                    value="{{ company.peppol_scheme_id or '' }}"
+                    placeholder="napr. 9946"
+                >
+
+                <p style="font-size: 13px; color: var(--text-muted); margin-top: -8px;">
+                    Tento kód (ISO 6523 schéma) ti potvrdí tvoj poskytovateľ Peppol pripojenia (tzv. Digitálny poštár) pri registrácii. Zatiaľ ho môžeš nechať prázdne - Peppol export bude fungovať aj bez neho, len s prázdnym poľom schémy, ktoré si doplníš neskôr.
+                </p>
+
+
                 <div class="form-buttons">
 
                     <a

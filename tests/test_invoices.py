@@ -646,3 +646,172 @@ def test_get_invoices_filtered_by_customer():
 
     for invoice_data in response.json():
         assert invoice_data["customer_id"] == customer_id
+
+
+# =========================================
+# PEPPOL XML EXPORT
+# =========================================
+
+def test_peppol_xml_download():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice_id = invoice.id
+    db.close()
+
+    response = client.get(f"/invoices/{invoice_id}/peppol-xml")
+
+    assert response.status_code == 200
+    assert "xml" in response.headers["content-type"]
+    assert response.content.startswith(b"<?xml")
+
+
+def test_peppol_xml_not_found():
+
+    response = client.get("/invoices/999999/peppol-xml")
+
+    assert response.status_code == 404
+
+
+def test_peppol_xml_well_formed_and_valid_structure():
+
+    import xml.etree.ElementTree as ET
+
+    db = TestingSessionLocal()
+
+    customer = db.query(Customer).first()
+
+    invoice = Invoice(
+        invoice_number="2026200",
+        customer_id=customer.id,
+        status="Návrh",
+        issue_date=date.today(),
+        due_date=date.today() + timedelta(days=14),
+        variable_symbol="2026200"
+    )
+
+    invoice.items.append(
+        InvoiceItem(
+            description="Práca",
+            quantity=Decimal("2"),
+            unit="hod",
+            unit_price=Decimal("25.00"),
+            vat_rate=23
+        )
+    )
+
+    invoice.items.append(
+        InvoiceItem(
+            description="Materiál oslobodený od DPH",
+            quantity=Decimal("1"),
+            unit="ks",
+            unit_price=Decimal("100.00"),
+            vat_rate=0
+        )
+    )
+
+    company = Company(
+        name="Firma XY",
+        ico="11223344",
+        ic_dph="SK1122334455",
+        address="Testovacia 1",
+        city="Bratislava",
+        zip_code="81101",
+        iban="SK1234567890123456789012",
+        peppol_scheme_id="9946"
+    )
+
+    db.add(company)
+    db.add(invoice)
+    db.commit()
+    db.refresh(invoice)
+
+    from peppol_xml import generate_peppol_xml
+
+    xml_bytes = generate_peppol_xml(invoice, company)
+
+    db.close()
+
+    # Musí byť well-formed XML
+    root = ET.fromstring(xml_bytes)
+
+    ns = {
+        "cac": "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2",
+        "cbc": "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2",
+    }
+
+    # Základné povinné elementy podľa Peppol BIS 3.0
+    assert root.find("cbc:CustomizationID", ns) is not None
+    assert root.find("cbc:ProfileID", ns) is not None
+    assert root.find("cbc:ID", ns).text == "2026200"
+    assert root.find("cbc:InvoiceTypeCode", ns).text == "380"
+    assert root.find("cbc:DocumentCurrencyCode", ns).text == "EUR"
+
+    supplier = root.find("cac:AccountingSupplierParty/cac:Party", ns)
+    assert supplier is not None
+    assert supplier.find("cac:PartyLegalEntity/cbc:CompanyID", ns).text == "11223344"
+
+    customer_party = root.find("cac:AccountingCustomerParty/cac:Party", ns)
+    assert customer_party is not None
+
+    lines = root.findall("cac:InvoiceLine", ns)
+    assert len(lines) == 2
+
+    # DPH kategórie: štandardná (S) a nulová (Z)
+    tax_categories = {
+        line.find("cac:Item/cac:ClassifiedTaxCategory/cbc:ID", ns).text
+        for line in lines
+    }
+    assert tax_categories == {"S", "Z"}
+
+    # Merná jednotka "hod" sa mapuje na UN/ECE kód HUR
+    quantities = root.findall("cac:InvoiceLine/cbc:InvoicedQuantity", ns)
+    unit_codes = {q.get("unitCode") for q in quantities}
+    assert "HUR" in unit_codes
+    assert "C62" in unit_codes
+
+    # Celková suma s DPH: (2*25*1.23) + 100 = 61.50 + 100 = 161.50
+    payable = root.find("cac:LegalMonetaryTotal/cbc:PayableAmount", ns)
+    assert payable.text == "161.50"
+
+
+def test_peppol_xml_without_company():
+    """
+    Musí sa dať vygenerovať aj bez vyplnených údajov firmy (company=None) -
+    nesmie spadnúť, aj keď výsledok nebude kompletný.
+    """
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+
+    from peppol_xml import generate_peppol_xml
+
+    xml_bytes = generate_peppol_xml(invoice, None)
+
+    db.close()
+
+    assert xml_bytes.startswith(b"<?xml")
+
+
+def test_map_unit_code():
+
+    from peppol_xml import map_unit_code
+
+    assert map_unit_code("ks") == "C62"
+    assert map_unit_code("hod") == "HUR"
+    assert map_unit_code("m2") == "MTK"
+    assert map_unit_code("kg") == "KGM"
+    assert map_unit_code("neznáma jednotka") == "C62"
+
+
+def test_vat_category_code():
+
+    from peppol_xml import vat_category_code
+
+    assert vat_category_code(0) == "Z"
+    assert vat_category_code(23) == "S"
+    assert vat_category_code(19) == "S"
+    assert vat_category_code(5) == "S"
+
+
+

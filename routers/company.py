@@ -94,6 +94,8 @@ def settings_save(
 
     phone: str = Form(""),
 
+    peppol_scheme_id: str = Form(""),
+
     db: Session = Depends(get_db),
 
     user: str = Depends(require_login_page)
@@ -113,6 +115,7 @@ def settings_save(
     company.iban = iban or None
     company.email = email or None
     company.phone = phone or None
+    company.peppol_scheme_id = peppol_scheme_id or None
 
 
     db.commit()
