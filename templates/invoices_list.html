@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="sk">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Faktúry - Digitálny zošit</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', path='style.css') }}"
+    >
+
+    <style>
+
+        .invoice-filter-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin: 16px 0 24px 0;
+        }
+
+        .invoice-filter-chip {
+            display: inline-block;
+            padding: 8px 14px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+
+        .invoice-filter-chip.active {
+            background: var(--button);
+            color: var(--button-text);
+            border-color: var(--button);
+        }
+
+        .invoice-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 16px 20px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            margin-bottom: 10px;
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .invoice-row-main h3 {
+            margin: 0 0 4px 0;
+            font-size: 16px;
+        }
+
+        .invoice-row-main p {
+            margin: 0;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .invoice-row-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .invoice-row-amount {
+            font-weight: 700;
+            font-size: 16px;
+            white-space: nowrap;
+        }
+
+        .invoice-row-overdue {
+            color: var(--danger);
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+
+<header class="topbar">
+
+    <div class="logo">
+        📒 Digitálny zošit
+    </div>
+
+    <div class="topbar-actions">
+
+        <button
+            type="button"
+            class="theme-button"
+            id="themeButton"
+            onclick="toggleTheme()"
+            title="Prepnúť tému"
+        >
+            🌙
+        </button>
+
+        <a
+            href="/"
+            class="back-button"
+        >
+            ← Prehľad
+        </a>
+
+    </div>
+
+</header>
+
+
+<main class="container">
+
+
+    <section class="customers-section">
+
+        <div class="section-heading">
+
+            <div>
+
+                <h2>
+                    Faktúry
+                </h2>
+
+                <p>
+                    Prehľad všetkých vystavených faktúr
+                </p>
+
+            </div>
+
+        </div>
+
+
+        <!-- =====================================
+             FILTER PODĽA STAVU
+             ===================================== -->
+
+        <div class="invoice-filter-row">
+
+            <a
+                href="/faktury"
+                class="invoice-filter-chip {% if not selected_status %}active{% endif %}"
+            >
+                Všetky
+            </a>
+
+            {% for status_option in statuses %}
+
+                <a
+                    href="/faktury?status={{ status_option.value }}"
+                    class="invoice-filter-chip {% if selected_status == status_option.value %}active{% endif %}"
+                >
+                    {{ status_option.value }}
+                </a>
+
+            {% endfor %}
+
+        </div>
+
+
+        <!-- =====================================
+             ZOZNAM FAKTÚR
+             ===================================== -->
+
+        {% if invoices %}
+
+            {% for invoice in invoices %}
+
+                {% set is_overdue = (
+                    invoice.due_date < today
+                    and invoice.status not in ["Uhradená", "Stornovaná"]
+                ) %}
+
+                <a
+                    href="/invoices/{{ invoice.id }}"
+                    class="invoice-row"
+                >
+
+                    <div class="invoice-row-main">
+
+                        <h3>
+                            Faktúra č. {{ invoice.invoice_number }}
+                        </h3>
+
+                        <p>
+                            {{ invoice.customer.name }}
+                            · vystavená {{ invoice.issue_date.strftime("%d.%m.%Y") }}
+                            · splatná {{ invoice.due_date.strftime("%d.%m.%Y") }}
+
+                            {% if is_overdue %}
+
+                                <span class="invoice-row-overdue">
+                                    · po splatnosti
+                                </span>
+
+                            {% endif %}
+
+                        </p>
+
+                    </div>
+
+
+                    <div class="invoice-row-right">
+
+                        <span
+                            class="job-status status-{{ invoice.status | lower | replace(' ', '-') }}"
+                        >
+                            {{ invoice.status }}
+                        </span>
+
+                        <span class="invoice-row-amount">
+                            {{ "%.2f"|format(invoice_totals[invoice.id]) }} €
+                        </span>
+
+                    </div>
+
+                </a>
+
+            {% endfor %}
+
+        {% else %}
+
+            <div class="empty-state">
+
+                <div class="empty-icon">
+                    🧾
+                </div>
+
+                <h2>
+
+                    {% if selected_status %}
+
+                        Žiadne faktúry v stave "{{ selected_status }}"
+
+                    {% else %}
+
+                        Zatiaľ žiadne faktúry
+
+                    {% endif %}
+
+                </h2>
+
+                <p>
+                    Faktúru vytvoríš z detailu zákazníka.
+                </p>
+
+            </div>
+
+        {% endif %}
+
+    </section>
+
+
+</main>
+
+
+<script>
+
+function applyTheme(theme) {
+
+    document.documentElement.setAttribute(
+        "data-theme",
+        theme
+    );
+
+    const button =
+        document.getElementById("themeButton");
+
+    if (theme === "dark") {
+
+        button.textContent = "☀️";
+
+    } else {
+
+        button.textContent = "🌙";
+
+    }
+
+}
+
+
+function toggleTheme() {
+
+    const currentTheme =
+        document.documentElement.getAttribute(
+            "data-theme"
+        );
+
+    const newTheme =
+        currentTheme === "dark"
+            ? "light"
+            : "dark";
+
+    localStorage.setItem(
+        "digitalnyZositTheme",
+        newTheme
+    );
+
+    applyTheme(newTheme);
+
+}
+
+
+const savedTheme =
+    localStorage.getItem(
+        "digitalnyZositTheme"
+    );
+
+
+if (savedTheme === "dark") {
+
+    applyTheme("dark");
+
+} else {
+
+    applyTheme("light");
+
+}
+
+</script>
+
+
+</body>
+
+</html>

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from auth import require_login_page
 from database import Base, engine, get_db
 
-from models import Customer, Job
+from models import Customer, Invoice, Job
 
 from routers.auth import router as auth_router
 from routers.company import router as company_router
@@ -53,6 +53,16 @@ app.mount(
     "/static",
     StaticFiles(directory="static"),
     name="static"
+)
+
+from uploads_utils import ensure_uploads_dir, UPLOADS_DIR
+
+ensure_uploads_dir()
+
+app.mount(
+    "/uploads",
+    StaticFiles(directory=str(UPLOADS_DIR)),
+    name="uploads"
 )
 
 
@@ -106,6 +116,13 @@ def home(
     )
 
 
+    invoices = (
+        db
+        .query(Invoice)
+        .all()
+    )
+
+
     # =====================================
     # ZÁKLADNÉ ŠTATISTIKY
     # =====================================
@@ -126,12 +143,24 @@ def home(
 
     total_jobs = len(jobs)
 
+    total_customers = len(customers)
+
+    total_invoices = len(invoices)
+
 
     # =====================================
     # TERMÍNY
     # =====================================
 
     today = date.today()
+
+
+    overdue_invoices = sum(
+        1
+        for invoice in invoices
+        if invoice.due_date < today
+        and invoice.status not in ("Uhradená", "Stornovaná")
+    )
 
 
     overdue_jobs = []
@@ -209,6 +238,12 @@ def home(
             "active_jobs": active_jobs,
 
             "total_jobs": total_jobs,
+
+            "total_customers": total_customers,
+
+            "total_invoices": total_invoices,
+
+            "overdue_invoices": overdue_invoices,
 
             "overdue_jobs": overdue_jobs,
 

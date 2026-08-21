@@ -814,4 +814,83 @@ def test_vat_category_code():
     assert vat_category_code(5) == "S"
 
 
+# =========================================
+# PDF S LOGOM A PODPISOM
+# =========================================
+
+def test_pdf_with_logo_and_signature():
+
+    import io
+    from PIL import Image as PILImage
+    from uploads_utils import UPLOADS_DIR, delete_image, ensure_uploads_dir
+
+    ensure_uploads_dir()
+
+    buffer = io.BytesIO()
+    PILImage.new("RGB", (200, 80), (10, 20, 30)).save(buffer, format="PNG")
+
+    logo_path = UPLOADS_DIR / "logo.png"
+
+    with open(logo_path, "wb") as f:
+        f.write(buffer.getvalue())
+
+
+    buffer2 = io.BytesIO()
+    PILImage.new("RGB", (150, 60), (200, 200, 200)).save(buffer2, format="PNG")
+
+    signature_path = UPLOADS_DIR / "signature.png"
+
+    with open(signature_path, "wb") as f:
+        f.write(buffer2.getvalue())
+
+
+    db = TestingSessionLocal()
+
+    invoice = create_sample_invoice(db)
+
+    company = Company(
+        name="Firma s logom",
+        logo_filename="logo.png",
+        signature_filename="signature.png"
+    )
+
+    db.add(company)
+    db.commit()
+
+    from invoice_pdf import generate_invoice_pdf
+
+    pdf_bytes = generate_invoice_pdf(invoice, company)
+
+    db.close()
+
+    delete_image("logo")
+    delete_image("signature")
+
+    assert pdf_bytes[:4] == b"%PDF"
+    assert len(pdf_bytes) > 1000
+
+
+def test_pdf_without_logo_or_signature_still_works():
+    """
+    Ak firma nemá nahraté logo/podpis, PDF sa musí vygenerovať bez chyby.
+    """
+
+    db = TestingSessionLocal()
+
+    invoice = create_sample_invoice(db)
+
+    company = Company(name="Firma bez loga")
+
+    db.add(company)
+    db.commit()
+
+    from invoice_pdf import generate_invoice_pdf
+
+    pdf_bytes = generate_invoice_pdf(invoice, company)
+
+    db.close()
+
+    assert pdf_bytes[:4] == b"%PDF"
+
+
 

@@ -212,6 +212,21 @@ class Company(Base):
         nullable=True
     )
 
+    # =====================================
+    # LOGO A PODPIS/PEČIATKA (na faktúre)
+    # Uchovávame len názov súboru, samotný súbor je v priečinku uploads/
+    # =====================================
+
+    logo_filename = Column(
+        String,
+        nullable=True
+    )
+
+    signature_filename = Column(
+        String,
+        nullable=True
+    )
+
 
 class Invoice(Base):
 

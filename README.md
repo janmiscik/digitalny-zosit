@@ -82,6 +82,15 @@ Appka má jednoduché prihlásenie s jedným admin účtom (session-based, cooki
 
 ---
 
+## 🧭 Navigácia
+
+- **`/`** – dashboard (štatistiky, termíny, posledné zákazky, rýchly prístup)
+- **`/zakaznici`** – zoznam všetkých zákazníkov (vyhľadávanie, pridanie nového)
+- **`/faktury`** – zoznam všetkých faktúr (filtrovanie podľa stavu)
+- **`/settings`** – fakturačné údaje firmy, logo, podpis/pečiatka
+
+---
+
 ## 🧾 Fakturácia
 
 V rámci prípravy na povinnú elektronickú fakturáciu (Peppol/eFaktúra, ktorá sa pre platiteľov DPH stáva povinnou od 1.1.2027) appka obsahuje základný fakturačný modul:
@@ -93,6 +102,7 @@ V rámci prípravy na povinnú elektronickú fakturáciu (Peppol/eFaktúra, ktor
 5. **PDF export** – na detaile faktúry je tlačidlo "Stiahnuť PDF", ktoré vygeneruje faktúru na stiahnutie/tlač (podporuje slovenskú diakritiku).
 6. **Stav faktúry** – Návrh / Odoslaná / Uhradená / Po splatnosti / Stornovaná.
 7. **Peppol XML export** – na detaile faktúry je tlačidlo "Peppol XML (návrh)", ktoré vygeneruje faktúru vo formáte UBL 2.1 / Peppol BIS Billing 3.0 (rovnaká štruktúra, akú vyžaduje pripravovaná povinná e-fakturácia).
+8. **Logo a podpis/pečiatka** – v Nastaveniach môžeš nahrať logo firmy (zobrazí sa v hlavičke PDF faktúry) a obrázok podpisu/pečiatky (zobrazí sa pri sume na konci faktúry). Podporované formáty: PNG, JPG (max. 2 MB).
 
 **Dôležité o Peppol XML exporte:** appka sama neposiela faktúry cez Peppol sieť (to si vyžaduje registráciu cez certifikovaného poskytovateľa, tzv. Digitálny poštár). Vygenerovaný XML je **návrh/príprava dát** v správnej štruktúre – priamo ho môžeš odovzdať svojmu poskytovateľovi pri jeho zapájaní. Pred ostrým používaním si u poskytovateľa over najmä:
 - presný **Peppol scheme ID** kód (pole "Peppol schéma ID" v Nastaveniach – nechaj prázdne, kým ti ho nepridelí)
@@ -134,6 +144,8 @@ digitalny-zosit/
 ├── templates/
 │   ├── index.html
 │   ├── customer.html
+│   ├── customers_list.html
+│   ├── invoices_list.html
 │   ├── edit_customer.html
 │   ├── edit_job.html
 │   ├── invoice_form.html
@@ -144,13 +156,17 @@ digitalny-zosit/
 ├── tests/
 │   ├── test_main.py      # CRUD, validácia
 │   ├── test_auth.py      # prihlásenie, odhlásenie
-│   └── test_invoices.py  # fakturácia, PDF, Peppol XML, číslovanie
+│   ├── test_invoices.py  # fakturácia, PDF, Peppol XML, číslovanie
+│   └── test_uploads.py   # logo/podpis - upload, validácia, náhľad
+│
+├── uploads/                # nahraté logo/podpis (negituje sa, .gitignore)
 │
 ├── auth.py                # hashovanie hesla, session dependencies
 ├── database.py
 ├── invoice_pdf.py         # generovanie PDF faktúr
 ├── invoice_utils.py       # číslovanie faktúr, výpočet DPH
 ├── peppol_xml.py          # export do Peppol BIS 3.0 XML formátu
+├── uploads_utils.py       # nahrávanie loga/podpisu
 ├── main.py
 ├── models.py
 ├── schemas.py              # Pydantic modely (validácia)

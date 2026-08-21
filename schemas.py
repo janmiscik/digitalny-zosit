@@ -120,6 +120,8 @@ class CompanyBase(BaseModel):
     email: str | None = None
     phone: str | None = None
     peppol_scheme_id: str | None = None
+    logo_filename: str | None = None
+    signature_filename: str | None = None
 
 
 class CompanyUpdate(CompanyBase):

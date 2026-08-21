@@ -10,14 +10,40 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
     SimpleDocTemplate,
+    Image,
     Paragraph,
     Spacer,
     Table,
     TableStyle,
 )
 from reportlab.lib.styles import ParagraphStyle
+from PIL import Image as PILImage
 
 from invoice_utils import calculate_invoice_totals
+from uploads_utils import image_path
+
+
+def scaled_image(path, max_width_mm: float, max_height_mm: float) -> Image:
+    """
+    Vytvorí reportlab Image flowable s rozmermi zmenšenými tak,
+    aby sa zmestil do zadaného boxu a zachoval si pomer strán.
+    """
+
+    with PILImage.open(path) as pil_img:
+        original_width, original_height = pil_img.size
+
+    max_width = max_width_mm * mm
+    max_height = max_height_mm * mm
+
+    width_ratio = max_width / original_width
+    height_ratio = max_height / original_height
+    scale = min(width_ratio, height_ratio)
+
+    return Image(
+        str(path),
+        width=original_width * scale,
+        height=original_height * scale
+    )
 
 
 # =========================================
@@ -137,19 +163,40 @@ def generate_invoice_pdf(invoice, company) -> bytes:
     # HLAVIČKA
     # =====================================
 
-    story.append(
+    title_block = [
         Paragraph(
             f"Faktúra č. {invoice.invoice_number}",
             styles["title"]
-        )
-    )
-
-    story.append(
+        ),
         Paragraph(
             f"Variabilný symbol: {invoice.variable_symbol or invoice.invoice_number}",
             styles["small"]
         )
-    )
+    ]
+
+    logo_file = image_path(company.logo_filename) if company else None
+
+    if logo_file is not None:
+
+        logo_flowable = scaled_image(logo_file, max_width_mm=45, max_height_mm=20)
+
+        title_table = Table(
+            [[title_block, logo_flowable]],
+            colWidths=[125 * mm, 45 * mm]
+        )
+
+        title_table.setStyle(
+            TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+            ])
+        )
+
+        story.append(title_table)
+
+    else:
+
+        story.extend(title_block)
 
     story.append(Spacer(1, 14))
 
@@ -414,6 +461,32 @@ def generate_invoice_pdf(invoice, company) -> bytes:
         story.append(Paragraph("Poznámka", styles["heading"]))
 
         story.append(Paragraph(invoice.note, styles["normal"]))
+
+
+    # =====================================
+    # PODPIS / PEČIATKA
+    # =====================================
+
+    signature_file = image_path(company.signature_filename) if company else None
+
+    if signature_file is not None:
+
+        story.append(Spacer(1, 24))
+
+        signature_flowable = scaled_image(signature_file, max_width_mm=50, max_height_mm=25)
+
+        signature_table = Table(
+            [[signature_flowable]],
+            colWidths=[170 * mm]
+        )
+
+        signature_table.setStyle(
+            TableStyle([
+                ("ALIGN", (0, 0), (0, 0), "RIGHT"),
+            ])
+        )
+
+        story.append(signature_table)
 
 
     doc.build(story)

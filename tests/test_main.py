@@ -137,6 +137,28 @@ def test_dashboard():
     assert response.status_code == 200
 
 
+def test_customers_list_page():
+
+    response = client.get("/zakaznici")
+
+    assert response.status_code == 200
+    assert "Testovací zákazník" in response.text
+
+
+def test_invoices_list_page():
+
+    response = client.get("/faktury")
+
+    assert response.status_code == 200
+
+
+def test_invoices_list_page_filtered_by_status():
+
+    response = client.get("/faktury?status=Návrh")
+
+    assert response.status_code == 200
+
+
 # =========================================
 # CUSTOMERS
 # =========================================
@@ -179,7 +201,7 @@ def test_create_customer():
     )
 
     assert response.status_code == 303
-    assert response.headers["location"] == "/"
+    assert response.headers["location"] == "/zakaznici"
 
 
 def test_create_customer_missing_name():

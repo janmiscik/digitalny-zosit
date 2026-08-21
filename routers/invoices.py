@@ -50,6 +50,81 @@ def parse_required_date(raw_value: str, field_label: str) -> date:
 
 
 # =========================================
+# ZOZNAM FAKTÚR (STRÁNKA)
+# =========================================
+
+@router.get("/faktury")
+def invoices_list_page(
+
+    request: Request,
+
+    status: str | None = None,
+
+    db: Session = Depends(get_db),
+
+    user: str = Depends(require_login_page)
+
+):
+
+    query = (
+
+        db
+        .query(Invoice)
+        .options(
+            joinedload(Invoice.items),
+            joinedload(Invoice.customer)
+        )
+
+    )
+
+    if status is not None:
+
+        query = query.filter(
+            Invoice.status == status
+        )
+
+
+    invoices = query.order_by(
+        Invoice.issue_date.desc(),
+        Invoice.id.desc()
+    ).all()
+
+
+    today = date.today()
+
+    invoice_totals = {
+
+        invoice.id: calculate_invoice_totals(invoice.items)["total_gross"]
+
+        for invoice in invoices
+
+    }
+
+
+    return templates.TemplateResponse(
+
+        request=request,
+
+        name="invoices_list.html",
+
+        context={
+
+            "invoices": invoices,
+
+            "invoice_totals": invoice_totals,
+
+            "statuses": list(InvoiceStatus),
+
+            "selected_status": status,
+
+            "today": today
+
+        }
+
+    )
+
+
+# =========================================
 # NOVÁ FAKTÚRA - FORM
 # =========================================
 

@@ -15,6 +15,48 @@ router = APIRouter()
 
 
 # =========================================
+# ZOZNAM ZÁKAZNÍKOV (STRÁNKA)
+# =========================================
+
+@router.get("/zakaznici")
+def customers_list_page(
+
+    request: Request,
+
+    db: Session = Depends(get_db),
+
+    user: str = Depends(require_login_page)
+
+):
+
+    customers = (
+
+        db
+        .query(Customer)
+        .order_by(
+            Customer.name.asc()
+        )
+        .all()
+
+    )
+
+
+    return templates.TemplateResponse(
+
+        request=request,
+
+        name="customers_list.html",
+
+        context={
+
+            "customers": customers
+
+        }
+
+    )
+
+
+# =========================================
 # CUSTOMER DETAIL
 # =========================================
 
@@ -141,7 +183,7 @@ def create_customer(
 
     return RedirectResponse(
 
-        url="/",
+        url="/zakaznici",
 
         status_code=303
 
