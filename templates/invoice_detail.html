@@ -224,6 +224,11 @@
                     {{ invoice.variable_symbol or invoice.invoice_number }}
                 </div>
 
+                <div>
+                    <span>Spôsob úhrady</span>
+                    {{ invoice.payment_method or "Prevodom" }}
+                </div>
+
             </div>
 
 

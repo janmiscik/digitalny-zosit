@@ -201,6 +201,16 @@ class Company(Base):
         nullable=True
     )
 
+    website = Column(
+        String,
+        nullable=True
+    )
+
+    swift_bic = Column(
+        String,
+        nullable=True
+    )
+
     # =====================================
     # PEPPOL (fáza 2 - príprava na e-fakturáciu)
     # Presný kód schémy ti pridelí/potvrdí tvoj poskytovateľ
@@ -282,6 +292,12 @@ class Invoice(Base):
     variable_symbol = Column(
         String,
         nullable=True
+    )
+
+    payment_method = Column(
+        String,
+        nullable=False,
+        default="Prevodom"
     )
 
     note = Column(

@@ -117,8 +117,10 @@ class CompanyBase(BaseModel):
     city: str | None = None
     zip_code: str | None = None
     iban: str | None = None
+    swift_bic: str | None = None
     email: str | None = None
     phone: str | None = None
+    website: str | None = None
     peppol_scheme_id: str | None = None
     logo_filename: str | None = None
     signature_filename: str | None = None
@@ -189,6 +191,7 @@ class InvoiceBase(BaseModel):
     due_date: date
     delivery_date: date | None = None
     variable_symbol: str | None = None
+    payment_method: str = "Prevodom"
     note: str | None = None
 
 

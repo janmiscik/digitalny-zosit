@@ -179,6 +179,18 @@
 
 
                 <label>
+                    SWIFT/BIC <span style="font-weight: 400; color: var(--text-muted);">(nepovinné)</span>
+                </label>
+
+                <input
+                    type="text"
+                    name="swift_bic"
+                    value="{{ company.swift_bic or '' }}"
+                    placeholder="napr. TATRSKBX"
+                >
+
+
+                <label>
                     E-mail
                 </label>
 
@@ -197,6 +209,18 @@
                     type="text"
                     name="phone"
                     value="{{ company.phone or '' }}"
+                >
+
+
+                <label>
+                    Web <span style="font-weight: 400; color: var(--text-muted);">(nepovinné)</span>
+                </label>
+
+                <input
+                    type="text"
+                    name="website"
+                    value="{{ company.website or '' }}"
+                    placeholder="napr. www.mojafirma.sk"
                 >
 
 

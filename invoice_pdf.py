@@ -20,6 +20,7 @@ from reportlab.lib.styles import ParagraphStyle
 from PIL import Image as PILImage
 
 from invoice_utils import calculate_invoice_totals
+from qr_payment import generate_payment_qr_image
 from uploads_utils import image_path
 
 
@@ -91,6 +92,9 @@ def format_date(value: date | None) -> str:
     return value.strftime("%d.%m.%Y")
 
 
+DEFAULT_THANK_YOU_NOTE = "Ďakujeme za využitie našich služieb."
+
+
 def generate_invoice_pdf(invoice, company) -> bytes:
     """
     Vygeneruje PDF faktúru.
@@ -107,8 +111,8 @@ def generate_invoice_pdf(invoice, company) -> bytes:
     doc = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        topMargin=20 * mm,
-        bottomMargin=20 * mm,
+        topMargin=18 * mm,
+        bottomMargin=18 * mm,
         leftMargin=20 * mm,
         rightMargin=20 * mm
     )
@@ -116,12 +120,19 @@ def generate_invoice_pdf(invoice, company) -> bytes:
 
     styles = {
 
+        "doctype": ParagraphStyle(
+            "doctype",
+            fontName="DejaVuSans-Bold",
+            fontSize=13,
+            textColor=colors.HexColor("#8A9184"),
+            leading=15
+        ),
+
         "title": ParagraphStyle(
             "title",
             fontName="DejaVuSans-Bold",
-            fontSize=20,
-            leading=26,
-            spaceAfter=10
+            fontSize=22,
+            leading=27,
         ),
 
         "normal": ParagraphStyle(
@@ -151,6 +162,37 @@ def generate_invoice_pdf(invoice, company) -> bytes:
             fontSize=8,
             leading=11,
             textColor=colors.HexColor("#62676d")
+        ),
+
+        "summary_label": ParagraphStyle(
+            "summary_label",
+            fontName="DejaVuSans",
+            fontSize=10,
+            leading=16,
+            textColor=colors.HexColor("#3a3f37")
+        ),
+
+        "summary_value": ParagraphStyle(
+            "summary_value",
+            fontName="DejaVuSans-Bold",
+            fontSize=10,
+            leading=16,
+            alignment=2
+        ),
+
+        "summary_total_label": ParagraphStyle(
+            "summary_total_label",
+            fontName="DejaVuSans-Bold",
+            fontSize=13,
+            leading=20
+        ),
+
+        "summary_total_value": ParagraphStyle(
+            "summary_total_value",
+            fontName="DejaVuSans-Bold",
+            fontSize=16,
+            leading=20,
+            alignment=2
         )
 
     }
@@ -160,12 +202,13 @@ def generate_invoice_pdf(invoice, company) -> bytes:
 
 
     # =====================================
-    # HLAVIČKA
+    # HLAVIČKA - veľký nadpis FAKTÚRA + číslo
     # =====================================
 
     title_block = [
+        Paragraph("FAKTÚRA", styles["doctype"]),
         Paragraph(
-            f"Faktúra č. {invoice.invoice_number}",
+            f"č. {invoice.invoice_number}",
             styles["title"]
         ),
         Paragraph(
@@ -198,7 +241,7 @@ def generate_invoice_pdf(invoice, company) -> bytes:
 
         story.extend(title_block)
 
-    story.append(Spacer(1, 14))
+    story.append(Spacer(1, 16))
 
 
     # =====================================
@@ -234,11 +277,14 @@ def generate_invoice_pdf(invoice, company) -> bytes:
         if company.ic_dph:
             supplier_lines.append(Paragraph(f"IČ DPH: {company.ic_dph}", styles["normal"]))
 
+        if company.phone:
+            supplier_lines.append(Paragraph(company.phone, styles["normal"]))
+
         if company.email:
             supplier_lines.append(Paragraph(company.email, styles["normal"]))
 
-        if company.phone:
-            supplier_lines.append(Paragraph(company.phone, styles["normal"]))
+        if company.website:
+            supplier_lines.append(Paragraph(company.website, styles["normal"]))
 
     else:
 
@@ -269,11 +315,11 @@ def generate_invoice_pdf(invoice, company) -> bytes:
     if customer.ic_dph:
         customer_lines.append(Paragraph(f"IČ DPH: {customer.ic_dph}", styles["normal"]))
 
-    if customer.email:
-        customer_lines.append(Paragraph(customer.email, styles["normal"]))
-
     if customer.phone:
         customer_lines.append(Paragraph(customer.phone, styles["normal"]))
+
+    if customer.email:
+        customer_lines.append(Paragraph(customer.email, styles["normal"]))
 
 
     header_table = Table(
@@ -293,7 +339,7 @@ def generate_invoice_pdf(invoice, company) -> bytes:
 
 
     # =====================================
-    # DÁTUMY A PLATBA
+    # DÔLEŽITÉ DÁTUMY - výrazný blok
     # =====================================
 
     dates_data = [
@@ -317,24 +363,18 @@ def generate_invoice_pdf(invoice, company) -> bytes:
     dates_table.setStyle(
         TableStyle([
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("BOTTOMPADDING", (0, 0), (-1, 0), 2),
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F1F1E7")),
+            ("BOX", (0, 0), (-1, -1), 0.75, colors.HexColor("#DBDCCC")),
+            ("INNERGRID", (0, 0), (-1, -1), 0.75, colors.HexColor("#DBDCCC")),
+            ("TOPPADDING", (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ("LEFTPADDING", (0, 0), (-1, -1), 10),
         ])
     )
 
     story.append(dates_table)
 
-    story.append(Spacer(1, 6))
-
-    if company is not None and company.iban:
-
-        story.append(
-            Paragraph(
-                f"IBAN: {company.iban}",
-                styles["normal"]
-            )
-        )
-
-    story.append(Spacer(1, 16))
+    story.append(Spacer(1, 18))
 
 
     # =====================================
@@ -376,9 +416,9 @@ def generate_invoice_pdf(invoice, company) -> bytes:
 
     items_table.setStyle(
         TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#202124")),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1E2B2F")),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("LINEBELOW", (0, 0), (-1, 0), 0.5, colors.HexColor("#202124")),
+            ("LINEBELOW", (0, 0), (-1, 0), 0.5, colors.HexColor("#1E2B2F")),
             ("LINEBELOW", (0, 1), (-1, -1), 0.5, colors.HexColor("#e1e4e8")),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ("TOPPADDING", (0, 0), (-1, -1), 6),
@@ -389,76 +429,181 @@ def generate_invoice_pdf(invoice, company) -> bytes:
 
     story.append(items_table)
 
-    story.append(Spacer(1, 16))
+    story.append(Spacer(1, 18))
 
 
     # =====================================
-    # REKAPITULÁCIA DPH
+    # SÚHRN - základ dane / DPH / CELKOM K ÚHRADE
+    # (výrazný zvýraznený blok)
     # =====================================
 
     totals = calculate_invoice_totals(invoice.items)
 
-    vat_rows = [[
-        Paragraph("Sadzba DPH", styles["bold"]),
-        Paragraph("Základ", styles["bold"]),
-        Paragraph("DPH", styles["bold"]),
-        Paragraph("Spolu", styles["bold"]),
-    ]]
+    summary_rows = [
+        [
+            Paragraph("Základ dane", styles["summary_label"]),
+            Paragraph(format_money(totals["total_base"]), styles["summary_value"])
+        ],
+        [
+            Paragraph("DPH spolu", styles["summary_label"]),
+            Paragraph(format_money(totals["total_vat"]), styles["summary_value"])
+        ],
+        [
+            Paragraph("CELKOM K ÚHRADE", styles["summary_total_label"]),
+            Paragraph(format_money(totals["total_gross"]), styles["summary_total_value"])
+        ],
+    ]
 
-    for row in totals["vat_breakdown"]:
-
-        vat_rows.append([
-            Paragraph(f"{row['rate']} %", styles["normal"]),
-            Paragraph(format_money(row["base"]), styles["normal"]),
-            Paragraph(format_money(row["vat"]), styles["normal"]),
-            Paragraph(format_money(row["gross"]), styles["normal"]),
-        ])
-
-
-    vat_table = Table(
-        vat_rows,
-        colWidths=[30 * mm, 40 * mm, 40 * mm, 40 * mm]
+    summary_table = Table(
+        summary_rows,
+        colWidths=[100 * mm, 70 * mm]
     )
 
-    vat_table.setStyle(
+    summary_table.setStyle(
         TableStyle([
-            ("LINEBELOW", (0, 0), (-1, 0), 0.5, colors.HexColor("#202124")),
-            ("LINEBELOW", (0, 1), (-1, -1), 0.5, colors.HexColor("#e1e4e8")),
-            ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
-            ("TOPPADDING", (0, 0), (-1, -1), 4),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("BACKGROUND", (0, 2), (-1, 2), colors.HexColor("#F1F1E7")),
+            ("LINEABOVE", (0, 2), (-1, 2), 1, colors.HexColor("#1E2B2F")),
+            ("TOPPADDING", (0, 0), (-1, 1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, 1), 3),
+            ("TOPPADDING", (0, 2), (-1, 2), 8),
+            ("BOTTOMPADDING", (0, 2), (-1, 2), 8),
+            ("LEFTPADDING", (0, 2), (0, 2), 8),
+            ("RIGHTPADDING", (-1, 2), (-1, 2), 8),
         ])
     )
 
-    story.append(vat_table)
+    story.append(summary_table)
 
-    story.append(Spacer(1, 12))
+    story.append(Spacer(1, 14))
 
 
     # =====================================
-    # CELKOVÁ SUMA
+    # REKAPITULÁCIA DPH PODĽA SADZIEB
     # =====================================
 
-    total_style = ParagraphStyle(
-        "total",
-        fontName="DejaVuSans-Bold",
-        fontSize=14,
-        alignment=2
-    )
+    if len(totals["vat_breakdown"]) > 1:
 
-    story.append(
+        vat_rows = [[
+            Paragraph("Sadzba DPH", styles["bold"]),
+            Paragraph("Základ", styles["bold"]),
+            Paragraph("DPH", styles["bold"]),
+            Paragraph("Spolu", styles["bold"]),
+        ]]
+
+        for row in totals["vat_breakdown"]:
+
+            vat_rows.append([
+                Paragraph(f"{row['rate']} %", styles["normal"]),
+                Paragraph(format_money(row["base"]), styles["normal"]),
+                Paragraph(format_money(row["vat"]), styles["normal"]),
+                Paragraph(format_money(row["gross"]), styles["normal"]),
+            ])
+
+
+        vat_table = Table(
+            vat_rows,
+            colWidths=[30 * mm, 40 * mm, 40 * mm, 40 * mm]
+        )
+
+        vat_table.setStyle(
+            TableStyle([
+                ("LINEBELOW", (0, 0), (-1, 0), 0.5, colors.HexColor("#1E2B2F")),
+                ("LINEBELOW", (0, 1), (-1, -1), 0.5, colors.HexColor("#e1e4e8")),
+                ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ])
+        )
+
+        story.append(vat_table)
+
+        story.append(Spacer(1, 18))
+
+
+    # =====================================
+    # PLATOBNÉ ÚDAJE + QR KÓD
+    # =====================================
+
+    payment_lines = [
+        Paragraph("Platobné údaje", styles["heading"]),
         Paragraph(
-            f"Celkom na úhradu: {format_money(totals['total_gross'])}",
-            total_style
+            f"Spôsob úhrady: {invoice.payment_method or 'Prevodom'}",
+            styles["normal"]
+        ),
+    ]
+
+    if company is not None and company.iban:
+
+        payment_lines.append(
+            Paragraph(f"IBAN: {company.iban}", styles["normal"])
+        )
+
+    if company is not None and company.swift_bic:
+
+        payment_lines.append(
+            Paragraph(f"SWIFT/BIC: {company.swift_bic}", styles["normal"])
+        )
+
+    payment_lines.append(
+        Paragraph(
+            f"Variabilný symbol: {invoice.variable_symbol or invoice.invoice_number}",
+            styles["normal"]
         )
     )
 
 
+    qr_buffer = None
+
+    if company is not None and company.iban:
+
+        qr_buffer = generate_payment_qr_image(
+            iban=company.iban,
+            amount=totals["total_gross"],
+            variable_symbol=invoice.variable_symbol or invoice.invoice_number,
+            beneficiary_name=company.name,
+            swift=company.swift_bic,
+            note=f"Faktura {invoice.invoice_number}"
+        )
+
+
+    if qr_buffer is not None:
+
+        qr_image = Image(
+            qr_buffer,
+            width=30 * mm,
+            height=30 * mm
+        )
+
+        payment_table = Table(
+            [[payment_lines, qr_image]],
+            colWidths=[135 * mm, 35 * mm]
+        )
+
+        payment_table.setStyle(
+            TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+            ])
+        )
+
+        story.append(payment_table)
+
+    else:
+
+        story.extend(payment_lines)
+
+    story.append(Spacer(1, 18))
+
+
+    # =====================================
+    # POZNÁMKA
+    # =====================================
+
+    story.append(Paragraph(DEFAULT_THANK_YOU_NOTE, styles["normal"]))
+
     if invoice.note:
 
-        story.append(Spacer(1, 16))
-
-        story.append(Paragraph("Poznámka", styles["heading"]))
+        story.append(Spacer(1, 8))
 
         story.append(Paragraph(invoice.note, styles["normal"]))
 

@@ -893,4 +893,226 @@ def test_pdf_without_logo_or_signature_still_works():
     assert pdf_bytes[:4] == b"%PDF"
 
 
+# =========================================
+# QR PLATOBNÝ KÓD (PAY BY SQUARE)
+# =========================================
+
+def test_qr_payment_generates_valid_png():
+
+    from qr_payment import generate_payment_qr_image
+
+    qr = generate_payment_qr_image(
+        iban="SK6807200002891987426353",
+        amount=Decimal("184.50"),
+        variable_symbol="2026001",
+        beneficiary_name="Testovacia firma"
+    )
+
+    assert qr is not None
+
+    png_bytes = qr.read()
+
+    assert png_bytes[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_qr_payment_returns_none_without_iban():
+
+    from qr_payment import generate_payment_qr_image
+
+    qr = generate_payment_qr_image(
+        iban=None,
+        amount=Decimal("100.00"),
+        variable_symbol="123",
+        beneficiary_name="Firma"
+    )
+
+    assert qr is None
+
+
+def test_qr_payment_roundtrip_data_integrity():
+    """
+    Overí, že vygenerovaný pay-by-square reťazec sa dá spätne dekódovať
+    a obsahuje presne tie údaje, ktoré sme zakódovali (vrátane CRC kontroly).
+    """
+
+    import lzma
+    import binascii
+    import pay_by_square
+
+    payment_string = pay_by_square.generate(
+        amount=99.90,
+        iban="SK6807200002891987426353",
+        swift="TATRSKBX",
+        beneficiary_name="Testovacia firma",
+        variable_symbol="2026005",
+        note="Test"
+    )
+
+    subst = "0123456789ABCDEFGHIJKLMNOPQRSTUV"
+
+    binary = "".join(
+        bin(subst.index(c))[2:].zfill(5)
+        for c in payment_string
+    )
+
+    n_bytes = len(binary) // 8
+
+    byte_data = bytes(
+        int(binary[i * 8:i * 8 + 8], 2)
+        for i in range(n_bytes)
+    )
+
+    compressed = byte_data[4:]
+
+    decompressed = lzma.decompress(
+        compressed,
+        format=lzma.FORMAT_RAW,
+        filters=[{
+            "id": lzma.FILTER_LZMA1,
+            "lc": 3, "lp": 0, "pb": 2, "dict_size": 128 * 1024,
+        }]
+    )
+
+    checksum = decompressed[:4]
+    data = decompressed[4:]
+
+    calculated_checksum = binascii.crc32(data).to_bytes(4, "little")
+
+    assert checksum == calculated_checksum
+
+    fields = data.decode().split("\t")
+
+    assert fields[3] == "99.90"
+    assert fields[6] == "2026005"
+    assert fields[12] == "SK6807200002891987426353"
+    assert fields[13] == "TATRSKBX"
+    assert fields[16] == "Testovacia firma"
+
+
+def test_pdf_includes_qr_code_when_iban_present():
+
+    db = TestingSessionLocal()
+
+    invoice = create_sample_invoice(db)
+
+    company = Company(
+        name="Firma s IBAN",
+        iban="SK6807200002891987426353"
+    )
+
+    db.add(company)
+    db.commit()
+
+    from invoice_pdf import generate_invoice_pdf
+
+    pdf_with_iban = generate_invoice_pdf(invoice, company)
+
+    company_no_iban = Company(name="Firma bez IBAN")
+
+    db.add(company_no_iban)
+    db.commit()
+
+    pdf_without_iban = generate_invoice_pdf(invoice, company_no_iban)
+
+    db.close()
+
+    # PDF s QR kódom musí byť väčší (obsahuje navyše vygenerovaný obrázok)
+    assert len(pdf_with_iban) > len(pdf_without_iban)
+
+
+# =========================================
+# NOVÉ POLIA FIRMY (website, swift_bic)
+# =========================================
+
+def test_settings_save_website_and_swift():
+
+    response = client.post(
+        "/settings",
+        data={
+            "name": "Firma XY",
+            "website": "www.firmaxy.sk",
+            "swift_bic": "TATRSKBX"
+        },
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+
+    db = TestingSessionLocal()
+    company = db.query(Company).first()
+    db.close()
+
+    assert company.website == "www.firmaxy.sk"
+    assert company.swift_bic == "TATRSKBX"
+
+
+# =========================================
+# SPÔSOB ÚHRADY NA FAKTÚRE
+# =========================================
+
+def test_create_invoice_with_payment_method():
+
+    customer, job = get_test_customer_and_job()
+
+    issue_date = date.today()
+    due_date = issue_date + timedelta(days=14)
+
+    response = post_form(
+        f"/customers/{customer.id}/invoices",
+        [
+            ("issue_date", issue_date.isoformat()),
+            ("due_date", due_date.isoformat()),
+            ("payment_method", "Hotovosť"),
+            ("description", "Test"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "10.00"),
+            ("vat_rate", "23"),
+        ],
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+
+    invoice_id = int(response.headers["location"].split("/")[-1])
+
+    db = TestingSessionLocal()
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    db.close()
+
+    assert invoice.payment_method == "Hotovosť"
+
+
+def test_create_invoice_default_payment_method():
+
+    customer, job = get_test_customer_and_job()
+
+    issue_date = date.today()
+    due_date = issue_date + timedelta(days=14)
+
+    response = post_form(
+        f"/customers/{customer.id}/invoices",
+        [
+            ("issue_date", issue_date.isoformat()),
+            ("due_date", due_date.isoformat()),
+            ("description", "Test"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "10.00"),
+            ("vat_rate", "23"),
+        ],
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+
+    invoice_id = int(response.headers["location"].split("/")[-1])
+
+    db = TestingSessionLocal()
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    db.close()
+
+    assert invoice.payment_method == "Prevodom"
+
+
 

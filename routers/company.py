@@ -91,9 +91,13 @@ async def settings_save(
 
     iban: str = Form(""),
 
+    swift_bic: str = Form(""),
+
     email: str = Form(""),
 
     phone: str = Form(""),
+
+    website: str = Form(""),
 
     peppol_scheme_id: str = Form(""),
 
@@ -122,8 +126,10 @@ async def settings_save(
     company.city = city or None
     company.zip_code = zip_code or None
     company.iban = iban or None
+    company.swift_bic = swift_bic or None
     company.email = email or None
     company.phone = phone or None
+    company.website = website or None
     company.peppol_scheme_id = peppol_scheme_id or None
 
 

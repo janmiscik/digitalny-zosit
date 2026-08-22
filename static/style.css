@@ -2443,3 +2443,42 @@ html[data-theme="dark"] .topbar {
     }
 
 }
+
+
+/* =========================================
+   AUTORSKÝ ODKAZ
+   ========================================= */
+
+body::after {
+    content: "Created by ©JanMi 2026";
+
+    position: fixed;
+    right: 14px;
+    bottom: 10px;
+
+    font-family: var(--font-body);
+    font-size: 11px;
+    color: var(--text-muted);
+
+    opacity: 0.65;
+
+    pointer-events: none;
+
+    z-index: 50;
+}
+
+@media print {
+
+    body::after {
+        display: none;
+    }
+
+}
+
+@media (max-width: 640px) {
+
+    body::after {
+        display: none;
+    }
+
+}

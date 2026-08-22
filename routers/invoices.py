@@ -327,6 +327,7 @@ async def create_invoice(
     )
 
     variable_symbol = form.get("variable_symbol", "").strip() or None
+    payment_method = form.get("payment_method", "").strip() or "Prevodom"
     note = form.get("note", "").strip() or None
 
 
@@ -342,6 +343,7 @@ async def create_invoice(
         due_date=due_date,
         delivery_date=delivery_date,
         variable_symbol=variable_symbol,
+        payment_method=payment_method,
         note=note
     )
 

@@ -103,6 +103,9 @@ V rámci prípravy na povinnú elektronickú fakturáciu (Peppol/eFaktúra, ktor
 6. **Stav faktúry** – Návrh / Odoslaná / Uhradená / Po splatnosti / Stornovaná.
 7. **Peppol XML export** – na detaile faktúry je tlačidlo "Peppol XML (návrh)", ktoré vygeneruje faktúru vo formáte UBL 2.1 / Peppol BIS Billing 3.0 (rovnaká štruktúra, akú vyžaduje pripravovaná povinná e-fakturácia).
 8. **Logo a podpis/pečiatka** – v Nastaveniach môžeš nahrať logo firmy (zobrazí sa v hlavičke PDF faktúry) a obrázok podpisu/pečiatky (zobrazí sa pri sume na konci faktúry). Podporované formáty: PNG, JPG (max. 2 MB).
+9. **QR platobný kód** – PDF faktúra obsahuje QR kód pre platbu podľa slovenského štandardu PAY by square (naskenovateľný väčšinou slovenských bankových aplikácií). Vygeneruje sa automaticky, ak má firma v Nastaveniach vyplnený IBAN.
+10. **Spôsob úhrady** – pri vytváraní faktúry si vyberieš Prevodom / Hotovosť / Kartou.
+11. **SWIFT/BIC a web firmy** – voliteľné polia v Nastaveniach, zobrazia sa na faktúre, ak sú vyplnené.
 
 **Dôležité o Peppol XML exporte:** appka sama neposiela faktúry cez Peppol sieť (to si vyžaduje registráciu cez certifikovaného poskytovateľa, tzv. Digitálny poštár). Vygenerovaný XML je **návrh/príprava dát** v správnej štruktúre – priamo ho môžeš odovzdať svojmu poskytovateľovi pri jeho zapájaní. Pred ostrým používaním si u poskytovateľa over najmä:
 - presný **Peppol scheme ID** kód (pole "Peppol schéma ID" v Nastaveniach – nechaj prázdne, kým ti ho nepridelí)
@@ -166,6 +169,7 @@ digitalny-zosit/
 ├── invoice_pdf.py         # generovanie PDF faktúr
 ├── invoice_utils.py       # číslovanie faktúr, výpočet DPH
 ├── peppol_xml.py          # export do Peppol BIS 3.0 XML formátu
+├── qr_payment.py          # QR platobný kód (PAY by square)
 ├── uploads_utils.py       # nahrávanie loga/podpisu
 ├── main.py
 ├── models.py
