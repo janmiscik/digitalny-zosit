@@ -2,54 +2,92 @@
    DIGITÁLNY ZOŠIT
    ========================================= */
 
+/* =========================================
+   DIGITÁLNY ZOŠIT
+
+   Vizuálna identita: dielenský zošit remeselníka.
+   Papierové plochy, atramentová modrá (--ink), tesárska
+   okrová (--accent) a stavové odznaky v podobe pečiatok.
+   ========================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
+
 :root {
-    --background: #f4f5f7;
-    --surface: #ffffff;
-    --surface-secondary: #f0f2f5;
+    /* Plochy */
+    --background: #EDEEE3;
+    --surface: #FBFBF7;
+    --surface-secondary: #F1F1E7;
 
-    --border: #e1e4e8;
+    --border: #DBDCCC;
 
-    --text: #202124;
-    --text-secondary: #62676d;
-    --text-muted: #8a8f96;
+    /* Text */
+    --text: #1E2B2F;
+    --text-secondary: #5B6459;
+    --text-muted: #8A9184;
 
-    --button: #202124;
-    --button-text: #ffffff;
+    /* Tlačidlá */
+    --button: #1E2B2F;
+    --button-text: #FBFBF7;
 
-    --input-background: #ffffff;
-    --input-border: #d3d7dc;
+    --input-background: #FFFFFF;
+    --input-border: #CBCDB8;
 
-    --overlay: rgba(0, 0, 0, 0.48);
+    --overlay: rgba(24, 28, 22, 0.5);
 
-    --danger: #d64545;
-    --warning: #c47a00;
-    --accent: #3978d3;
+    /* Signálne farby */
+    --danger: #A63A2E;
+    --warning: #A9691B;
+    --accent: #C1791E;
+    --accent-ink: #1E2B2F;
 
-    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
-    --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.07);
+    /* Atramenty pečiatok (stavové odznaky) */
+    --stamp-navy: #24425C;
+    --stamp-amber: #A9691B;
+    --stamp-green: #3F6B49;
+    --stamp-red: #A63A2E;
+    --stamp-grey: #6B6F62;
+
+    --shadow-sm: 0 2px 8px rgba(30, 43, 47, 0.06);
+    --shadow-md: 0 10px 28px rgba(30, 43, 47, 0.10);
+
+    /* Typografia */
+    --font-display: 'Space Grotesk', 'Inter', Arial, sans-serif;
+    --font-body: 'Inter', Arial, sans-serif;
+    --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
 }
 
 html[data-theme="dark"] {
-    --background: #151719;
-    --surface: #202326;
-    --surface-secondary: #2a2e32;
+    --background: #181B15;
+    --surface: #22251E;
+    --surface-secondary: #2A2D24;
 
-    --border: #393e43;
+    --border: #3A3D31;
 
-    --text: #f1f1f1;
-    --text-secondary: #b8b8b8;
-    --text-muted: #969ba1;
+    --text: #EEEFE4;
+    --text-secondary: #B7BBA9;
+    --text-muted: #888D7C;
 
-    --button: #f1f1f1;
-    --button-text: #181818;
+    --button: #EEEFE4;
+    --button-text: #1B1E17;
 
-    --input-background: #292d31;
-    --input-border: #484d52;
+    --input-background: #262920;
+    --input-border: #454939;
 
-    --overlay: rgba(0, 0, 0, 0.68);
+    --overlay: rgba(10, 12, 8, 0.68);
 
-    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.20);
-    --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.30);
+    --danger: #D97F6E;
+    --warning: #E0A140;
+    --accent: #E0A140;
+    --accent-ink: #1B1E17;
+
+    --stamp-navy: #7FA3C4;
+    --stamp-amber: #E0A140;
+    --stamp-green: #7FB68C;
+    --stamp-red: #D97F6E;
+    --stamp-grey: #A6AA98;
+
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.24);
+    --shadow-md: 0 10px 28px rgba(0, 0, 0, 0.34);
 }
 
 
@@ -71,19 +109,30 @@ html {
 body {
     min-height: 100vh;
 
-    font-family:
-        Arial,
-        Helvetica,
-        sans-serif;
+    font-family: var(--font-body);
 
     background: var(--background);
     color: var(--text);
+
+    background-image:
+        radial-gradient(circle, rgba(30, 43, 47, 0.05) 1px, transparent 1px);
+    background-size: 22px 22px;
 
     transition:
         background-color 0.2s ease,
         color 0.2s ease;
 
     line-height: 1.5;
+}
+
+html[data-theme="dark"] body {
+    background-image:
+        radial-gradient(circle, rgba(238, 239, 228, 0.045) 1px, transparent 1px);
+}
+
+h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
 }
 
 button,
@@ -119,9 +168,23 @@ select {
 }
 
 .logo {
+    font-family: var(--font-display);
     font-size: 21px;
     font-weight: 700;
     letter-spacing: -0.3px;
+
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.logo::after {
+    content: "";
+    display: inline-block;
+    width: 26px;
+    height: 3px;
+    background: var(--accent);
+    border-radius: 2px;
 }
 
 .topbar-actions {
@@ -139,8 +202,8 @@ select {
     width: 42px;
     height: 42px;
 
-    border: 1px solid var(--border);
-    border-radius: 10px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
 
     background: var(--surface);
     color: var(--text);
@@ -154,12 +217,12 @@ select {
     justify-content: center;
 
     transition:
-        background-color 0.15s ease,
+        border-color 0.15s ease,
         transform 0.15s ease;
 }
 
 .theme-button:hover {
-    background: var(--surface-secondary);
+    border-color: var(--accent);
     transform: translateY(-1px);
 }
 
@@ -172,17 +235,18 @@ select {
     display: inline-block;
     text-decoration: none;
 
-    border: 1px solid var(--border);
-    border-radius: 9px;
+    border: 1.5px solid var(--text);
+    border-radius: 8px;
 
-    background: var(--surface);
+    background: transparent;
     color: var(--text);
 
-    padding: 11px 16px;
+    padding: 10px 16px;
 
-    font-size: 14px;
-    font-family: inherit;
+    font-size: 13px;
+    font-family: var(--font-display);
     font-weight: 600;
+    letter-spacing: 0.01em;
 
     cursor: pointer;
 
@@ -202,28 +266,37 @@ select {
    ========================================= */
 
 .new-customer-button {
-    border: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 
-    background: var(--button);
-    color: var(--button-text);
+    text-decoration: none;
 
-    padding: 11px 18px;
+    border: 1.5px solid var(--accent);
 
-    border-radius: 9px;
+    background: var(--accent);
+    color: var(--accent-ink);
 
+    padding: 10px 18px;
+
+    border-radius: 8px;
+
+    font-family: var(--font-display);
     font-size: 14px;
     font-weight: 600;
+    letter-spacing: 0.01em;
 
     cursor: pointer;
 
     transition:
-        opacity 0.15s ease,
         transform 0.15s ease,
-        box-shadow 0.15s ease;
+        box-shadow 0.15s ease,
+        background-color 0.15s ease;
 }
 
 .new-customer-button:hover {
-    opacity: 0.90;
+    background: var(--stamp-amber);
+    border-color: var(--stamp-amber);
     transform: translateY(-1px);
     box-shadow: var(--shadow-sm);
 }
@@ -314,8 +387,9 @@ select {
 }
 
 .dashboard-number {
+    font-family: var(--font-mono);
     font-size: 34px;
-    font-weight: 700;
+    font-weight: 600;
 
     line-height: 1.1;
 
@@ -345,9 +419,9 @@ select {
 
     background: var(--surface);
 
-    border: 1px solid var(--border);
+    border: 1.5px solid var(--border);
 
-    border-radius: 14px;
+    border-radius: 10px;
 
     padding: 20px 24px;
 
@@ -358,12 +432,19 @@ select {
 
     transition:
         transform 0.15s ease,
-        box-shadow 0.15s ease;
+        box-shadow 0.15s ease,
+        border-color 0.15s ease;
 }
 
 .quick-link-card:hover {
     transform: translateY(-2px);
     box-shadow: var(--shadow-md);
+    border-color: var(--accent);
+}
+
+.quick-link-card:hover .quick-link-arrow {
+    transform: translateX(3px);
+    color: var(--accent);
 }
 
 .quick-link-icon {
@@ -376,6 +457,7 @@ select {
 
 .quick-link-info h3 {
     margin: 0 0 2px 0;
+    font-family: var(--font-display);
     font-size: 16px;
     font-weight: 700;
     color: var(--text);
@@ -395,6 +477,9 @@ select {
 .quick-link-arrow {
     font-size: 18px;
     color: var(--text-muted);
+    transition:
+        transform 0.15s ease,
+        color 0.15s ease;
 }
 
 .dashboard-label {
@@ -931,7 +1016,15 @@ input[type="date"] {
     text-decoration: none;
     color: var(--text);
 
-    font-size: 15px;
+    font-family: var(--font-display);
+    font-size: 14px;
+    font-weight: 600;
+
+    transition: color 0.15s ease;
+}
+
+.back-button:hover {
+    color: var(--accent);
 }
 
 .customer-detail {
@@ -1129,7 +1222,11 @@ input[type="date"] {
 
 
 /* =========================================
-   STAV ZÁKAZKY
+   STAV ZÁKAZKY / FAKTÚRY - PEČIATKA
+
+   Signature prvok appky: stavové odznaky vyzerajú ako
+   pečiatka na papierovom dokumente - mierne pootočené,
+   dvojitý rámik, farba atramentu podľa významu stavu.
    ========================================= */
 
 .status-form {
@@ -1137,19 +1234,77 @@ input[type="date"] {
 }
 
 .job-status {
-    border: 1px solid var(--border);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 
-    border-radius: 20px;
+    border: 1.5px solid var(--stamp-grey);
+    border-radius: 4px;
 
-    padding: 8px 12px;
+    padding: 5px 12px;
 
-    font-size: 13px;
-    font-weight: 600;
+    font-family: var(--font-display);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
 
     cursor: pointer;
 
-    background: var(--surface-secondary);
-    color: var(--text);
+    background: transparent;
+    color: var(--stamp-grey);
+
+    box-shadow:
+        inset 0 0 0 1px color-mix(in srgb, currentColor 25%, transparent);
+
+    transform: rotate(-1.4deg);
+
+    transition:
+        transform 0.15s ease,
+        border-color 0.15s ease;
+}
+
+.job-status:hover,
+.job-status:focus {
+    transform: rotate(0deg);
+    outline: none;
+}
+
+/* Neutrálne / nové - atramentová modrá */
+.status-nová,
+.status-návrh {
+    color: var(--stamp-navy);
+    border-color: var(--stamp-navy);
+}
+
+/* Aktívne / prebiehajúce - okrová */
+.status-dohodnutá,
+.status-prebieha,
+.status-odoslaná {
+    color: var(--stamp-amber);
+    border-color: var(--stamp-amber);
+}
+
+/* Vyžaduje pozornosť - červená */
+.status-čaká-na-materiál,
+.status-po-splatnosti {
+    color: var(--stamp-red);
+    border-color: var(--stamp-red);
+}
+
+/* Dokončené / uhradené - zelená */
+.status-hotová,
+.status-uhradená {
+    color: var(--stamp-green);
+    border-color: var(--stamp-green);
+}
+
+/* Stornované - sivá, mierne priehľadné */
+.status-stornovaná {
+    color: var(--stamp-grey);
+    border-color: var(--stamp-grey);
+    opacity: 0.7;
+    text-decoration: line-through;
 }
 
 .job-status-select {
@@ -1157,7 +1312,7 @@ input[type="date"] {
 
     padding: 12px;
 
-    border: 1px solid var(--input-border);
+    border: 1.5px solid var(--input-border);
 
     border-radius: 8px;
 
@@ -1190,26 +1345,27 @@ input[type="date"] {
 
     padding: 8px 12px;
 
-    border-radius: 8px;
+    border-radius: 7px;
 
     text-decoration: none;
 
+    font-family: var(--font-display);
     font-size: 13px;
     font-weight: 600;
 
-    background: var(--surface-secondary);
+    background: transparent;
     color: var(--text);
 
-    border: 1px solid var(--border);
+    border: 1.5px solid var(--border);
 
     transition:
         transform 0.15s ease,
-        background-color 0.15s ease;
+        border-color 0.15s ease;
 }
 
 .edit-job-button:hover {
     transform: translateY(-1px);
-    background: var(--surface);
+    border-color: var(--accent);
 }
 
 
@@ -1353,39 +1509,55 @@ input[type="date"] {
 
 .cancel-button,
 .save-button {
-    border: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 
-    padding: 11px 18px;
+    border: 1.5px solid transparent;
+
+    padding: 10px 18px;
 
     border-radius: 8px;
 
+    font-family: var(--font-display);
     font-size: 14px;
     font-weight: 600;
+    letter-spacing: 0.01em;
+
+    text-decoration: none;
 
     cursor: pointer;
 
     transition:
         transform 0.15s ease,
-        opacity 0.15s ease;
+        background-color 0.15s ease,
+        border-color 0.15s ease;
 }
 
 .cancel-button {
-    background: var(--surface-secondary);
+    background: transparent;
     color: var(--text);
+    border-color: var(--border);
+}
+
+.cancel-button:hover {
+    border-color: var(--text);
 }
 
 .save-button {
-    background: var(--button);
-    color: var(--button-text);
+    background: var(--accent);
+    color: var(--accent-ink);
+    border-color: var(--accent);
+}
+
+.save-button:hover {
+    background: var(--stamp-amber);
+    border-color: var(--stamp-amber);
 }
 
 .cancel-button:hover,
 .save-button:hover {
     transform: translateY(-1px);
-}
-
-.save-button:hover {
-    opacity: 0.9;
 }
 
 
@@ -1606,9 +1778,7 @@ input[type="date"] {
     }
 
 }
-```
 
-```css
 /* =========================================
    MODERNÉ DASHBOARD KARTY
    ========================================= */
@@ -1642,7 +1812,7 @@ input[type="date"] {
 
     width: 4px;
 
-    background: var(--text);
+    background: var(--accent);
 }
 
 .dashboard-card:hover {
@@ -1696,9 +1866,7 @@ html[data-theme="dark"] .dashboard-card:hover {
     }
 
 }
-```
 
-```css
 /* =========================================
    VYLEPŠENÉ TERMÍNY
    ========================================= */
@@ -1865,9 +2033,7 @@ html[data-theme="dark"] .today-card {
     }
 
 }
-```
 
-```css
 /* =========================================
    VYLEPŠENÉ POSLEDNÉ ZÁKAZKY
    ========================================= */
@@ -1946,10 +2112,19 @@ html[data-theme="dark"] .today-card {
 }
 
 .job-status-label {
-    padding: 6px 11px;
+    padding: 5px 11px;
 
-    font-size: 12px;
-    font-weight: 600;
+    font-family: var(--font-display);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+
+    border-radius: 4px;
+    border: 1.5px solid var(--stamp-grey);
+
+    color: var(--stamp-grey);
+    background: transparent;
 }
 
 .job-open {
@@ -1991,9 +2166,7 @@ html[data-theme="dark"] .job-card-clickable:hover {
     }
 
 }
-```
 
-```css id="2s8k1p"
 /* =========================================
    VYLEPŠENÉ KARTY ZÁKAZNÍKOV
    ========================================= */
@@ -2141,9 +2314,7 @@ html[data-theme="dark"] .customer-search input:focus {
     }
 
 }
-```
 
-```css
 /* =========================================
    VYLEPŠENÁ HORNÁ LIŠTA
    ========================================= */

@@ -288,7 +288,7 @@
                                 {{ job.due_date.strftime("%d.%m.%Y") }}
                             </span>
 
-                            <span class="job-status-label">
+                            <span class="job-status-label status-{{ job.status | lower | replace(' ', '-') }}">
                                 {{ job.status }}
                             </span>
 
@@ -338,7 +338,7 @@
                                 Dnes
                             </span>
 
-                            <span class="job-status-label">
+                            <span class="job-status-label status-{{ job.status | lower | replace(' ', '-') }}">
                                 {{ job.status }}
                             </span>
 
@@ -388,7 +388,7 @@
                                 {{ job.due_date.strftime("%d.%m.%Y") }}
                             </span>
 
-                            <span class="job-status-label">
+                            <span class="job-status-label status-{{ job.status | lower | replace(' ', '-') }}">
                                 {{ job.status }}
                             </span>
 
@@ -498,7 +498,7 @@
                                     {{ job.customer.name }}
                                 </div>
 
-                                <span class="job-status-label">
+                                <span class="job-status-label status-{{ job.status | lower | replace(' ', '-') }}">
                                     {{ job.status }}
                                 </span>
 
