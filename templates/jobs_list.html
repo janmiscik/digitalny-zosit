@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="sk">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Zákazky - Digitálny zošit</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', path='style.css') }}"
+    >
+
+    <style>
+
+        .job-filter-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin: 16px 0 24px 0;
+        }
+
+        .job-filter-chip {
+            display: inline-block;
+            padding: 8px 14px;
+            border-radius: 20px;
+            border: 1.5px solid var(--border);
+            background: var(--surface);
+            color: var(--text-secondary);
+            font-family: var(--font-display);
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+            white-space: nowrap;
+            transition: border-color 0.15s ease, color 0.15s ease;
+        }
+
+        .job-filter-chip:hover {
+            border-color: var(--accent);
+        }
+
+        .job-filter-chip.active {
+            background: var(--ink, var(--text));
+            color: var(--surface);
+            border-color: var(--text);
+        }
+
+        .job-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 16px 20px;
+            background: var(--surface);
+            border: 1.5px solid var(--border);
+            border-radius: 10px;
+            margin-bottom: 10px;
+            text-decoration: none;
+            color: inherit;
+            transition: border-color 0.15s ease, transform 0.15s ease;
+        }
+
+        .job-row:hover {
+            border-color: var(--accent);
+            transform: translateY(-1px);
+        }
+
+        .job-row-main h3 {
+            margin: 0 0 4px 0;
+            font-family: var(--font-display);
+            font-size: 16px;
+        }
+
+        .job-row-main p {
+            margin: 0;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .job-row-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .job-row-overdue {
+            color: var(--danger);
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+
+<header class="topbar">
+
+    <div class="logo">
+        📒 Digitálny zošit
+    </div>
+
+    <div class="topbar-actions">
+
+        <button
+            type="button"
+            class="theme-button"
+            id="themeButton"
+            onclick="toggleTheme()"
+            title="Prepnúť tému"
+        >
+            🌙
+        </button>
+
+        <a
+            href="/"
+            class="back-button"
+        >
+            ← Prehľad
+        </a>
+
+    </div>
+
+</header>
+
+
+<main class="container">
+
+
+    <section class="customers-section">
+
+        <div class="section-heading">
+
+            <div>
+
+                <h2>
+                    Zákazky
+                </h2>
+
+                <p>
+                    Prehľad všetkých zákaziek naprieč zákazníkmi
+                </p>
+
+            </div>
+
+        </div>
+
+
+        <!-- =====================================
+             FILTER PODĽA STAVU
+             ===================================== -->
+
+        <div class="job-filter-row">
+
+            <a
+                href="/zakazky"
+                class="job-filter-chip {% if not selected_status %}active{% endif %}"
+            >
+                Všetky
+            </a>
+
+            {% for status_option in statuses %}
+
+                <a
+                    href="/zakazky?status={{ status_option.value }}"
+                    class="job-filter-chip {% if selected_status == status_option.value %}active{% endif %}"
+                >
+                    {{ status_option.value }}
+                </a>
+
+            {% endfor %}
+
+        </div>
+
+
+        <!-- =====================================
+             ZOZNAM ZÁKAZIEK
+             ===================================== -->
+
+        {% if jobs %}
+
+            {% for job in jobs %}
+
+                {% set is_overdue = (
+                    job.due_date
+                    and job.due_date < today
+                    and job.status != "Hotová"
+                ) %}
+
+                <a
+                    href="/customers/{{ job.customer.id }}"
+                    class="job-row"
+                >
+
+                    <div class="job-row-main">
+
+                        <h3>
+                            {{ job.title }}
+                        </h3>
+
+                        <p>
+                            {{ job.customer.name }}
+
+                            {% if job.due_date %}
+
+                                · termín {{ job.due_date.strftime("%d.%m.%Y") }}
+
+                            {% else %}
+
+                                · bez termínu
+
+                            {% endif %}
+
+                            {% if is_overdue %}
+
+                                <span class="job-row-overdue">
+                                    · po termíne
+                                </span>
+
+                            {% endif %}
+
+                        </p>
+
+                    </div>
+
+
+                    <div class="job-row-right">
+
+                        <span
+                            class="job-status status-{{ job.status | lower | replace(' ', '-') }}"
+                        >
+                            {{ job.status }}
+                        </span>
+
+                    </div>
+
+
+                </a>
+
+
+            {% endfor %}
+
+
+        {% else %}
+
+
+            <div class="empty-state">
+
+                <div class="empty-icon">
+                    🔧
+                </div>
+
+                <h2>
+
+                    {% if selected_status %}
+
+                        Žiadne zákazky v stave "{{ selected_status }}"
+
+                    {% else %}
+
+                        Zatiaľ žiadne zákazky
+
+                    {% endif %}
+
+                </h2>
+
+                <p>
+                    Zákazku vytvoríš z detailu zákazníka.
+                </p>
+
+            </div>
+
+
+        {% endif %}
+
+    </section>
+
+
+</main>
+
+
+<script>
+
+function applyTheme(theme) {
+
+    document.documentElement.setAttribute(
+        "data-theme",
+        theme
+    );
+
+    const button =
+        document.getElementById("themeButton");
+
+    if (theme === "dark") {
+
+        button.textContent = "☀️";
+
+    } else {
+
+        button.textContent = "🌙";
+
+    }
+
+}
+
+
+function toggleTheme() {
+
+    const currentTheme =
+        document.documentElement.getAttribute(
+            "data-theme"
+        );
+
+    const newTheme =
+        currentTheme === "dark"
+            ? "light"
+            : "dark";
+
+    localStorage.setItem(
+        "digitalnyZositTheme",
+        newTheme
+    );
+
+    applyTheme(newTheme);
+
+}
+
+
+const savedTheme =
+    localStorage.getItem(
+        "digitalnyZositTheme"
+    );
+
+
+if (savedTheme === "dark") {
+
+    applyTheme("dark");
+
+} else {
+
+    applyTheme("light");
+
+}
+
+</script>
+
+
+</body>
+
+</html>

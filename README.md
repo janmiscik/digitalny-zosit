@@ -86,6 +86,7 @@ Appka má jednoduché prihlásenie s jedným admin účtom (session-based, cooki
 
 - **`/`** – dashboard (štatistiky, termíny, posledné zákazky, rýchly prístup)
 - **`/zakaznici`** – zoznam všetkých zákazníkov (vyhľadávanie, pridanie nového)
+- **`/zakazky`** – zoznam všetkých zákaziek naprieč zákazníkmi (filtrovanie podľa stavu)
 - **`/faktury`** – zoznam všetkých faktúr (filtrovanie podľa stavu)
 - **`/settings`** – fakturačné údaje firmy, logo, podpis/pečiatka
 
@@ -148,6 +149,7 @@ digitalny-zosit/
 │   ├── index.html
 │   ├── customer.html
 │   ├── customers_list.html
+│   ├── jobs_list.html
 │   ├── invoices_list.html
 │   ├── edit_customer.html
 │   ├── edit_job.html

@@ -159,6 +159,21 @@ def test_invoices_list_page_filtered_by_status():
     assert response.status_code == 200
 
 
+def test_jobs_list_page():
+
+    response = client.get("/zakazky")
+
+    assert response.status_code == 200
+    assert "Testovacia zákazka" in response.text
+
+
+def test_jobs_list_page_filtered_by_status():
+
+    response = client.get("/zakazky?status=Nová")
+
+    assert response.status_code == 200
+
+
 # =========================================
 # CUSTOMERS
 # =========================================

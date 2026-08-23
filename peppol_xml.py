@@ -300,6 +300,11 @@ def generate_peppol_xml(invoice, company) -> bytes:
         payee_account = SubElement(payment_means, qn(NS_CAC, "PayeeFinancialAccount"))
         add_text(payee_account, NS_CBC, "ID", company.iban)
 
+        if company.swift_bic:
+
+            branch = SubElement(payee_account, qn(NS_CAC, "FinancialInstitutionBranch"))
+            add_text(branch, NS_CBC, "ID", company.swift_bic)
+
 
     # =====================================
     # SÚČTY DPH

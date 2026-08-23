@@ -37,6 +37,68 @@ def parse_due_date(raw_value: str) -> date | None:
 
 
 # =========================================
+# ZOZNAM ZÁKAZIEK (STRÁNKA)
+# =========================================
+
+@router.get("/zakazky")
+def jobs_list_page(
+
+    request: Request,
+
+    status: str | None = None,
+
+    db: Session = Depends(get_db),
+
+    user: str = Depends(require_login_page)
+
+):
+
+    query = (
+
+        db
+        .query(Job)
+        .join(Customer)
+
+    )
+
+    if status is not None:
+
+        query = query.filter(
+            Job.status == status
+        )
+
+
+    jobs = query.order_by(
+        Job.due_date.is_(None),
+        Job.due_date.asc()
+    ).all()
+
+
+    today = date.today()
+
+
+    return templates.TemplateResponse(
+
+        request=request,
+
+        name="jobs_list.html",
+
+        context={
+
+            "jobs": jobs,
+
+            "statuses": list(JobStatus),
+
+            "selected_status": status,
+
+            "today": today
+
+        }
+
+    )
+
+
+# =========================================
 # CREATE JOB
 # =========================================
 
