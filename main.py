@@ -2,9 +2,12 @@ import os
 from datetime import date
 
 from fastapi import Depends, FastAPI, Request
+from fastapi.exceptions import HTTPException
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
-from sqlalchemy.orm import Session
+from sqlalchemy import func
+from sqlalchemy.orm import Session, joinedload
 
 from auth import require_login_page
 from database import Base, engine, get_db
@@ -47,6 +50,70 @@ app.add_middleware(
     secret_key=SECRET_KEY,
     same_site="lax",
 )
+
+
+# =========================================
+# CHYBOVÉ STRÁNKY
+#
+# Formuláre (napr. vytvorenie faktúry s chýbajúcou položkou) vracajú
+# HTTPException, čo by FastAPI defaultne zobrazilo ako surový JSON -
+# nepoužiteľné pre bežného používateľa v prehliadači. Tento handler
+# preto pre prehliadačové požiadavky (Accept: text/html) zobrazí
+# prehľadnú chybovú stránku namiesto JSON.
+#
+# Presmerovania (napr. redirect na /login pri neprihlásení, alebo
+# 303 po úspešnom uložení formulára) majú vlastnú Location hlavičku
+# a tento handler ich nezachytáva - prejdú ako zvyčajne.
+# =========================================
+
+@app.exception_handler(HTTPException)
+async def html_aware_exception_handler(request: Request, exc: HTTPException):
+
+    is_redirect = (
+        300 <= exc.status_code < 400
+        and exc.headers
+        and "location" in {h.lower() for h in exc.headers.keys()}
+    )
+
+    wants_html = "text/html" in request.headers.get("accept", "")
+
+    if is_redirect or not wants_html:
+
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+            headers=exc.headers
+        )
+
+
+    detail = exc.detail
+
+    if isinstance(detail, (list, dict)):
+        detail = "Skontroluj prosím zadané údaje."
+
+
+    referer = request.headers.get("referer", "/")
+
+
+    return templates.TemplateResponse(
+
+        request=request,
+
+        name="error.html",
+
+        status_code=exc.status_code,
+
+        context={
+
+            "status_code": exc.status_code,
+
+            "detail": detail,
+
+            "back_url": referer
+
+        }
+
+    )
 
 
 app.mount(
@@ -93,6 +160,13 @@ app.include_router(
 
 # =========================================
 # HOME / DASHBOARD
+#
+# Štatistiky sa počítajú priamo v databáze (COUNT/filter), nie načítaním
+# všetkých riadkov do Pythonu - pri väčšom množstve dát je to podstatný
+# rozdiel vo výkone aj pamäti. Zoznamy zákaziek pre jednotlivé sekcie
+# (termíny, posledné zákazky) sa načítavajú len v potrebnom rozsahu
+# (LIMIT, filter na strane DB) a s joinedload(Job.customer), aby sa
+# predišlo N+1 dotazom pri prístupe k job.customer v šablóne.
 # =========================================
 
 @app.get("/")
@@ -102,123 +176,93 @@ def home(
     user: str = Depends(require_login_page)
 ):
 
-    customers = (
-        db
-        .query(Customer)
-        .all()
-    )
-
-
-    jobs = (
-        db
-        .query(Job)
-        .all()
-    )
-
-
-    invoices = (
-        db
-        .query(Invoice)
-        .all()
-    )
-
-
-    # =====================================
-    # ZÁKLADNÉ ŠTATISTIKY
-    # =====================================
-
-    new_jobs = sum(
-        1
-        for job in jobs
-        if job.status == "Nová"
-    )
-
-
-    active_jobs = sum(
-        1
-        for job in jobs
-        if job.status == "Prebieha"
-    )
-
-
-    total_jobs = len(jobs)
-
-    total_customers = len(customers)
-
-    total_invoices = len(invoices)
-
-
-    # =====================================
-    # TERMÍNY
-    # =====================================
-
     today = date.today()
 
 
-    overdue_invoices = sum(
-        1
-        for invoice in invoices
-        if invoice.due_date < today
-        and invoice.status not in ("Uhradená", "Stornovaná")
-    )
-
-
-    overdue_jobs = []
-
-    today_jobs = []
-
-    upcoming_jobs = []
-
-
-    for job in jobs:
-
-        if job.due_date is None:
-            continue
-
-
-        if job.status == "Hotová":
-            continue
-
-
-        if job.due_date < today:
-
-            overdue_jobs.append(job)
-
-
-        elif job.due_date == today:
-
-            today_jobs.append(job)
-
-
-        else:
-
-            upcoming_jobs.append(job)
-
-
     # =====================================
-    # ZORADENIE
+    # ZÁKLADNÉ ŠTATISTIKY (COUNT na strane DB)
     # =====================================
 
-    overdue_jobs.sort(
-        key=lambda job: job.due_date
+    new_jobs = (
+        db
+        .query(func.count(Job.id))
+        .filter(Job.status == "Nová")
+        .scalar()
     )
 
-
-    today_jobs.sort(
-        key=lambda job: job.due_date
+    active_jobs = (
+        db
+        .query(func.count(Job.id))
+        .filter(Job.status == "Prebieha")
+        .scalar()
     )
 
+    total_jobs = db.query(func.count(Job.id)).scalar()
 
-    upcoming_jobs.sort(
-        key=lambda job: job.due_date
+    total_customers = db.query(func.count(Customer.id)).scalar()
+
+    total_invoices = db.query(func.count(Invoice.id)).scalar()
+
+    overdue_invoices = (
+        db
+        .query(func.count(Invoice.id))
+        .filter(
+            Invoice.due_date < today,
+            Invoice.status.notin_(("Uhradená", "Stornovaná"))
+        )
+        .scalar()
     )
 
 
     # =====================================
-    # NAJBLIŽŠIE ZÁKAZKY
+    # TERMÍNY (filtrované a zoradené priamo v DB)
     # =====================================
 
-    upcoming_jobs = upcoming_jobs[:5]
+    jobs_with_due_date = (
+        db
+        .query(Job)
+        .options(joinedload(Job.customer))
+        .filter(
+            Job.due_date.isnot(None),
+            Job.status != "Hotová"
+        )
+    )
+
+    overdue_jobs = (
+        jobs_with_due_date
+        .filter(Job.due_date < today)
+        .order_by(Job.due_date.asc())
+        .all()
+    )
+
+    today_jobs = (
+        jobs_with_due_date
+        .filter(Job.due_date == today)
+        .order_by(Job.due_date.asc())
+        .all()
+    )
+
+    upcoming_jobs = (
+        jobs_with_due_date
+        .filter(Job.due_date > today)
+        .order_by(Job.due_date.asc())
+        .limit(5)
+        .all()
+    )
+
+
+    # =====================================
+    # POSLEDNÉ ZÁKAZKY (najnovšie vytvorené, max 5)
+    # =====================================
+
+    recent_jobs = (
+        db
+        .query(Job)
+        .options(joinedload(Job.customer))
+        .order_by(Job.id.desc())
+        .limit(5)
+        .all()
+    )
 
 
     return templates.TemplateResponse(
@@ -229,9 +273,7 @@ def home(
 
         context={
 
-            "customers": customers,
-
-            "jobs": jobs,
+            "jobs": recent_jobs,
 
             "new_jobs": new_jobs,
 
@@ -256,3 +298,4 @@ def home(
         }
 
     )
+

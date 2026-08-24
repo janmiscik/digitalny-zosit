@@ -140,6 +140,34 @@
 
             <div class="invoice-actions-row">
 
+                {% if invoice.status == "Návrh" %}
+
+                    <a
+                        href="/invoices/{{ invoice.id }}/edit"
+                        class="edit-job-button"
+                    >
+                        ✏️ Upraviť
+                    </a>
+
+
+                    <form
+                        action="/invoices/{{ invoice.id }}/delete"
+                        method="post"
+                        onsubmit="return confirm('Naozaj chceš zmazať túto faktúru? Táto akcia sa nedá vrátiť späť.');"
+                        style="display: inline;"
+                    >
+                        <button
+                            type="submit"
+                            class="edit-job-button"
+                            style="color: var(--danger); border-color: var(--danger);"
+                        >
+                            🗑️ Zmazať
+                        </button>
+                    </form>
+
+                {% endif %}
+
+
                 <a
                     href="/invoices/{{ invoice.id }}/pdf"
                     class="save-button"

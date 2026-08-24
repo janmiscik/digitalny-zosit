@@ -634,7 +634,28 @@ def generate_invoice_pdf(invoice, company) -> bytes:
         story.append(signature_table)
 
 
-    doc.build(story)
+    def draw_footer(canvas, doc):
+
+        canvas.saveState()
+
+        canvas.setFont("DejaVuSans", 8)
+
+        canvas.setFillColor(colors.HexColor("#8A9184"))
+
+        canvas.drawCentredString(
+            A4[0] / 2,
+            12 * mm,
+            "Vytvorená faktúra v programe Digitálny zošit."
+        )
+
+        canvas.restoreState()
+
+
+    doc.build(
+        story,
+        onFirstPage=draw_footer,
+        onLaterPages=draw_footer
+    )
 
 
     return buffer.getvalue()

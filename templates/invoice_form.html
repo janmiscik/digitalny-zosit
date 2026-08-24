@@ -130,7 +130,11 @@
         <div class="page-header">
 
             <h1>
-                Nová faktúra
+                {% if invoice %}
+                    Upraviť faktúru č. {{ invoice.invoice_number }}
+                {% else %}
+                    Nová faktúra
+                {% endif %}
             </h1>
 
             <p>
@@ -147,7 +151,7 @@
 
 
             <form
-                action="/customers/{{ customer.id }}/invoices"
+                action="{{ '/invoices/' ~ invoice.id ~ '/edit' if invoice else '/customers/' ~ customer.id ~ '/invoices' }}"
                 method="post"
                 id="invoiceForm"
             >
@@ -176,7 +180,7 @@
                         <input
                             type="date"
                             name="issue_date"
-                            value="{{ today.isoformat() }}"
+                            value="{{ invoice.issue_date.isoformat() if invoice else today.isoformat() }}"
                             required
                         >
 
@@ -192,6 +196,7 @@
                         <input
                             type="date"
                             name="due_date"
+                            value="{{ invoice.due_date.isoformat() if invoice else '' }}"
                             required
                         >
 
@@ -207,6 +212,7 @@
                         <input
                             type="date"
                             name="delivery_date"
+                            value="{{ invoice.delivery_date.isoformat() if invoice and invoice.delivery_date else '' }}"
                         >
 
                     </div>
@@ -222,6 +228,7 @@
                 <input
                     type="text"
                     name="variable_symbol"
+                    value="{{ invoice.variable_symbol or '' if invoice else '' }}"
                 >
 
 
@@ -230,9 +237,9 @@
                 </label>
 
                 <select name="payment_method">
-                    <option value="Prevodom" selected>Prevodom</option>
-                    <option value="Hotovosť">Hotovosť</option>
-                    <option value="Kartou">Kartou</option>
+                    <option value="Prevodom" {% if not invoice or invoice.payment_method == "Prevodom" %}selected{% endif %}>Prevodom</option>
+                    <option value="Hotovosť" {% if invoice and invoice.payment_method == "Hotovosť" %}selected{% endif %}>Hotovosť</option>
+                    <option value="Kartou" {% if invoice and invoice.payment_method == "Kartou" %}selected{% endif %}>Kartou</option>
                 </select>
 
 
@@ -264,73 +271,151 @@
                     <tbody id="itemsBody">
 
 
-                        <tr class="invoice-item-row">
+                        {% if invoice and invoice.items %}
 
-                            <td class="invoice-item-description">
-                                <input
-                                    type="text"
-                                    name="description"
-                                    placeholder="Napr. Práca, materiál..."
-                                    value="{{ job.title if job else '' }}"
-                                    required
-                                >
-                            </td>
+                            {% for existing_item in invoice.items %}
 
-                            <td>
-                                <input
-                                    type="number"
-                                    name="quantity"
-                                    value="1"
-                                    step="0.01"
-                                    min="0.01"
-                                    required
-                                >
-                            </td>
+                                <tr class="invoice-item-row">
 
-                            <td>
-                                <input
-                                    type="text"
-                                    name="unit"
-                                    value="ks"
-                                >
-                            </td>
+                                    <td class="invoice-item-description">
+                                        <input
+                                            type="text"
+                                            name="description"
+                                            placeholder="Napr. Práca, materiál..."
+                                            value="{{ existing_item.description }}"
+                                            required
+                                        >
+                                    </td>
 
-                            <td>
-                                <input
-                                    type="number"
-                                    name="unit_price"
-                                    value="0"
-                                    step="0.01"
-                                    min="0"
-                                    required
-                                >
-                            </td>
+                                    <td>
+                                        <input
+                                            type="number"
+                                            name="quantity"
+                                            value="{{ existing_item.quantity }}"
+                                            step="0.01"
+                                            min="0.01"
+                                            required
+                                        >
+                                    </td>
 
-                            <td>
+                                    <td>
+                                        <input
+                                            type="text"
+                                            name="unit"
+                                            value="{{ existing_item.unit }}"
+                                        >
+                                    </td>
 
-                                <select name="vat_rate">
+                                    <td>
+                                        <input
+                                            type="number"
+                                            name="unit_price"
+                                            value="{{ existing_item.unit_price }}"
+                                            step="0.01"
+                                            min="0"
+                                            required
+                                        >
+                                    </td>
 
-                                    <option value="23" selected>23 %</option>
-                                    <option value="19">19 %</option>
-                                    <option value="5">5 %</option>
-                                    <option value="0">0 %</option>
+                                    <td>
 
-                                </select>
+                                        <select name="vat_rate">
 
-                            </td>
+                                            <option value="23" {% if existing_item.vat_rate == 23 %}selected{% endif %}>23 %</option>
+                                            <option value="19" {% if existing_item.vat_rate == 19 %}selected{% endif %}>19 %</option>
+                                            <option value="5" {% if existing_item.vat_rate == 5 %}selected{% endif %}>5 %</option>
+                                            <option value="0" {% if existing_item.vat_rate == 0 %}selected{% endif %}>0 %</option>
 
-                            <td>
-                                <button
-                                    type="button"
-                                    class="invoice-item-remove"
-                                    onclick="removeItemRow(this)"
-                                    title="Odstrániť položku"
-                                >
-                                    ×
-                                </button>
-                            </td>
+                                        </select>
 
-                        </tr>
+                                    </td>
+
+                                    <td>
+                                        <button
+                                            type="button"
+                                            class="invoice-item-remove"
+                                            onclick="removeItemRow(this)"
+                                            title="Odstrániť položku"
+                                        >
+                                            ×
+                                        </button>
+                                    </td>
+
+                                </tr>
+
+                            {% endfor %}
+
+                        {% else %}
+
+                            <tr class="invoice-item-row">
+
+                                <td class="invoice-item-description">
+                                    <input
+                                        type="text"
+                                        name="description"
+                                        placeholder="Napr. Práca, materiál..."
+                                        value="{{ job.title if job else '' }}"
+                                        required
+                                    >
+                                </td>
+
+                                <td>
+                                    <input
+                                        type="number"
+                                        name="quantity"
+                                        value="1"
+                                        step="0.01"
+                                        min="0.01"
+                                        required
+                                    >
+                                </td>
+
+                                <td>
+                                    <input
+                                        type="text"
+                                        name="unit"
+                                        value="ks"
+                                    >
+                                </td>
+
+                                <td>
+                                    <input
+                                        type="number"
+                                        name="unit_price"
+                                        value="0"
+                                        step="0.01"
+                                        min="0"
+                                        required
+                                    >
+                                </td>
+
+                                <td>
+
+                                    <select name="vat_rate">
+
+                                        <option value="23" selected>23 %</option>
+                                        <option value="19">19 %</option>
+                                        <option value="5">5 %</option>
+                                        <option value="0">0 %</option>
+
+                                    </select>
+
+                                </td>
+
+                                <td>
+                                    <button
+                                        type="button"
+                                        class="invoice-item-remove"
+                                        onclick="removeItemRow(this)"
+                                        title="Odstrániť položku"
+                                    >
+                                        ×
+                                    </button>
+                                </td>
+
+                            </tr>
+
+                        {% endif %}
 
 
                     </tbody>
@@ -355,13 +440,13 @@
                     name="note"
                     rows="3"
                     placeholder="Nepovinná poznámka na faktúre"
-                ></textarea>
+                >{{ invoice.note or '' if invoice else '' }}</textarea>
 
 
                 <div class="form-buttons">
 
                     <a
-                        href="/customers/{{ customer.id }}"
+                        href="{{ '/invoices/' ~ invoice.id if invoice else '/customers/' ~ customer.id }}"
                         class="cancel-button edit-cancel-link"
                     >
                         Zrušiť
@@ -371,7 +456,11 @@
                         type="submit"
                         class="save-button"
                     >
-                        Vytvoriť faktúru
+                        {% if invoice %}
+                            Uložiť zmeny
+                        {% else %}
+                            Vytvoriť faktúru
+                        {% endif %}
                     </button>
 
                 </div>

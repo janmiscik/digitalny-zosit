@@ -49,6 +49,76 @@ def parse_required_date(raw_value: str, field_label: str) -> date:
     return parsed
 
 
+def parse_items_from_form(form) -> list:
+    """
+    Zdieľaná logika parsovania riadkov položiek faktúry z formulára -
+    používa create_invoice aj update_invoice, aby sa nedublovala.
+    Vyhodí HTTPException 422, ak nie je zadaná ani jedna platná položka.
+    """
+
+    descriptions = form.getlist("description")
+    quantities = form.getlist("quantity")
+    units = form.getlist("unit")
+    unit_prices = form.getlist("unit_price")
+    vat_rates = form.getlist("vat_rate")
+
+
+    items_data = []
+
+    for i in range(len(descriptions)):
+
+        description = descriptions[i].strip()
+
+        if not description:
+            continue
+
+        try:
+
+            item = InvoiceItemCreate(
+                description=description,
+                quantity=quantities[i] or "1",
+                unit=units[i] or "ks",
+                unit_price=unit_prices[i] or "0",
+                vat_rate=int(vat_rates[i] or 23)
+            )
+
+        except (ValidationError, ValueError, IndexError) as exc:
+
+            raise HTTPException(
+                status_code=422,
+                detail=f"Neplatná položka faktúry: {exc}"
+            )
+
+        items_data.append(item)
+
+
+    if not items_data:
+
+        raise HTTPException(
+            status_code=422,
+            detail="Faktúra musí obsahovať aspoň jednu položku"
+        )
+
+    return items_data
+
+
+def require_draft_invoice(invoice) -> None:
+    """
+    Úprava a zmazanie faktúry sú povolené len pre faktúry v stave Návrh -
+    odoslané/uhradené faktúry sa už potichu nemenia (účtovná integrita).
+    """
+
+    if invoice.status != InvoiceStatus.DRAFT.value:
+
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Túto faktúru už nie je možné upraviť ani zmazať, "
+                "pretože nie je v stave Návrh."
+            )
+        )
+
+
 # =========================================
 # ZOZNAM FAKTÚR (STRÁNKA)
 # =========================================
@@ -241,48 +311,7 @@ async def create_invoice(
 
     form = await request.form()
 
-    descriptions = form.getlist("description")
-    quantities = form.getlist("quantity")
-    units = form.getlist("unit")
-    unit_prices = form.getlist("unit_price")
-    vat_rates = form.getlist("vat_rate")
-
-
-    items_data = []
-
-    for i in range(len(descriptions)):
-
-        description = descriptions[i].strip()
-
-        if not description:
-            continue
-
-        try:
-
-            item = InvoiceItemCreate(
-                description=description,
-                quantity=quantities[i] or "1",
-                unit=units[i] or "ks",
-                unit_price=unit_prices[i] or "0",
-                vat_rate=int(vat_rates[i] or 23)
-            )
-
-        except (ValidationError, ValueError, IndexError) as exc:
-
-            raise HTTPException(
-                status_code=422,
-                detail=f"Neplatná položka faktúry: {exc}"
-            )
-
-        items_data.append(item)
-
-
-    if not items_data:
-
-        raise HTTPException(
-            status_code=422,
-            detail="Faktúra musí obsahovať aspoň jednu položku"
-        )
+    items_data = parse_items_from_form(form)
 
 
     job_id_raw = form.get("job_id", "")
@@ -436,6 +465,224 @@ def invoice_detail(
             "statuses": list(InvoiceStatus)
 
         }
+
+    )
+
+
+# =========================================
+# ÚPRAVA FAKTÚRY (len v stave Návrh)
+# =========================================
+
+@router.get("/invoices/{invoice_id}/edit")
+def edit_invoice_form(
+
+    invoice_id: int,
+
+    request: Request,
+
+    db: Session = Depends(get_db),
+
+    user: str = Depends(require_login_page)
+
+):
+
+    invoice = (
+
+        db
+        .query(Invoice)
+        .options(
+            joinedload(Invoice.items),
+            joinedload(Invoice.customer)
+        )
+        .filter(
+            Invoice.id == invoice_id
+        )
+        .first()
+
+    )
+
+
+    if invoice is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Faktúra neexistuje"
+        )
+
+
+    require_draft_invoice(invoice)
+
+
+    return templates.TemplateResponse(
+
+        request=request,
+
+        name="invoice_form.html",
+
+        context={
+
+            "customer": invoice.customer,
+
+            "job": invoice.job,
+
+            "today": date.today(),
+
+            "invoice": invoice
+
+        }
+
+    )
+
+
+@router.post("/invoices/{invoice_id}/edit")
+async def update_invoice(
+
+    invoice_id: int,
+
+    request: Request,
+
+    db: Session = Depends(get_db),
+
+    user: str = Depends(require_login_page)
+
+):
+
+    invoice = (
+
+        db
+        .query(Invoice)
+        .options(
+            joinedload(Invoice.items)
+        )
+        .filter(
+            Invoice.id == invoice_id
+        )
+        .first()
+
+    )
+
+
+    if invoice is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Faktúra neexistuje"
+        )
+
+
+    require_draft_invoice(invoice)
+
+
+    form = await request.form()
+
+    items_data = parse_items_from_form(form)
+
+
+    issue_date = parse_required_date(
+        form.get("issue_date", ""),
+        "Dátum vystavenia"
+    )
+
+    due_date = parse_required_date(
+        form.get("due_date", ""),
+        "Dátum splatnosti"
+    )
+
+    delivery_date = parse_optional_date(
+        form.get("delivery_date", "")
+    )
+
+    variable_symbol = form.get("variable_symbol", "").strip() or None
+    payment_method = form.get("payment_method", "").strip() or "Prevodom"
+    note = form.get("note", "").strip() or None
+
+
+    invoice.issue_date = issue_date
+    invoice.due_date = due_date
+    invoice.delivery_date = delivery_date
+    invoice.variable_symbol = variable_symbol
+    invoice.payment_method = payment_method
+    invoice.note = note
+
+
+    # Nahradenie položiek - jednoduchšie a spoľahlivejšie ako
+    # zosúlaďovanie existujúcich riadkov s novým formulárom
+    invoice.items.clear()
+
+    for item in items_data:
+
+        invoice.items.append(
+            InvoiceItem(
+                description=item.description,
+                quantity=item.quantity,
+                unit=item.unit,
+                unit_price=item.unit_price,
+                vat_rate=item.vat_rate
+            )
+        )
+
+
+    db.commit()
+
+
+    return RedirectResponse(
+
+        url=f"/invoices/{invoice.id}",
+
+        status_code=303
+
+    )
+
+
+# =========================================
+# ZMAZANIE FAKTÚRY (len v stave Návrh)
+# =========================================
+
+@router.post("/invoices/{invoice_id}/delete")
+def delete_invoice(
+
+    invoice_id: int,
+
+    db: Session = Depends(get_db),
+
+    user: str = Depends(require_login_page)
+
+):
+
+    invoice = (
+
+        db
+        .query(Invoice)
+        .filter(
+            Invoice.id == invoice_id
+        )
+        .first()
+
+    )
+
+
+    if invoice is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Faktúra neexistuje"
+        )
+
+
+    require_draft_invoice(invoice)
+
+    customer_id = invoice.customer_id
+
+    db.delete(invoice)
+
+    db.commit()
+
+
+    return RedirectResponse(
+
+        url=f"/customers/{customer_id}",
+
+        status_code=303
 
     )
 

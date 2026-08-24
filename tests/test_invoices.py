@@ -1115,4 +1115,196 @@ def test_create_invoice_default_payment_method():
     assert invoice.payment_method == "Prevodom"
 
 
+# =========================================
+# ÚPRAVA FAKTÚRY
+# =========================================
+
+def test_edit_invoice_form_draft():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice_id = invoice.id
+    db.close()
+
+    response = client.get(f"/invoices/{invoice_id}/edit")
+
+    assert response.status_code == 200
+    assert "Testovacia položka" in response.text
+
+
+def test_edit_invoice_form_not_found():
+
+    response = client.get("/invoices/999999/edit")
+
+    assert response.status_code == 404
+
+
+def test_edit_invoice_form_non_draft_forbidden():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.status = "Uhradená"
+    invoice_id = invoice.id
+    db.commit()
+    db.close()
+
+    response = client.get(f"/invoices/{invoice_id}/edit")
+
+    assert response.status_code == 409
+
+
+def test_update_invoice_changes_items_and_dates():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice_id = invoice.id
+    db.close()
+
+    new_due_date = date.today() + timedelta(days=30)
+
+    response = post_form(
+        f"/invoices/{invoice_id}/edit",
+        [
+            ("issue_date", date.today().isoformat()),
+            ("due_date", new_due_date.isoformat()),
+            ("payment_method", "Hotovosť"),
+            ("note", "Upravená poznámka"),
+            ("description", "Nová položka po úprave"),
+            ("quantity", "5"),
+            ("unit", "hod"),
+            ("unit_price", "12.50"),
+            ("vat_rate", "19"),
+        ],
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/invoices/{invoice_id}"
+
+    db = TestingSessionLocal()
+    updated = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    items_count = len(updated.items)
+    first_item_description = updated.items[0].description
+    first_item_vat_rate = updated.items[0].vat_rate
+    db.close()
+
+    assert updated.due_date == new_due_date
+    assert updated.payment_method == "Hotovosť"
+    assert updated.note == "Upravená poznámka"
+    assert items_count == 1
+    assert first_item_description == "Nová položka po úprave"
+    assert first_item_vat_rate == 19
+
+
+def test_update_invoice_non_draft_forbidden():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.status = "Odoslaná"
+    invoice_id = invoice.id
+    db.commit()
+    db.close()
+
+    response = post_form(
+        f"/invoices/{invoice_id}/edit",
+        [
+            ("issue_date", date.today().isoformat()),
+            ("due_date", date.today().isoformat()),
+            ("description", "Pokus o úpravu"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "10.00"),
+            ("vat_rate", "23"),
+        ]
+    )
+
+    assert response.status_code == 409
+
+    db = TestingSessionLocal()
+    unchanged = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    first_item_description = unchanged.items[0].description
+    db.close()
+
+    assert first_item_description == "Testovacia položka"
+
+
+def test_update_invoice_no_items_fails():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice_id = invoice.id
+    db.close()
+
+    response = post_form(
+        f"/invoices/{invoice_id}/edit",
+        [
+            ("issue_date", date.today().isoformat()),
+            ("due_date", date.today().isoformat()),
+            ("description", ""),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "10.00"),
+            ("vat_rate", "23"),
+        ]
+    )
+
+    assert response.status_code == 422
+
+
+# =========================================
+# ZMAZANIE FAKTÚRY
+# =========================================
+
+def test_delete_draft_invoice():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice_id = invoice.id
+    customer_id = invoice.customer_id
+    db.close()
+
+    response = client.post(
+        f"/invoices/{invoice_id}/delete",
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/customers/{customer_id}"
+
+    db = TestingSessionLocal()
+    deleted = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    remaining_items = db.query(InvoiceItem).filter(InvoiceItem.invoice_id == invoice_id).count()
+    db.close()
+
+    assert deleted is None
+    assert remaining_items == 0  # cascade delete of items
+
+
+def test_delete_non_draft_invoice_forbidden():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.status = "Uhradená"
+    invoice_id = invoice.id
+    db.commit()
+    db.close()
+
+    response = client.post(f"/invoices/{invoice_id}/delete")
+
+    assert response.status_code == 409
+
+    db = TestingSessionLocal()
+    still_exists = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    db.close()
+
+    assert still_exists is not None
+
+
+def test_delete_invoice_not_found():
+
+    response = client.post("/invoices/999999/delete")
+
+    assert response.status_code == 404
+
+
 
