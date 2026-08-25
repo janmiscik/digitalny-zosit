@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from pydantic import ValidationError
 from sqlalchemy import or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from auth import require_login_api, require_login_page
 from database import get_db
@@ -33,6 +33,9 @@ def customers_list_page(
 
         db
         .query(Customer)
+        .options(
+            joinedload(Customer.jobs)
+        )
         .order_by(
             Customer.name.asc()
         )

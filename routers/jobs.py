@@ -3,7 +3,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from pydantic import ValidationError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from auth import require_login_api, require_login_page
 from database import get_db
@@ -57,7 +57,9 @@ def jobs_list_page(
 
         db
         .query(Job)
-        .join(Customer)
+        .options(
+            joinedload(Job.customer)
+        )
 
     )
 
