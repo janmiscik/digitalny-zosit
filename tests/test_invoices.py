@@ -616,6 +616,45 @@ def test_update_invoice_status_invalid():
     assert response.status_code == 422
 
 
+def test_overdue_status_not_manually_selectable():
+    """
+    "Po splatnosti" sa počíta automaticky podľa dátumu splatnosti
+    (v zoznamoch faktúr) - nemal by sa dať nastaviť ručne, aby si
+    neprotirečil s automatickým výpočtom (napr. faktúra splatná
+    o mesiac by sa nemala dať ručne označiť ako "po splatnosti").
+    """
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice_id = invoice.id
+    db.close()
+
+    response = client.get(f"/invoices/{invoice_id}")
+
+    assert response.status_code == 200
+    assert 'value="Po splatnosti"' not in response.text
+
+
+def test_overdue_status_still_shown_if_already_set():
+    """
+    Ak faktúra už má (napr. z importu staršej verzie) uložený stav
+    'Po splatnosti', formulár ju musí zobraziť korektne - len ju
+    neponúka ako novú voľbu pre iné faktúry.
+    """
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.status = "Po splatnosti"
+    invoice_id = invoice.id
+    db.commit()
+    db.close()
+
+    response = client.get(f"/invoices/{invoice_id}")
+
+    assert response.status_code == 200
+    assert 'value="Po splatnosti"' in response.text
+
+
 # =========================================
 # ZOZNAM FAKTÚR (API)
 # =========================================

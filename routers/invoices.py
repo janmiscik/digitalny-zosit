@@ -450,6 +450,24 @@ def invoice_detail(
     totals = calculate_invoice_totals(invoice.items)
 
 
+    # "Po splatnosti" nie je stav, ktorý by mal používateľ nastavovať ručne -
+    # appka ho počíta automaticky podľa dátumu splatnosti (viď is_overdue
+    # v šablónach zoznamu faktúr aj dashboardu). Ponuka v rozbaľovacom
+    # zozname preto obsahuje len stavy, ktoré dávajú zmysel nastaviť ručne.
+    selectable_statuses = [
+        status
+        for status in InvoiceStatus
+        if status != InvoiceStatus.OVERDUE
+    ]
+
+    # Ak má faktúra (napr. zo staršej verzie appky) už uložený stav
+    # "Po splatnosti", zobrazíme ho v zozname korektne aj naďalej -
+    # len ho neponúkame ako novú voľbu pre ostatné faktúry.
+    if invoice.status == InvoiceStatus.OVERDUE.value:
+
+        selectable_statuses.append(InvoiceStatus.OVERDUE)
+
+
     return templates.TemplateResponse(
 
         request=request,
@@ -462,7 +480,7 @@ def invoice_detail(
 
             "totals": totals,
 
-            "statuses": list(InvoiceStatus)
+            "statuses": selectable_statuses
 
         }
 
