@@ -239,10 +239,19 @@
 
                             {% if job.due_date %}
 
-                                <div class="job-due-date">
+                                {% set job_is_overdue = (
+                                    job.due_date < today
+                                    and job.status != "Hotová"
+                                ) %}
+
+                                <div class="job-due-date {% if job_is_overdue %}job-due-date-overdue{% endif %}">
 
                                     📅
                                     {{ job.due_date.strftime("%d.%m.%Y") }}
+
+                                    {% if job_is_overdue %}
+                                        · po termíne
+                                    {% endif %}
 
                                 </div>
 

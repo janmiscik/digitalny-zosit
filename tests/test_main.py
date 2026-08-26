@@ -174,6 +174,20 @@ def test_jobs_list_page_filtered_by_status():
     assert response.status_code == 200
 
 
+def test_jobs_list_page_filtered_by_overdue():
+
+    response = client.get("/zakazky?when=overdue")
+
+    assert response.status_code == 200
+
+
+def test_jobs_list_page_filtered_by_no_date():
+
+    response = client.get("/zakazky?when=no_date")
+
+    assert response.status_code == 200
+
+
 # =========================================
 # CUSTOMERS
 # =========================================

@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from pydantic import ValidationError
@@ -117,7 +119,9 @@ def customer_detail(
 
             "jobs": jobs,
 
-            "invoices": invoices
+            "invoices": invoices,
+
+            "today": date.today()
 
         }
 

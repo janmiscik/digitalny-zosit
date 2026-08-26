@@ -47,11 +47,16 @@ def jobs_list_page(
 
     status: str | None = None,
 
+    when: str | None = None,
+
     db: Session = Depends(get_db),
 
     user: str = Depends(require_login_page)
 
 ):
+
+    today = date.today()
+
 
     query = (
 
@@ -70,13 +75,25 @@ def jobs_list_page(
         )
 
 
+    if when == "overdue":
+
+        query = query.filter(
+            Job.due_date.isnot(None),
+            Job.due_date < today,
+            Job.status != "Hotová"
+        )
+
+    elif when == "no_date":
+
+        query = query.filter(
+            Job.due_date.is_(None)
+        )
+
+
     jobs = query.order_by(
         Job.due_date.is_(None),
         Job.due_date.asc()
     ).all()
-
-
-    today = date.today()
 
 
     return templates.TemplateResponse(
@@ -92,6 +109,8 @@ def jobs_list_page(
             "statuses": list(JobStatus),
 
             "selected_status": status,
+
+            "selected_when": when,
 
             "today": today
 

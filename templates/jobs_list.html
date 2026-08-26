@@ -159,7 +159,7 @@
         <div class="job-filter-row">
 
             <a
-                href="/zakazky"
+                href="/zakazky{{ '?when=' ~ selected_when if selected_when else '' }}"
                 class="job-filter-chip {% if not selected_status %}active{% endif %}"
             >
                 Všetky
@@ -168,13 +168,44 @@
             {% for status_option in statuses %}
 
                 <a
-                    href="/zakazky?status={{ status_option.value }}"
+                    href="/zakazky?status={{ status_option.value }}{{ '&when=' ~ selected_when if selected_when else '' }}"
                     class="job-filter-chip {% if selected_status == status_option.value %}active{% endif %}"
                 >
                     {{ status_option.value }}
                 </a>
 
             {% endfor %}
+
+        </div>
+
+
+        <!-- =====================================
+             FILTER PODĽA TERMÍNU
+             ===================================== -->
+
+        <div class="job-filter-row">
+
+            <a
+                href="/zakazky{{ '?status=' ~ selected_status if selected_status else '' }}"
+                class="job-filter-chip {% if not selected_when %}active{% endif %}"
+            >
+                Všetky termíny
+            </a>
+
+            <a
+                href="/zakazky?when=overdue{{ '&status=' ~ selected_status if selected_status else '' }}"
+                class="job-filter-chip {% if selected_when == 'overdue' %}active{% endif %}"
+                style="{% if selected_when == 'overdue' %}background: var(--danger); border-color: var(--danger); color: var(--surface);{% endif %}"
+            >
+                ⚠️ Po termíne
+            </a>
+
+            <a
+                href="/zakazky?when=no_date{{ '&status=' ~ selected_status if selected_status else '' }}"
+                class="job-filter-chip {% if selected_when == 'no_date' %}active{% endif %}"
+            >
+                Bez termínu
+            </a>
 
         </div>
 

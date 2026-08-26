@@ -2127,6 +2127,12 @@ html[data-theme="dark"] .today-card {
     font-weight: 600;
 }
 
+.job-due-date-overdue {
+    background: transparent;
+    border: 1.5px solid var(--danger);
+    color: var(--danger);
+}
+
 .job-dashboard-right {
     gap: 12px;
 }
