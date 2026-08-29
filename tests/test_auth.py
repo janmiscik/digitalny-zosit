@@ -165,3 +165,72 @@ def test_logout():
     response = client.get("/", follow_redirects=False)
 
     assert response.status_code == 303
+
+
+# =========================================
+# RATE LIMITING PRIHLÁSENIA
+# =========================================
+
+def test_login_locked_after_too_many_wrong_attempts():
+
+    # vyčistíme stav limitera, nech test nezávisí od poradia iných testov
+    auth._failed_login_attempts.clear()
+    auth._lockout_until = None
+
+    for _ in range(auth.MAX_LOGIN_ATTEMPTS):
+
+        response = client.post(
+            "/login",
+            data={
+                "username": "testadmin",
+                "password": "zle-heslo"
+            }
+        )
+
+        assert response.status_code == 401
+
+    # ďalší pokus (aj so správnym heslom) musí byť zablokovaný
+    response = client.post(
+        "/login",
+        data={
+            "username": "testadmin",
+            "password": TEST_PASSWORD
+        }
+    )
+
+    assert response.status_code == 429
+    assert "session" not in response.cookies
+
+    auth._failed_login_attempts.clear()
+    auth._lockout_until = None
+
+
+def test_successful_login_resets_lockout_counter():
+
+    auth._failed_login_attempts.clear()
+    auth._lockout_until = None
+
+    for _ in range(auth.MAX_LOGIN_ATTEMPTS - 1):
+
+        client.post(
+            "/login",
+            data={
+                "username": "testadmin",
+                "password": "zle-heslo"
+            }
+        )
+
+    response = client.post(
+        "/login",
+        data={
+            "username": "testadmin",
+            "password": TEST_PASSWORD
+        },
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert len(auth._failed_login_attempts) == 0
+
+    auth._failed_login_attempts.clear()
+    auth._lockout_until = None
