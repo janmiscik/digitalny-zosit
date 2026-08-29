@@ -238,6 +238,84 @@
 
 
     <!-- =====================================
+         FINANCIE
+         ===================================== -->
+
+    <section class="finance-section">
+
+        <h2 class="finance-heading">
+            Financie
+        </h2>
+
+        <div class="finance-cards">
+
+            <div class="finance-card {% if unpaid_count > 0 %}finance-card-warning{% endif %}">
+
+                <div class="finance-number">
+                    {{ "%.2f"|format(unpaid_total) }} €
+                </div>
+
+                <div class="finance-label">
+
+                    {% if unpaid_count == 1 %}
+                        Neuhradená 1 faktúra
+                    {% else %}
+                        Neuhradené faktúry ({{ unpaid_count }})
+                    {% endif %}
+
+                </div>
+
+            </div>
+
+
+            <div class="finance-card">
+
+                <div class="finance-number">
+                    {{ "%.2f"|format(revenue_this_month) }} €
+                </div>
+
+                <div class="finance-label">
+                    Tržba tento mesiac
+                </div>
+
+            </div>
+
+
+            <div class="finance-card">
+
+                <div class="finance-number">
+                    {{ "%.2f"|format(revenue_this_year) }} €
+                </div>
+
+                <div class="finance-label">
+                    Tržba tento rok
+                </div>
+
+            </div>
+
+
+            <div class="finance-card {% if overdue_jobs_count > 0 %}finance-card-warning{% endif %}">
+
+                <div class="finance-number">
+                    {{ overdue_jobs_count }}
+                </div>
+
+                <div class="finance-label">
+                    Zákazky po termíne
+                </div>
+
+            </div>
+
+        </div>
+
+        <p class="finance-note">
+            Tržba = súčet uhradených faktúr podľa dátumu vystavenia.
+        </p>
+
+    </section>
+
+
+    <!-- =====================================
          TERMÍNY
          ===================================== -->
 

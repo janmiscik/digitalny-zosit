@@ -1,9 +1,10 @@
 import os
 from datetime import date
+from decimal import Decimal
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy import func
@@ -11,6 +12,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from auth import require_login_page
 from database import Base, engine, get_db
+from invoice_utils import calculate_invoice_totals
 
 from models import Customer, Invoice, Job
 
@@ -126,11 +128,10 @@ from uploads_utils import ensure_uploads_dir, UPLOADS_DIR
 
 ensure_uploads_dir()
 
-app.mount(
-    "/uploads",
-    StaticFiles(directory=str(UPLOADS_DIR)),
-    name="uploads"
-)
+# POZNÁMKA: /uploads (logo, podpis/pečiatka) sa NEpripája cez StaticFiles,
+# pretože ten by bol dostupný bez prihlásenia. Namiesto toho ho obsluhuje
+# chránená route nižšie (serve_upload) - viď routers/company.py by bolo
+# logickejšie, ale kvôli jednoduchosti je priamo tu.
 
 
 # =========================================
@@ -215,6 +216,93 @@ def home(
 
 
     # =====================================
+    # FINANCIE
+    #
+    # Súčty sa počítajú v Pythone (nie priamo v SQL), aby sme použili
+    # tú istú, už otestovanú Decimal-presnú logiku (calculate_invoice_totals)
+    # ako všade inde v appke. Dotazy sú ale zámerne ohraničené (len
+    # neuhradené / len tento mesiac / len tento rok), nie celá tabuľka -
+    # v duchu rovnakej výkonovej opravy ako vyššie.
+    # =====================================
+
+    unpaid_invoices = (
+        db
+        .query(Invoice)
+        .options(joinedload(Invoice.items))
+        .filter(
+            Invoice.status.notin_(("Uhradená", "Stornovaná"))
+        )
+        .all()
+    )
+
+    unpaid_total = sum(
+        (
+            calculate_invoice_totals(invoice.items)["total_gross"]
+            for invoice in unpaid_invoices
+        ),
+        Decimal("0")
+    )
+
+
+    month_start = today.replace(day=1)
+
+    paid_this_month = (
+        db
+        .query(Invoice)
+        .options(joinedload(Invoice.items))
+        .filter(
+            Invoice.status == "Uhradená",
+            Invoice.issue_date >= month_start,
+            Invoice.issue_date <= today
+        )
+        .all()
+    )
+
+    revenue_this_month = sum(
+        (
+            calculate_invoice_totals(invoice.items)["total_gross"]
+            for invoice in paid_this_month
+        ),
+        Decimal("0")
+    )
+
+
+    year_start = today.replace(month=1, day=1)
+
+    paid_this_year = (
+        db
+        .query(Invoice)
+        .options(joinedload(Invoice.items))
+        .filter(
+            Invoice.status == "Uhradená",
+            Invoice.issue_date >= year_start,
+            Invoice.issue_date <= today
+        )
+        .all()
+    )
+
+    revenue_this_year = sum(
+        (
+            calculate_invoice_totals(invoice.items)["total_gross"]
+            for invoice in paid_this_year
+        ),
+        Decimal("0")
+    )
+
+
+    overdue_jobs_count = (
+        db
+        .query(func.count(Job.id))
+        .filter(
+            Job.due_date.isnot(None),
+            Job.due_date < today,
+            Job.status != "Hotová"
+        )
+        .scalar()
+    )
+
+
+    # =====================================
     # TERMÍNY (filtrované a zoradené priamo v DB)
     # =====================================
 
@@ -287,6 +375,16 @@ def home(
 
             "overdue_invoices": overdue_invoices,
 
+            "unpaid_total": unpaid_total,
+
+            "unpaid_count": len(unpaid_invoices),
+
+            "revenue_this_month": revenue_this_month,
+
+            "revenue_this_year": revenue_this_year,
+
+            "overdue_jobs_count": overdue_jobs_count,
+
             "overdue_jobs": overdue_jobs,
 
             "today_jobs": today_jobs,
@@ -297,5 +395,61 @@ def home(
 
         }
 
+    )
+
+
+# =========================================
+# UPLOADY (logo, podpis/pečiatka) - CHRÁNENÉ
+#
+# Servuje sa vlastnou route (nie StaticFiles mount), aby to vyžadovalo
+# prihlásenie. Názov súboru sa navyše prísne validuje - povolený je len
+# vzor "logo.<prípona>" / "signature.<prípona>" s bezpečnou príponou,
+# žiadne "/", "\" ani ".." (ochrana proti path traversal).
+# =========================================
+
+ALLOWED_UPLOAD_NAMES = {"logo", "signature"}
+ALLOWED_UPLOAD_EXTENSIONS = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
+
+
+@app.get("/uploads/{filename}")
+def serve_upload(
+    filename: str,
+    user: str = Depends(require_login_page)
+):
+
+    stem = os.path.splitext(filename)[0]
+    extension = os.path.splitext(filename)[1].lower()
+
+    if stem not in ALLOWED_UPLOAD_NAMES or extension not in ALLOWED_UPLOAD_EXTENSIONS:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Súbor neexistuje"
+        )
+
+
+    candidate_path = (UPLOADS_DIR / filename).resolve()
+
+    # Aj napriek kontrole vyššie si ešte overíme, že výsledná cesta
+    # naozaj leží vnútri uploads/ priečinka (obrana do hĺbky).
+    if UPLOADS_DIR.resolve() not in candidate_path.parents:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Súbor neexistuje"
+        )
+
+
+    if not candidate_path.exists():
+
+        raise HTTPException(
+            status_code=404,
+            detail="Súbor neexistuje"
+        )
+
+
+    return FileResponse(
+        candidate_path,
+        media_type=ALLOWED_UPLOAD_EXTENSIONS[extension]
     )
 

@@ -172,6 +172,50 @@
 
 
         <!-- =====================================
+             HISTÓRIA - fakturované / neuhradené
+             ===================================== -->
+
+        {% if invoices %}
+
+            <div class="customer-history-row">
+
+                <div class="customer-history-card">
+
+                    <div class="customer-history-number">
+                        {{ "%.2f"|format(total_invoiced) }} €
+                    </div>
+
+                    <div class="customer-history-label">
+                        Celkovo fakturované
+                    </div>
+
+                </div>
+
+
+                <div class="customer-history-card {% if total_unpaid > 0 %}customer-history-card-warning{% endif %}">
+
+                    <div class="customer-history-number">
+                        {{ "%.2f"|format(total_unpaid) }} €
+                    </div>
+
+                    <div class="customer-history-label">
+
+                        {% if unpaid_count == 1 %}
+                            Neuhradená 1 faktúra
+                        {% else %}
+                            Neuhradené faktúry ({{ unpaid_count }})
+                        {% endif %}
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        {% endif %}
+
+
+        <!-- =====================================
              ZÁKAZKY
              ===================================== -->
 

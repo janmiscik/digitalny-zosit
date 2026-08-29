@@ -289,3 +289,73 @@ def test_uploaded_logo_is_served():
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
+
+
+# =========================================
+# BEZPEČNOSŤ - PRÍSTUP BEZ PRIHLÁSENIA
+#
+# Tieto testy zámerne odstránia override pre require_login_page, aby
+# overili SKUTOČNÉ správanie (nie testovací "vždy prihlásený" skrat).
+# =========================================
+
+def test_uploaded_logo_blocked_without_login():
+
+    png_bytes = make_png_bytes()
+
+    client.post(
+        "/settings",
+        data={"name": "Firma"},
+        files={"logo": ("logo.png", png_bytes, "image/png")}
+    )
+
+    del app.dependency_overrides[require_login_page]
+
+    try:
+
+        response = client.get("/uploads/logo.png", follow_redirects=False)
+
+        assert response.status_code == 303
+        assert response.headers["location"] == "/login"
+
+    finally:
+
+        app.dependency_overrides[require_login_page] = lambda: "testuser"
+
+
+def test_uploads_path_traversal_blocked():
+
+    png_bytes = make_png_bytes()
+
+    client.post(
+        "/settings",
+        data={"name": "Firma"},
+        files={"logo": ("logo.png", png_bytes, "image/png")}
+    )
+
+    traversal_attempts = [
+        "/uploads/..%2Fmain.py",
+        "/uploads/..%2f..%2fmain.py",
+        "/uploads/%2e%2e%2fmain.py",
+    ]
+
+    for path in traversal_attempts:
+
+        response = client.get(path, follow_redirects=False)
+
+        assert response.status_code == 404, f"Zlyhalo pre: {path}"
+        assert b"import" not in response.content
+        assert b"FastAPI" not in response.content
+
+
+def test_uploads_rejects_disallowed_extension():
+
+    response = client.get("/uploads/hacker.exe")
+
+    assert response.status_code == 404
+
+
+def test_uploads_rejects_unknown_filename():
+
+    response = client.get("/uploads/random-file.png")
+
+    assert response.status_code == 404

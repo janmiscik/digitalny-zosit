@@ -1346,4 +1346,123 @@ def test_delete_invoice_not_found():
     assert response.status_code == 404
 
 
+# =========================================
+# FINANCIE - DASHBOARD
+# =========================================
+
+def test_dashboard_shows_unpaid_total():
+
+    db = TestingSessionLocal()
+
+    invoice = create_sample_invoice(db)
+    invoice.status = "Odoslaná"
+    db.commit()
+    db.close()
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    # 3 * 15.50 = 46.50 základ, +19% DPH = 55.335 -> 55.34 zaokrúhlené
+    assert "55.34" in response.text
+    assert "Neuhradená 1 faktúra" in response.text
+
+
+def test_dashboard_shows_revenue_this_month():
+
+    db = TestingSessionLocal()
+
+    invoice = create_sample_invoice(db)
+    invoice.status = "Uhradená"
+    invoice.issue_date = date.today()
+    db.commit()
+    db.close()
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "Tržba tento mesiac" in response.text
+    assert "55.34" in response.text
+
+
+def test_dashboard_excludes_cancelled_from_unpaid():
+
+    db = TestingSessionLocal()
+
+    invoice = create_sample_invoice(db)
+    invoice.status = "Stornovaná"
+    db.commit()
+    db.close()
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    # Stornovaná faktúra sa nesmie počítať ako neuhradená
+    assert "Neuhradená 1 faktúra" not in response.text
+
+
+def test_dashboard_shows_overdue_jobs_count():
+
+    db = TestingSessionLocal()
+
+    customer = db.query(Customer).first()
+
+    overdue_job = Job(
+        title="Zákazka po termíne",
+        status="Prebieha",
+        due_date=date.today() - timedelta(days=3),
+        customer_id=customer.id
+    )
+
+    db.add(overdue_job)
+    db.commit()
+    db.close()
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "Zákazky po termíne" in response.text
+
+
+# =========================================
+# HISTÓRIA ZÁKAZNÍKA
+# =========================================
+
+def test_customer_detail_shows_total_invoiced():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    customer_id = invoice.customer_id
+    db.close()
+
+    response = client.get(f"/customers/{customer_id}")
+
+    assert response.status_code == 200
+    assert "Celkovo fakturované" in response.text
+    assert "55.34" in response.text
+
+
+def test_customer_detail_no_history_when_no_invoices():
+
+    response = client.get("/customers/1")
+
+    assert response.status_code == 200
+    assert "Celkovo fakturované" not in response.text
+
+
+def test_customer_detail_unpaid_excludes_paid_invoice():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.status = "Uhradená"
+    customer_id = invoice.customer_id
+    db.commit()
+    db.close()
+
+    response = client.get(f"/customers/{customer_id}")
+
+    assert response.status_code == 200
+    # Faktúra je uhradená, takže neuhradená suma musí byť nulová
+    assert "Neuhradené faktúry (0)" in response.text
+
+
 

@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
@@ -8,8 +9,9 @@ from sqlalchemy.orm import Session, joinedload
 
 from auth import require_login_api, require_login_page
 from database import get_db
+from invoice_utils import calculate_invoice_totals
 from models import Customer
-from schemas import CustomerCreate, CustomerRead, CustomerUpdate
+from schemas import CustomerCreate, CustomerRead, CustomerUpdate, InvoiceStatus
 from templates_config import templates
 
 
@@ -107,6 +109,39 @@ def customer_detail(
     )
 
 
+    # =====================================
+    # HISTÓRIA - fakturované a neuhradené sumy
+    # =====================================
+
+    active_invoices = [
+        invoice
+        for invoice in invoices
+        if invoice.status != InvoiceStatus.CANCELLED.value
+    ]
+
+    unpaid_invoices = [
+        invoice
+        for invoice in active_invoices
+        if invoice.status != InvoiceStatus.PAID.value
+    ]
+
+    total_invoiced = sum(
+        (
+            calculate_invoice_totals(invoice.items)["total_gross"]
+            for invoice in active_invoices
+        ),
+        Decimal("0")
+    )
+
+    total_unpaid = sum(
+        (
+            calculate_invoice_totals(invoice.items)["total_gross"]
+            for invoice in unpaid_invoices
+        ),
+        Decimal("0")
+    )
+
+
     return templates.TemplateResponse(
 
         request=request,
@@ -120,6 +155,12 @@ def customer_detail(
             "jobs": jobs,
 
             "invoices": invoices,
+
+            "total_invoiced": total_invoiced,
+
+            "total_unpaid": total_unpaid,
+
+            "unpaid_count": len(unpaid_invoices),
 
             "today": date.today()
 
