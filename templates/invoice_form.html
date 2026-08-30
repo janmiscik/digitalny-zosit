@@ -232,6 +232,39 @@
                 >
 
 
+                <div class="invoice-form-grid">
+
+                    <div>
+
+                        <label>
+                            Konštantný symbol
+                        </label>
+
+                        <input
+                            type="text"
+                            name="constant_symbol"
+                            value="{{ (invoice.constant_symbol or '') if invoice else '0308' }}"
+                        >
+
+                    </div>
+
+                    <div>
+
+                        <label>
+                            Špecifický symbol
+                        </label>
+
+                        <input
+                            type="text"
+                            name="specific_symbol"
+                            value="{{ invoice.specific_symbol or '' if invoice else '' }}"
+                        >
+
+                    </div>
+
+                </div>
+
+
                 <label>
                     Spôsob úhrady
                 </label>

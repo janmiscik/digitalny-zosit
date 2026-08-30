@@ -323,6 +323,18 @@ class Invoice(Base):
         nullable=True
     )
 
+    # Konštantný symbol - štandardná hodnota pre úhradu tovaru/služieb je
+    # 0308, appka ju defaultne predvyplní, ale dá sa zmeniť/vymazať.
+    constant_symbol = Column(
+        String,
+        nullable=True
+    )
+
+    specific_symbol = Column(
+        String,
+        nullable=True
+    )
+
     payment_method = Column(
         String,
         nullable=False,

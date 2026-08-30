@@ -1679,6 +1679,193 @@ def test_create_invoice_default_payment_method():
 
 
 # =========================================
+# KONŠTANTNÝ SYMBOL / ŠPECIFICKÝ SYMBOL
+# =========================================
+
+def test_create_invoice_with_constant_and_specific_symbol():
+
+    customer, job = get_test_customer_and_job()
+
+    issue_date = date.today()
+    due_date = issue_date + timedelta(days=14)
+
+    response = post_form(
+        f"/customers/{customer.id}/invoices",
+        [
+            ("issue_date", issue_date.isoformat()),
+            ("due_date", due_date.isoformat()),
+            ("constant_symbol", "0308"),
+            ("specific_symbol", "1234"),
+            ("description", "Test"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "10.00"),
+            ("vat_rate", "23"),
+        ],
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+
+    invoice_id = int(response.headers["location"].split("/")[-1])
+
+    db = TestingSessionLocal()
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    db.close()
+
+    assert invoice.constant_symbol == "0308"
+    assert invoice.specific_symbol == "1234"
+
+
+def test_create_invoice_without_constant_symbol_is_none():
+    """Ak používateľ pole vyčistí/nepošle, uloží sa None, nie prázdny
+    reťazec ani vynútené '0308' na backende (default je len v UI)."""
+
+    customer, job = get_test_customer_and_job()
+
+    issue_date = date.today()
+    due_date = issue_date + timedelta(days=14)
+
+    response = post_form(
+        f"/customers/{customer.id}/invoices",
+        [
+            ("issue_date", issue_date.isoformat()),
+            ("due_date", due_date.isoformat()),
+            ("description", "Test"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "10.00"),
+            ("vat_rate", "23"),
+        ],
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+
+    invoice_id = int(response.headers["location"].split("/")[-1])
+
+    db = TestingSessionLocal()
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    db.close()
+
+    assert invoice.constant_symbol is None
+    assert invoice.specific_symbol is None
+
+
+def test_new_invoice_form_prefills_constant_symbol_0308():
+
+    customer, job = get_test_customer_and_job()
+
+    response = client.get(f"/customers/{customer.id}/invoices/new")
+
+    assert response.status_code == 200
+    assert 'value="0308"' in response.text
+
+
+def test_update_invoice_constant_and_specific_symbol():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice_id = invoice.id
+    db.close()
+
+    response = post_form(
+        f"/invoices/{invoice_id}/edit",
+        [
+            ("issue_date", date.today().isoformat()),
+            ("due_date", date.today().isoformat()),
+            ("constant_symbol", "0008"),
+            ("specific_symbol", "9999"),
+            ("description", "Práca"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "10.00"),
+            ("vat_rate", "23"),
+        ],
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+
+    db = TestingSessionLocal()
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    db.close()
+
+    assert invoice.constant_symbol == "0008"
+    assert invoice.specific_symbol == "9999"
+
+
+def test_pdf_shows_constant_and_specific_symbol():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.constant_symbol = "0308"
+    invoice.specific_symbol = "555666"
+
+    company = Company(
+        name="Firma s.r.o.",
+        iban="SK6807200002891987426353",
+        is_vat_payer=True
+    )
+
+    db.add(company)
+    db.commit()
+    db.refresh(invoice)
+
+    from invoice_pdf import generate_invoice_pdf
+
+    pdf_bytes = generate_invoice_pdf(invoice, company)
+
+    db.close()
+
+    text = extract_pdf_text(pdf_bytes)
+
+    assert "0308" in text
+    assert "555666" in text
+
+
+def test_pdf_omits_symbols_when_not_set():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.constant_symbol = None
+    invoice.specific_symbol = None
+
+    company = Company(name="Firma s.r.o.", is_vat_payer=True)
+
+    db.add(company)
+    db.commit()
+    db.refresh(invoice)
+
+    from invoice_pdf import generate_invoice_pdf
+
+    pdf_bytes = generate_invoice_pdf(invoice, company)
+
+    db.close()
+
+    text = extract_pdf_text(pdf_bytes)
+
+    assert "Konštantný symbol" not in text
+    assert "Špecifický symbol" not in text
+
+
+def test_qr_payment_includes_constant_and_specific_symbol():
+
+    from qr_payment import generate_payment_qr_image
+
+    buffer = generate_payment_qr_image(
+        iban="SK6807200002891987426353",
+        amount=Decimal("100.00"),
+        variable_symbol="2026001",
+        beneficiary_name="Test Firma",
+        constant_symbol="0308",
+        specific_symbol="1234"
+    )
+
+    assert buffer is not None
+
+
+# =========================================
 # ÚPRAVA FAKTÚRY
 # =========================================
 

@@ -19,7 +19,9 @@ def generate_payment_qr_image(
     variable_symbol: str | None,
     beneficiary_name: str | None,
     swift: str | None = None,
-    note: str | None = None
+    note: str | None = None,
+    constant_symbol: str | None = None,
+    specific_symbol: str | None = None
 ) -> BytesIO | None:
     """
     Vygeneruje QR kód pre platbu (PAY by square) ako PNG obrázok v pamäti.
@@ -39,6 +41,8 @@ def generate_payment_qr_image(
             swift=(swift or "").replace(" ", ""),
             beneficiary_name=beneficiary_name or "",
             variable_symbol=variable_symbol or "",
+            constant_symbol=constant_symbol or "",
+            specific_symbol=specific_symbol or "",
             note=(note or "")[:140]
         )
 

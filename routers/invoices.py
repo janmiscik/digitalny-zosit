@@ -418,6 +418,8 @@ async def create_invoice(
     validate_invoice_dates(issue_date, due_date)
 
     variable_symbol = form.get("variable_symbol", "").strip() or None
+    constant_symbol = form.get("constant_symbol", "").strip() or None
+    specific_symbol = form.get("specific_symbol", "").strip() or None
     payment_method = form.get("payment_method", "").strip() or "Prevodom"
     note = form.get("note", "").strip() or None
     reverse_charge = form.get("reverse_charge") == "on"
@@ -453,6 +455,8 @@ async def create_invoice(
         due_date=due_date,
         delivery_date=delivery_date,
         variable_symbol=variable_symbol,
+        constant_symbol=constant_symbol,
+        specific_symbol=specific_symbol,
         payment_method=payment_method,
         reverse_charge=reverse_charge,
         note=note
@@ -708,6 +712,8 @@ async def update_invoice(
     validate_invoice_dates(issue_date, due_date)
 
     variable_symbol = form.get("variable_symbol", "").strip() or None
+    constant_symbol = form.get("constant_symbol", "").strip() or None
+    specific_symbol = form.get("specific_symbol", "").strip() or None
     payment_method = form.get("payment_method", "").strip() or "Prevodom"
     note = form.get("note", "").strip() or None
     reverse_charge = form.get("reverse_charge") == "on"
@@ -735,6 +741,8 @@ async def update_invoice(
     invoice.due_date = due_date
     invoice.delivery_date = delivery_date
     invoice.variable_symbol = variable_symbol
+    invoice.constant_symbol = constant_symbol
+    invoice.specific_symbol = specific_symbol
     invoice.payment_method = payment_method
     invoice.reverse_charge = reverse_charge
     invoice.note = note

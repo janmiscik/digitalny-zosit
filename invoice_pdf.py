@@ -630,6 +630,24 @@ def generate_invoice_pdf(invoice, company) -> bytes:
         )
     )
 
+    if invoice.constant_symbol:
+
+        payment_lines.append(
+            Paragraph(
+                f"Konštantný symbol: {invoice.constant_symbol}",
+                styles["normal"]
+            )
+        )
+
+    if invoice.specific_symbol:
+
+        payment_lines.append(
+            Paragraph(
+                f"Špecifický symbol: {invoice.specific_symbol}",
+                styles["normal"]
+            )
+        )
+
 
     qr_buffer = None
 
@@ -641,7 +659,9 @@ def generate_invoice_pdf(invoice, company) -> bytes:
             variable_symbol=invoice.variable_symbol or invoice.invoice_number,
             beneficiary_name=company.name,
             swift=company.swift_bic,
-            note=f"Faktura {invoice.invoice_number}"
+            note=f"Faktura {invoice.invoice_number}",
+            constant_symbol=invoice.constant_symbol,
+            specific_symbol=invoice.specific_symbol
         )
 
 
