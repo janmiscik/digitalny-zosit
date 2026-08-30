@@ -92,6 +92,7 @@
 
                 <input
                     type="text"
+                    id="edit-customer-name"
                     name="name"
                     value="{{ customer.name }}"
                     required
@@ -129,6 +130,7 @@
 
                 <input
                     type="text"
+                    id="edit-customer-address"
                     name="address"
                     value="{{ customer.address or '' }}"
                 >
@@ -138,11 +140,30 @@
                     IČO <span style="font-weight: 400; color: var(--text-muted);">(pre firmy/živnostníkov)</span>
                 </label>
 
-                <input
-                    type="text"
-                    name="ico"
-                    value="{{ customer.ico or '' }}"
-                >
+                <div style="display: flex; gap: 8px;">
+
+                    <input
+                        type="text"
+                        id="edit-customer-ico"
+                        name="ico"
+                        value="{{ customer.ico or '' }}"
+                        style="flex: 1;"
+                    >
+
+                    <button
+                        type="button"
+                        class="cancel-button"
+                        onclick="lookupCustomerIco('edit')"
+                    >
+                        Nájsť
+                    </button>
+
+                </div>
+
+                <p
+                    id="edit-customer-ico-status"
+                    style="font-size: 0.85em; color: var(--text-muted); margin: 4px 0 0 0;"
+                ></p>
 
 
                 <label>
@@ -151,6 +172,7 @@
 
                 <input
                     type="text"
+                    id="edit-customer-dic"
                     name="dic"
                     value="{{ customer.dic or '' }}"
                 >
@@ -162,6 +184,7 @@
 
                 <input
                     type="text"
+                    id="edit-customer-ic_dph"
                     name="ic_dph"
                     value="{{ customer.ic_dph or '' }}"
                     placeholder="napr. SK1234567890"
@@ -214,6 +237,65 @@
 
 
 <script>
+
+/* =====================================
+   VYHĽADANIE PODĽA IČO (auto-doplnenie)
+   ===================================== */
+
+async function lookupCustomerIco(prefix) {
+
+    const icoInput = document.getElementById(prefix + "-customer-ico");
+    const statusEl = document.getElementById(prefix + "-customer-ico-status");
+
+    const ico = icoInput.value.trim();
+
+    if (!ico) {
+
+        statusEl.textContent = "Najprv zadaj IČO.";
+        statusEl.style.color = "var(--danger, #c0392b)";
+        return;
+
+    }
+
+    statusEl.textContent = "Hľadám...";
+    statusEl.style.color = "var(--text-muted)";
+
+    try {
+
+        const response = await fetch(`/customers/lookup-ico/${encodeURIComponent(ico)}`);
+
+        if (!response.ok) {
+
+            statusEl.textContent = "Nenašlo sa - vyplň údaje ručne.";
+            statusEl.style.color = "var(--danger, #c0392b)";
+            return;
+
+        }
+
+        const data = await response.json();
+
+        const nameField = document.getElementById(prefix + "-customer-name");
+        const addressField = document.getElementById(prefix + "-customer-address");
+        const dicField = document.getElementById(prefix + "-customer-dic");
+        const icDphField = document.getElementById(prefix + "-customer-ic_dph");
+
+        if (nameField && data.name) nameField.value = data.name;
+        if (addressField && data.address) addressField.value = data.address;
+        if (dicField && data.dic) dicField.value = data.dic;
+        if (icDphField) icDphField.value = data.ic_dph || "";
+
+        statusEl.textContent = "Nájdené a doplnené - skontroluj údaje.";
+        statusEl.style.color = "var(--success, #2e7d32)";
+
+    } catch (error) {
+
+        statusEl.textContent = "Vyhľadávanie zlyhalo - vyplň údaje ručne.";
+        statusEl.style.color = "var(--danger, #c0392b)";
+
+    }
+
+}
+
 
 /* =====================================
    TÉMA

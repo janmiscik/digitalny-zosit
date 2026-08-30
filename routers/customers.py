@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from auth import require_login_api, require_login_page
 from database import get_db
+from ico_lookup import lookup_company_by_ico
 from invoice_utils import calculate_invoice_totals
 from models import Customer
 from schemas import CustomerCreate, CustomerRead, CustomerUpdate, InvoiceStatus
@@ -16,6 +17,34 @@ from templates_config import templates
 
 
 router = APIRouter()
+
+
+# =========================================
+# VYHĽADANIE FIRMY PODĽA IČO (auto-doplnenie formulára)
+# =========================================
+
+@router.get("/customers/lookup-ico/{ico}")
+def lookup_customer_by_ico(
+
+    ico: str,
+
+    user: str = Depends(require_login_api)
+
+):
+
+    result = lookup_company_by_ico(ico)
+
+    if result is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Firma s týmto IČO sa nenašla, alebo vyhľadávacia "
+                "služba momentálne nie je dostupná. Údaje vyplň ručne."
+            )
+        )
+
+    return result
 
 
 # =========================================
