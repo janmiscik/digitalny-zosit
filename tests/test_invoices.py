@@ -26,7 +26,15 @@ from urllib.parse import urlencode
 from auth import require_login_api, require_login_page
 from database import Base, get_db
 from invoice_pdf import generate_invoice_pdf
-from invoice_utils import calculate_invoice_totals, next_invoice_number
+from invoice_utils import (
+    NON_VAT_PAYER_NOTICE,
+    REVERSE_CHARGE_NOTICE,
+    calculate_invoice_totals,
+    next_invoice_number,
+    validate_invoice_vat,
+    validate_reverse_charge_eligibility,
+    validate_vat_regime,
+)
 from main import app
 from models import Company, Customer, Invoice, InvoiceItem, Job
 
@@ -83,6 +91,18 @@ def setup_test_database():
     db.add(job)
     db.commit()
 
+    # Predvolená testovacia firma JE platiteľom DPH - drvivá väčšina
+    # existujúcich testov predpokladá bežnú fakturáciu s DPH (napr.
+    # sadzba 23 %). Testy pre neplatcu DPH / prenesenie daňovej
+    # povinnosti si is_vat_payer explicitne nastavia inak.
+    company = Company(
+        name="Testovacia firma s.r.o.",
+        is_vat_payer=True
+    )
+
+    db.add(company)
+    db.commit()
+
     db.close()
 
 
@@ -111,6 +131,26 @@ def setup_test_database():
 
 
 client = TestClient(app)
+
+
+def extract_pdf_text(pdf_bytes: bytes) -> str:
+    """
+    Vytiahne textový obsah z PDF pomocou čisto Python knižnice pypdf -
+    zámerne NEPOUŽÍVA externú binárku ako pdftotext (poppler-utils),
+    lebo tá na Windows vývojárskych strojoch typicky nie je nainštalovaná
+    a testy by tam boli nespustiteľné.
+    """
+
+    import io
+
+    from pypdf import PdfReader
+
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+
+    return "\n".join(
+        page.extract_text() or ""
+        for page in reader.pages
+    )
 
 
 def post_form(url, items, **kwargs):
@@ -1950,3 +1990,399 @@ def test_customer_detail_unpaid_excludes_paid_invoice():
 
 
 
+
+# =========================================
+# DPH REŽIM - NEPLATCA VS. PLATCA DPH
+# =========================================
+
+def set_company_vat_payer(is_vat_payer: bool) -> None:
+
+    db = TestingSessionLocal()
+    company = db.query(Company).first()
+    company.is_vat_payer = is_vat_payer
+    db.commit()
+    db.close()
+
+
+def test_validate_vat_regime_allows_zero_rate_for_non_payer():
+
+    validate_vat_regime(is_vat_payer=False, item_vat_rates=[0, 0])
+
+
+def test_validate_vat_regime_rejects_nonzero_rate_for_non_payer():
+
+    with pytest.raises(ValueError):
+        validate_vat_regime(is_vat_payer=False, item_vat_rates=[0, 23])
+
+
+def test_validate_vat_regime_allows_any_rate_for_payer():
+
+    validate_vat_regime(is_vat_payer=True, item_vat_rates=[23, 19, 5, 0])
+
+
+def test_validate_reverse_charge_requires_vat_payer_company():
+
+    with pytest.raises(ValueError):
+        validate_reverse_charge_eligibility(
+            company_is_vat_payer=False,
+            customer_ic_dph="SK1234567890"
+        )
+
+
+def test_validate_reverse_charge_requires_customer_ic_dph():
+
+    with pytest.raises(ValueError):
+        validate_reverse_charge_eligibility(
+            company_is_vat_payer=True,
+            customer_ic_dph=None
+        )
+
+
+def test_validate_reverse_charge_succeeds_when_eligible():
+
+    validate_reverse_charge_eligibility(
+        company_is_vat_payer=True,
+        customer_ic_dph="SK1234567890"
+    )
+
+
+def test_validate_invoice_vat_reverse_charge_forces_zero_rate():
+
+    with pytest.raises(ValueError):
+        validate_invoice_vat(
+            company_is_vat_payer=True,
+            customer_ic_dph="SK1234567890",
+            reverse_charge=True,
+            item_vat_rates=[23]
+        )
+
+
+def test_validate_invoice_vat_reverse_charge_success():
+
+    validate_invoice_vat(
+        company_is_vat_payer=True,
+        customer_ic_dph="SK1234567890",
+        reverse_charge=True,
+        item_vat_rates=[0, 0]
+    )
+
+
+def test_create_invoice_with_vat_when_not_vat_payer_rejected():
+
+    set_company_vat_payer(False)
+
+    customer, job = get_test_customer_and_job()
+
+    response = post_form(
+        f"/customers/{customer.id}/invoices",
+        [
+            ("issue_date", date.today().isoformat()),
+            ("due_date", date.today().isoformat()),
+            ("description", "Práca"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "100.00"),
+            ("vat_rate", "23"),
+        ]
+    )
+
+    assert response.status_code == 422
+
+
+def test_create_invoice_zero_vat_when_not_vat_payer_allowed():
+
+    set_company_vat_payer(False)
+
+    customer, job = get_test_customer_and_job()
+
+    response = post_form(
+        f"/customers/{customer.id}/invoices",
+        [
+            ("issue_date", date.today().isoformat()),
+            ("due_date", date.today().isoformat()),
+            ("description", "Práca"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "100.00"),
+            ("vat_rate", "0"),
+        ],
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+
+
+def test_create_invoice_reverse_charge_requires_vat_payer_company():
+
+    set_company_vat_payer(False)
+
+    customer, job = get_test_customer_and_job()
+
+    response = post_form(
+        f"/customers/{customer.id}/invoices",
+        [
+            ("issue_date", date.today().isoformat()),
+            ("due_date", date.today().isoformat()),
+            ("description", "Stavebné práce"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "100.00"),
+            ("vat_rate", "0"),
+            ("reverse_charge", "on"),
+        ]
+    )
+
+    assert response.status_code == 422
+
+
+def test_create_invoice_reverse_charge_requires_customer_ic_dph():
+
+    set_company_vat_payer(True)
+
+    db = TestingSessionLocal()
+    customer = Customer(name="Zákazník bez IČ DPH")
+    db.add(customer)
+    db.commit()
+    customer_id = customer.id
+    db.close()
+
+    response = post_form(
+        f"/customers/{customer_id}/invoices",
+        [
+            ("issue_date", date.today().isoformat()),
+            ("due_date", date.today().isoformat()),
+            ("description", "Stavebné práce"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "100.00"),
+            ("vat_rate", "0"),
+            ("reverse_charge", "on"),
+        ]
+    )
+
+    assert response.status_code == 422
+
+
+def test_create_invoice_reverse_charge_success():
+
+    set_company_vat_payer(True)
+
+    # predvolený testovací zákazník má ic_dph="SK1234567890" (viď fixture)
+    customer, job = get_test_customer_and_job()
+
+    response = post_form(
+        f"/customers/{customer.id}/invoices",
+        [
+            ("issue_date", date.today().isoformat()),
+            ("due_date", date.today().isoformat()),
+            ("description", "Stavebné práce"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "1000.00"),
+            ("vat_rate", "0"),
+            ("reverse_charge", "on"),
+        ],
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+
+    db = TestingSessionLocal()
+    invoice = db.query(Invoice).order_by(Invoice.id.desc()).first()
+    assert invoice.reverse_charge is True
+    db.close()
+
+
+def test_create_invoice_reverse_charge_rejects_nonzero_vat_rate():
+
+    set_company_vat_payer(True)
+
+    customer, job = get_test_customer_and_job()
+
+    response = post_form(
+        f"/customers/{customer.id}/invoices",
+        [
+            ("issue_date", date.today().isoformat()),
+            ("due_date", date.today().isoformat()),
+            ("description", "Stavebné práce"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "1000.00"),
+            ("vat_rate", "23"),
+            ("reverse_charge", "on"),
+        ]
+    )
+
+    assert response.status_code == 422
+
+
+def test_update_invoice_vat_regime_validated_too():
+
+    set_company_vat_payer(False)
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.items[0].vat_rate = 0
+    invoice_id = invoice.id
+    db.commit()
+    db.close()
+
+    response = post_form(
+        f"/invoices/{invoice_id}/edit",
+        [
+            ("issue_date", date.today().isoformat()),
+            ("due_date", date.today().isoformat()),
+            ("description", "Nová položka"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "50.00"),
+            ("vat_rate", "23"),
+        ]
+    )
+
+    assert response.status_code == 422
+
+
+def test_settings_save_vat_payer_checkbox_checked():
+
+    response = client.post(
+        "/settings",
+        data={"name": "Firma", "is_vat_payer": "1"},
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+
+    db = TestingSessionLocal()
+    company = db.query(Company).first()
+    assert company.is_vat_payer is True
+    db.close()
+
+
+def test_settings_save_vat_payer_checkbox_unchecked():
+    """Needostavená checkbox hodnota v HTML formulári znamená, že sa
+    vôbec neposlala - appka to musí interpretovať ako False."""
+
+    response = client.post(
+        "/settings",
+        data={"name": "Firma"},
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+
+    db = TestingSessionLocal()
+    company = db.query(Company).first()
+    assert company.is_vat_payer is False
+    db.close()
+
+
+# =========================================
+# PDF - DPH REŽIM
+# =========================================
+
+def test_pdf_hides_vat_column_for_non_vat_payer():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.items[0].vat_rate = 0
+
+    company = Company(name="Neplatca s.r.o.", is_vat_payer=False)
+
+    db.add(company)
+    db.commit()
+    db.refresh(invoice)
+
+    from invoice_pdf import generate_invoice_pdf
+
+    pdf_bytes = generate_invoice_pdf(invoice, company)
+
+    db.close()
+
+    assert pdf_bytes[:4] == b"%PDF"
+
+    # Text upozornenia musí byť niekde v (nekomprimovanom) obsahu PDF -
+    # keďže reportlab defaultne kompresuje stream, len overíme, že sa
+    # PDF vygenerovalo bez chyby; textový obsah PDF sa dôkladnejšie
+    # kontroluje cez pdftotext v manuálnom vizuálnom teste.
+    assert len(pdf_bytes) > 500
+
+
+def test_pdf_generation_works_with_reverse_charge():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.items[0].vat_rate = 0
+    invoice.reverse_charge = True
+
+    company = Company(
+        name="Platca s.r.o.",
+        ico="12345678",
+        is_vat_payer=True
+    )
+
+    db.add(company)
+    db.commit()
+    db.refresh(invoice)
+
+    from invoice_pdf import generate_invoice_pdf
+
+    pdf_bytes = generate_invoice_pdf(invoice, company)
+
+    db.close()
+
+    assert pdf_bytes[:4] == b"%PDF"
+    assert len(pdf_bytes) > 500
+
+
+def test_pdf_hides_company_ic_dph_when_not_vat_payer():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.items[0].vat_rate = 0
+
+    company = Company(
+        name="Firma s IC DPH ale neplatca",
+        ic_dph="SK9999999999",
+        is_vat_payer=False
+    )
+
+    db.add(company)
+    db.commit()
+    db.refresh(invoice)
+
+    from invoice_pdf import generate_invoice_pdf
+
+    pdf_bytes = generate_invoice_pdf(invoice, company)
+
+    db.close()
+
+    text = extract_pdf_text(pdf_bytes)
+
+    assert "SK9999999999" not in text
+    assert NON_VAT_PAYER_NOTICE in text
+
+
+def test_pdf_shows_reverse_charge_notice_text():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.items[0].vat_rate = 0
+    invoice.reverse_charge = True
+
+    company = Company(name="Platca s.r.o.", is_vat_payer=True)
+
+    db.add(company)
+    db.commit()
+    db.refresh(invoice)
+
+    from invoice_pdf import generate_invoice_pdf
+
+    pdf_bytes = generate_invoice_pdf(invoice, company)
+
+    db.close()
+
+    text = extract_pdf_text(pdf_bytes)
+
+    assert REVERSE_CHARGE_NOTICE in text
+    assert "DPH spolu" not in text

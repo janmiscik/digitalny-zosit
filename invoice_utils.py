@@ -236,3 +236,95 @@ def is_valid_invoice_status_transition(current_status: str, new_status: str) -> 
         return True
 
     return new_status in allowed_next_invoice_statuses(current_status)
+
+
+# =========================================
+# DPH REŽIM - NEPLATCA VS. PLATCA DPH
+#
+# Neplatca DPH NESMIE na faktúre uvádzať sadzbu ani výšku DPH (zo zákona)
+# a MUSÍ uviesť text "Nie som platiteľom DPH podľa zákona o DPH."
+# Táto kontrola sa robí PRI VYTVÁRANÍ/ÚPRAVE faktúry (nie až vizuálne pri
+# zobrazení) - dáta v DB majú byť konzistentné s DPH režimom firmy.
+# =========================================
+
+NON_VAT_PAYER_NOTICE = "Nie som platiteľom DPH podľa zákona o DPH."
+
+REVERSE_CHARGE_NOTICE = "Prenesenie daňovej povinnosti"
+
+
+def validate_vat_regime(is_vat_payer: bool, item_vat_rates: list[int]) -> None:
+    """
+    Ak firma NIE JE platiteľom DPH, žiadna položka faktúry nesmie mať
+    nenulovú sadzbu DPH - inak by faktúra tvrdila niečo, čo firma zo
+    zákona nesmie (účtovať a vyberať DPH bez toho, aby ňou bola
+    registrovaná).
+
+    Vyhodí ValueError s používateľsky zrozumiteľnou správou - volajúci
+    (routers/invoices.py) ju premení na HTTPException 422.
+    """
+
+    if is_vat_payer:
+        return
+
+    if any(rate != 0 for rate in item_vat_rates):
+
+        raise ValueError(
+            "Ako neplatca DPH nemôžete na faktúre účtovať DPH "
+            "(sadzba musí byť 0 %). Skontrolujte nastavenia firmy, ak "
+            "ste medzičasom platiteľom DPH."
+        )
+
+
+def validate_reverse_charge_eligibility(
+    company_is_vat_payer: bool,
+    customer_ic_dph: str | None
+) -> None:
+    """
+    Prenesenie daňovej povinnosti (§69 ods. 12 zákona o DPH) je možné
+    len medzi dvoma platiteľmi DPH - dodávateľ aj odberateľ musia mať
+    pridelené IČ DPH.
+
+    Vyhodí ValueError s používateľsky zrozumiteľnou správou, ak podmienky
+    nie sú splnené.
+    """
+
+    if not company_is_vat_payer:
+
+        raise ValueError(
+            "Prenesenie daňovej povinnosti je možné len ak ste "
+            "platiteľom DPH."
+        )
+
+    if not customer_ic_dph:
+
+        raise ValueError(
+            "Prenesenie daňovej povinnosti je možné len vtedy, keď má "
+            "odberateľ pridelené IČ DPH."
+        )
+
+
+def validate_invoice_vat(
+    company_is_vat_payer: bool,
+    customer_ic_dph: str | None,
+    reverse_charge: bool,
+    item_vat_rates: list[int]
+) -> None:
+    """
+    Jednotný vstupný bod pre všetky pravidlá DPH pri vytváraní/úprave
+    faktúry - volajte VŽDY túto funkciu (nie priamo validate_vat_regime/
+    validate_reverse_charge_eligibility), nech sa poradie kontrol
+    nerozíde medzi vytváraním a úpravou faktúry.
+    """
+
+    if reverse_charge:
+
+        validate_reverse_charge_eligibility(company_is_vat_payer, customer_ic_dph)
+
+        # Pri prenesení daňovej povinnosti sa DPH nikdy neúčtuje - platí
+        # rovnaké pravidlo ako pre neplatcu DPH (nulová sadzba na všetkých
+        # položkách).
+        validate_vat_regime(is_vat_payer=False, item_vat_rates=item_vat_rates)
+
+        return
+
+    validate_vat_regime(company_is_vat_payer, item_vat_rates)

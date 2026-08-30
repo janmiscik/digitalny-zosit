@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, Date, Numeric
+from sqlalchemy import Boolean, Column, Integer, String, Text, ForeignKey, Date, Numeric
 from sqlalchemy.orm import relationship
 
 from database import Base
@@ -227,6 +227,20 @@ class Company(Base):
     )
 
     # =====================================
+    # DPH REŽIM
+    # Väčšina drobných remeselníkov/živnostníkov začína ako neplatca DPH.
+    # Tento prepínač riadi, či appka vôbec smie na faktúrach účtovať DPH
+    # (viď invoice_utils.validate_vat_regime) - nie je odvodený len z
+    # toho, či je vyplnené IČ DPH, aby mal používateľ plnú kontrolu.
+    # =====================================
+
+    is_vat_payer = Column(
+        Boolean,
+        nullable=False,
+        default=False
+    )
+
+    # =====================================
     # PEPPOL (fáza 2 - príprava na e-fakturáciu)
     # Presný kód schémy ti pridelí/potvrdí tvoj poskytovateľ
     # (Digitálny poštár) pri registrácii na Peppol sieť.
@@ -313,6 +327,20 @@ class Invoice(Base):
         String,
         nullable=False,
         default="Prevodom"
+    )
+
+    # =====================================
+    # PRENESENIE DAŇOVEJ POVINNOSTI (tuzemské samozdanenie, §69 ods.12)
+    # Platí len medzi dvoma platiteľmi DPH (dodávateľ aj odberateľ musia
+    # mať IČ DPH) - viď invoice_utils.validate_reverse_charge_eligibility.
+    # Ak True, faktúra sa vystavuje BEZ DPH a musí obsahovať povinný text
+    # "Prenesenie daňovej povinnosti" (§74 ods.1 písm. k zákona o DPH).
+    # =====================================
+
+    reverse_charge = Column(
+        Boolean,
+        nullable=False,
+        default=False
     )
 
     note = Column(

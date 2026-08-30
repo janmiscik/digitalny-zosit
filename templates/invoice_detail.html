@@ -234,6 +234,14 @@
 
                     {% endif %}
 
+                    {% if invoice.reverse_charge %}
+
+                        <span style="color: var(--text-muted); font-weight: 600;" title="Prenesenie daňovej povinnosti - faktúra bez DPH, odberateľ si DPH sám prizná.">
+                            · prenesenie daňovej povinnosti
+                        </span>
+
+                    {% endif %}
+
                 </form>
 
 

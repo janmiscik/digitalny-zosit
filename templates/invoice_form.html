@@ -319,14 +319,29 @@
 
                                     <td>
 
-                                        <select name="vat_rate">
+                                        <select
+                                            name="vat_rate"
+                                            {% if not company_is_vat_payer %}disabled{% endif %}
+                                        >
 
-                                            <option value="23" {% if existing_item.vat_rate == 23 %}selected{% endif %}>23 %</option>
-                                            <option value="19" {% if existing_item.vat_rate == 19 %}selected{% endif %}>19 %</option>
-                                            <option value="5" {% if existing_item.vat_rate == 5 %}selected{% endif %}>5 %</option>
-                                            <option value="0" {% if existing_item.vat_rate == 0 %}selected{% endif %}>0 %</option>
+                                            {% if company_is_vat_payer %}
+
+                                                <option value="23" {% if existing_item.vat_rate == 23 %}selected{% endif %}>23 %</option>
+                                                <option value="19" {% if existing_item.vat_rate == 19 %}selected{% endif %}>19 %</option>
+                                                <option value="5" {% if existing_item.vat_rate == 5 %}selected{% endif %}>5 %</option>
+                                                <option value="0" {% if existing_item.vat_rate == 0 %}selected{% endif %}>0 %</option>
+
+                                            {% else %}
+
+                                                <option value="0" selected>0 % (neplatca DPH)</option>
+
+                                            {% endif %}
 
                                         </select>
+
+                                        {% if not company_is_vat_payer %}
+                                            <input type="hidden" name="vat_rate" value="0">
+                                        {% endif %}
 
                                     </td>
 
@@ -391,14 +406,29 @@
 
                                 <td>
 
-                                    <select name="vat_rate">
+                                    <select
+                                        name="vat_rate"
+                                        {% if not company_is_vat_payer %}disabled{% endif %}
+                                    >
 
-                                        <option value="23" selected>23 %</option>
-                                        <option value="19">19 %</option>
-                                        <option value="5">5 %</option>
-                                        <option value="0">0 %</option>
+                                        {% if company_is_vat_payer %}
+
+                                            <option value="23" selected>23 %</option>
+                                            <option value="19">19 %</option>
+                                            <option value="5">5 %</option>
+                                            <option value="0">0 %</option>
+
+                                        {% else %}
+
+                                            <option value="0" selected>0 % (neplatca DPH)</option>
+
+                                        {% endif %}
 
                                     </select>
+
+                                    {% if not company_is_vat_payer %}
+                                        <input type="hidden" name="vat_rate" value="0">
+                                    {% endif %}
 
                                 </td>
 
@@ -430,6 +460,35 @@
                 >
                     + Pridať položku
                 </button>
+
+
+                {% if reverse_charge_available %}
+
+                    <label style="display: flex; align-items: center; gap: 8px; margin-top: 20px;">
+                        <input
+                            type="checkbox"
+                            name="reverse_charge"
+                            value="on"
+                            {% if invoice and invoice.reverse_charge %}checked{% endif %}
+                            style="width: auto;"
+                        >
+                        Prenesenie daňovej povinnosti (tuzemské samozdanenie, §69 ods. 12)
+                    </label>
+
+                    <p style="font-size: 0.85em; color: var(--text-muted); margin: 4px 0 0 0;">
+                        Faktúra sa vystaví bez DPH - odberateľ si DPH sám prizná.
+                        Použi len pre plnenia, na ktoré sa prenesenie daňovej
+                        povinnosti podľa zákona vzťahuje (napr. stavebné práce).
+                    </p>
+
+                {% elif company_is_vat_payer %}
+
+                    <p style="font-size: 0.85em; color: var(--text-muted); margin-top: 20px;">
+                        Prenesenie daňovej povinnosti je možné len vtedy, keď má
+                        odberateľ pridelené IČ DPH (doplň ho v údajoch zákazníka).
+                    </p>
+
+                {% endif %}
 
 
                 <label style="margin-top: 20px;">
@@ -523,14 +582,29 @@
 
         <td>
 
-            <select name="vat_rate">
+            <select
+                name="vat_rate"
+                {% if not company_is_vat_payer %}disabled{% endif %}
+            >
 
-                <option value="23" selected>23 %</option>
-                <option value="19">19 %</option>
-                <option value="5">5 %</option>
-                <option value="0">0 %</option>
+                {% if company_is_vat_payer %}
+
+                    <option value="23" selected>23 %</option>
+                    <option value="19">19 %</option>
+                    <option value="5">5 %</option>
+                    <option value="0">0 %</option>
+
+                {% else %}
+
+                    <option value="0" selected>0 % (neplatca DPH)</option>
+
+                {% endif %}
 
             </select>
+
+            {% if not company_is_vat_payer %}
+                <input type="hidden" name="vat_rate" value="0">
+            {% endif %}
 
         </td>
 

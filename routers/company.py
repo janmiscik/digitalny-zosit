@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from auth import require_login_page
 from database import get_db
+from invoice_utils import NON_VAT_PAYER_NOTICE
 from models import Company
 from templates_config import templates
 from uploads_utils import delete_image, save_image_upload
@@ -61,7 +62,9 @@ def settings_form(
 
         context={
 
-            "company": company
+            "company": company,
+
+            "NON_VAT_PAYER_NOTICE": NON_VAT_PAYER_NOTICE
 
         }
 
@@ -82,6 +85,8 @@ async def settings_save(
     dic: str = Form(""),
 
     ic_dph: str = Form(""),
+
+    is_vat_payer: str = Form(""),
 
     address: str = Form(""),
 
@@ -122,6 +127,7 @@ async def settings_save(
     company.ico = ico or None
     company.dic = dic or None
     company.ic_dph = ic_dph or None
+    company.is_vat_payer = is_vat_payer == "1"
     company.address = address or None
     company.city = city or None
     company.zip_code = zip_code or None

@@ -132,6 +132,24 @@
                 >
 
 
+                <label style="display: flex; align-items: center; gap: 8px; margin-top: 12px;">
+                    <input
+                        type="checkbox"
+                        name="is_vat_payer"
+                        value="1"
+                        {% if company.is_vat_payer %}checked{% endif %}
+                        style="width: auto;"
+                    >
+                    Som platiteľom DPH
+                </label>
+
+                <p style="font-size: 0.85em; color: var(--text-muted); margin: 4px 0 20px 0;">
+                    Ak nie si platiteľ DPH, na faktúrach sa DPH vôbec
+                    nebude účtovať a namiesto rozpisu DPH sa zobrazí
+                    povinný text "{{ NON_VAT_PAYER_NOTICE }}".
+                </p>
+
+
                 <label>
                     Adresa
                 </label>

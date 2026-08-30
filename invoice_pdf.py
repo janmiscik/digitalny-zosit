@@ -19,7 +19,11 @@ from reportlab.platypus import (
 from reportlab.lib.styles import ParagraphStyle
 from PIL import Image as PILImage
 
-from invoice_utils import calculate_invoice_totals
+from invoice_utils import (
+    NON_VAT_PAYER_NOTICE,
+    REVERSE_CHARGE_NOTICE,
+    calculate_invoice_totals,
+)
 from qr_payment import generate_payment_qr_image
 from uploads_utils import image_path
 
@@ -274,7 +278,9 @@ def generate_invoice_pdf(invoice, company) -> bytes:
         if company.dic:
             supplier_lines.append(Paragraph(f"DIČ: {company.dic}", styles["normal"]))
 
-        if company.ic_dph:
+        # Neplatca DPH nesmie na faktúre uvádzať IČ DPH (zo zákona) -
+        # bez ohľadu na to, či ho má z nejakého dôvodu v appke vyplnené.
+        if company.ic_dph and company.is_vat_payer:
             supplier_lines.append(Paragraph(f"IČ DPH: {company.ic_dph}", styles["normal"]))
 
         if company.phone:
@@ -379,16 +385,43 @@ def generate_invoice_pdf(invoice, company) -> bytes:
 
     # =====================================
     # POLOŽKY
+    #
+    # Stĺpec "DPH" sa zobrazuje len vtedy, keď sa DPH na faktúre skutočne
+    # účtuje - neplatca DPH aj faktúra s prenesením daňovej povinnosti
+    # majú vždy nulovú sadzbu na všetkých položkách (vynucuje
+    # invoice_utils.validate_invoice_vat), takže by stĺpec ukazoval len
+    # rady núl - namiesto toho sa radšej úplne vynechá a nahradí
+    # povinným upozornením nižšie pod súhrnom.
     # =====================================
 
-    items_header = [
-        Paragraph("Popis", styles["bold"]),
-        Paragraph("Množ.", styles["bold"]),
-        Paragraph("MJ", styles["bold"]),
-        Paragraph("Cena/MJ", styles["bold"]),
-        Paragraph("DPH", styles["bold"]),
-        Paragraph("Spolu", styles["bold"]),
-    ]
+    company_is_vat_payer = bool(company is not None and company.is_vat_payer)
+
+    show_vat = company_is_vat_payer and not invoice.reverse_charge
+
+    if show_vat:
+
+        items_header = [
+            Paragraph("Popis", styles["bold"]),
+            Paragraph("Množ.", styles["bold"]),
+            Paragraph("MJ", styles["bold"]),
+            Paragraph("Cena/MJ", styles["bold"]),
+            Paragraph("DPH", styles["bold"]),
+            Paragraph("Spolu", styles["bold"]),
+        ]
+
+        items_col_widths = [70 * mm, 15 * mm, 15 * mm, 25 * mm, 15 * mm, 30 * mm]
+
+    else:
+
+        items_header = [
+            Paragraph("Popis", styles["bold"]),
+            Paragraph("Množ.", styles["bold"]),
+            Paragraph("MJ", styles["bold"]),
+            Paragraph("Cena/MJ", styles["bold"]),
+            Paragraph("Spolu", styles["bold"]),
+        ]
+
+        items_col_widths = [80 * mm, 20 * mm, 20 * mm, 25 * mm, 25 * mm]
 
     items_rows = [items_header]
 
@@ -399,19 +432,24 @@ def generate_invoice_pdf(invoice, company) -> bytes:
 
         line_total = (quantity * unit_price)
 
-        items_rows.append([
+        row = [
             Paragraph(item.description, styles["normal"]),
             Paragraph(f"{quantity:g}", styles["normal"]),
             Paragraph(item.unit, styles["normal"]),
             Paragraph(format_money(unit_price), styles["normal"]),
-            Paragraph(f"{item.vat_rate} %", styles["normal"]),
-            Paragraph(format_money(line_total), styles["normal"]),
-        ])
+        ]
+
+        if show_vat:
+            row.append(Paragraph(f"{item.vat_rate} %", styles["normal"]))
+
+        row.append(Paragraph(format_money(line_total), styles["normal"]))
+
+        items_rows.append(row)
 
 
     items_table = Table(
         items_rows,
-        colWidths=[70 * mm, 15 * mm, 15 * mm, 25 * mm, 15 * mm, 30 * mm]
+        colWidths=items_col_widths
     )
 
     items_table.setStyle(
@@ -435,24 +473,44 @@ def generate_invoice_pdf(invoice, company) -> bytes:
     # =====================================
     # SÚHRN - základ dane / DPH / CELKOM K ÚHRADE
     # (výrazný zvýraznený blok)
+    #
+    # Bez DPH (neplatca DPH alebo prenesenie daňovej povinnosti) sa
+    # neukazuje rozpis "Základ dane"/"DPH spolu" - je to zbytočné a
+    # zavádzajúce, keď je DPH spolu vždy 0. Namiesto toho len jeden
+    # riadok s celkovou sumou a povinné upozornenie pod ním.
     # =====================================
 
     totals = calculate_invoice_totals(invoice.items)
 
-    summary_rows = [
-        [
-            Paragraph("Základ dane", styles["summary_label"]),
-            Paragraph(format_money(totals["total_base"]), styles["summary_value"])
-        ],
-        [
-            Paragraph("DPH spolu", styles["summary_label"]),
-            Paragraph(format_money(totals["total_vat"]), styles["summary_value"])
-        ],
-        [
-            Paragraph("CELKOM K ÚHRADE", styles["summary_total_label"]),
-            Paragraph(format_money(totals["total_gross"]), styles["summary_total_value"])
-        ],
-    ]
+    if show_vat:
+
+        summary_rows = [
+            [
+                Paragraph("Základ dane", styles["summary_label"]),
+                Paragraph(format_money(totals["total_base"]), styles["summary_value"])
+            ],
+            [
+                Paragraph("DPH spolu", styles["summary_label"]),
+                Paragraph(format_money(totals["total_vat"]), styles["summary_value"])
+            ],
+            [
+                Paragraph("CELKOM K ÚHRADE", styles["summary_total_label"]),
+                Paragraph(format_money(totals["total_gross"]), styles["summary_total_value"])
+            ],
+        ]
+
+        summary_highlight_row = 2
+
+    else:
+
+        summary_rows = [
+            [
+                Paragraph("CELKOM K ÚHRADE", styles["summary_total_label"]),
+                Paragraph(format_money(totals["total_gross"]), styles["summary_total_value"])
+            ],
+        ]
+
+        summary_highlight_row = 0
 
     summary_table = Table(
         summary_rows,
@@ -461,14 +519,14 @@ def generate_invoice_pdf(invoice, company) -> bytes:
 
     summary_table.setStyle(
         TableStyle([
-            ("BACKGROUND", (0, 2), (-1, 2), colors.HexColor("#F1F1E7")),
-            ("LINEABOVE", (0, 2), (-1, 2), 1, colors.HexColor("#1E2B2F")),
-            ("TOPPADDING", (0, 0), (-1, 1), 3),
-            ("BOTTOMPADDING", (0, 0), (-1, 1), 3),
-            ("TOPPADDING", (0, 2), (-1, 2), 8),
-            ("BOTTOMPADDING", (0, 2), (-1, 2), 8),
-            ("LEFTPADDING", (0, 2), (0, 2), 8),
-            ("RIGHTPADDING", (-1, 2), (-1, 2), 8),
+            ("BACKGROUND", (0, summary_highlight_row), (-1, summary_highlight_row), colors.HexColor("#F1F1E7")),
+            ("LINEABOVE", (0, summary_highlight_row), (-1, summary_highlight_row), 1, colors.HexColor("#1E2B2F")),
+            ("TOPPADDING", (0, 0), (-1, max(summary_highlight_row - 1, 0)), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, max(summary_highlight_row - 1, 0)), 3),
+            ("TOPPADDING", (0, summary_highlight_row), (-1, summary_highlight_row), 8),
+            ("BOTTOMPADDING", (0, summary_highlight_row), (-1, summary_highlight_row), 8),
+            ("LEFTPADDING", (0, summary_highlight_row), (0, summary_highlight_row), 8),
+            ("RIGHTPADDING", (-1, summary_highlight_row), (-1, summary_highlight_row), 8),
         ])
     )
 
@@ -478,10 +536,31 @@ def generate_invoice_pdf(invoice, company) -> bytes:
 
 
     # =====================================
+    # POVINNÉ UPOZORNENIA K DPH REŽIMU
+    # =====================================
+
+    if not company_is_vat_payer:
+
+        story.append(
+            Paragraph(NON_VAT_PAYER_NOTICE, styles["bold"])
+        )
+
+        story.append(Spacer(1, 14))
+
+    elif invoice.reverse_charge:
+
+        story.append(
+            Paragraph(REVERSE_CHARGE_NOTICE, styles["bold"])
+        )
+
+        story.append(Spacer(1, 14))
+
+
+    # =====================================
     # REKAPITULÁCIA DPH PODĽA SADZIEB
     # =====================================
 
-    if len(totals["vat_breakdown"]) > 1:
+    if show_vat and len(totals["vat_breakdown"]) > 1:
 
         vat_rows = [[
             Paragraph("Sadzba DPH", styles["bold"]),

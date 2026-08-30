@@ -14,8 +14,10 @@ from invoice_utils import (
     is_invoice_overdue,
     is_valid_invoice_status_transition,
     next_invoice_number,
+    validate_invoice_vat,
 )
 from models import Company, Customer, Invoice, InvoiceItem, Job
+from routers.company import get_or_create_company
 from peppol_xml import generate_peppol_xml
 from schemas import InvoiceItemCreate, InvoiceRead, InvoiceStatus
 from templates_config import templates
@@ -300,6 +302,12 @@ def new_invoice_form(
 
     today = date.today()
 
+    company = get_or_create_company(db)
+
+    reverse_charge_available = bool(
+        company.is_vat_payer and customer.ic_dph
+    )
+
 
     return templates.TemplateResponse(
 
@@ -313,7 +321,11 @@ def new_invoice_form(
 
             "job": job,
 
-            "today": today
+            "today": today,
+
+            "company_is_vat_payer": company.is_vat_payer,
+
+            "reverse_charge_available": reverse_charge_available
 
         }
 
@@ -408,6 +420,25 @@ async def create_invoice(
     variable_symbol = form.get("variable_symbol", "").strip() or None
     payment_method = form.get("payment_method", "").strip() or "Prevodom"
     note = form.get("note", "").strip() or None
+    reverse_charge = form.get("reverse_charge") == "on"
+
+    company = get_or_create_company(db)
+
+    try:
+
+        validate_invoice_vat(
+            company_is_vat_payer=company.is_vat_payer,
+            customer_ic_dph=customer.ic_dph,
+            reverse_charge=reverse_charge,
+            item_vat_rates=[item.vat_rate for item in items_data]
+        )
+
+    except ValueError as exc:
+
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc)
+        )
 
 
     invoice_number = next_invoice_number(db, issue_date.year)
@@ -423,6 +454,7 @@ async def create_invoice(
         delivery_date=delivery_date,
         variable_symbol=variable_symbol,
         payment_method=payment_method,
+        reverse_charge=reverse_charge,
         note=note
     )
 
@@ -583,6 +615,13 @@ def edit_invoice_form(
     require_draft_invoice(invoice)
 
 
+    company = get_or_create_company(db)
+
+    reverse_charge_available = bool(
+        company.is_vat_payer and invoice.customer.ic_dph
+    )
+
+
     return templates.TemplateResponse(
 
         request=request,
@@ -597,7 +636,11 @@ def edit_invoice_form(
 
             "today": date.today(),
 
-            "invoice": invoice
+            "invoice": invoice,
+
+            "company_is_vat_payer": company.is_vat_payer,
+
+            "reverse_charge_available": reverse_charge_available
 
         }
 
@@ -667,6 +710,25 @@ async def update_invoice(
     variable_symbol = form.get("variable_symbol", "").strip() or None
     payment_method = form.get("payment_method", "").strip() or "Prevodom"
     note = form.get("note", "").strip() or None
+    reverse_charge = form.get("reverse_charge") == "on"
+
+    company = get_or_create_company(db)
+
+    try:
+
+        validate_invoice_vat(
+            company_is_vat_payer=company.is_vat_payer,
+            customer_ic_dph=invoice.customer.ic_dph,
+            reverse_charge=reverse_charge,
+            item_vat_rates=[item.vat_rate for item in items_data]
+        )
+
+    except ValueError as exc:
+
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc)
+        )
 
 
     invoice.issue_date = issue_date
@@ -674,6 +736,7 @@ async def update_invoice(
     invoice.delivery_date = delivery_date
     invoice.variable_symbol = variable_symbol
     invoice.payment_method = payment_method
+    invoice.reverse_charge = reverse_charge
     invoice.note = note
 
 
