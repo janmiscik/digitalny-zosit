@@ -161,6 +161,92 @@ def test_settings_upload_too_large():
     assert response.status_code == 422
 
 
+# =========================================
+# SKUTOČNÉ OVERENIE TYPU OBRÁZKA (nielen podľa prípony/názvu súboru)
+# =========================================
+
+def test_settings_upload_rejects_non_image_disguised_as_png():
+    """Súbor, ktorý sa len VOLÁ .png, ale v skutočnosti nie je obrázok
+    (napr. HTML/text/škodlivý súbor), sa musí odmietnuť - kontrola podľa
+    prípony samotnej nestačí."""
+
+    fake_png = b"<script>alert('nie som obrazok')</script>"
+
+    response = client.post(
+        "/settings",
+        data={"name": "Firma"},
+        files={"logo": ("logo.png", fake_png, "image/png")}
+    )
+
+    assert response.status_code == 422
+
+    db = TestingSessionLocal()
+    company = db.query(Company).first()
+    db.close()
+
+    assert company is None or company.logo_filename is None
+
+
+def test_settings_upload_rejects_jpeg_disguised_as_png():
+    """Skutočný JPEG obsah nahraný pod príponou .png sa musí odmietnuť -
+    obsah musí zodpovedať deklarovanej prípone, nielen sa podobať na
+    'nejaký' obrázok."""
+
+    buffer = io.BytesIO()
+    PILImage.new("RGB", (10, 10), (0, 255, 0)).save(buffer, format="JPEG")
+    jpeg_bytes_with_png_extension = buffer.getvalue()
+
+    response = client.post(
+        "/settings",
+        data={"name": "Firma"},
+        files={
+            "logo": (
+                "logo.png",
+                jpeg_bytes_with_png_extension,
+                "image/png"
+            )
+        }
+    )
+
+    assert response.status_code == 422
+
+
+def test_settings_upload_rejects_truncated_corrupted_image():
+    """Poškodený/orezaný obrázok (napr. prerušené sťahovanie) sa musí
+    odmietnuť, nie uložiť a spôsobiť pád neskôr pri generovaní PDF."""
+
+    valid_png = make_png_bytes()
+
+    # odrežeme polovicu súboru - hlavička bude vyzerať ako PNG,
+    # ale dáta budú neúplné/poškodené
+    truncated = valid_png[: len(valid_png) // 2]
+
+    response = client.post(
+        "/settings",
+        data={"name": "Firma"},
+        files={"logo": ("logo.png", truncated, "image/png")}
+    )
+
+    assert response.status_code == 422
+
+
+def test_settings_upload_accepts_real_jpeg():
+    """Overíme aj kladný prípad - skutočný JPEG s príponou .jpg musí
+    prejsť (nechceme byť príliš prísni, len odhaliť podvrhnuté súbory)."""
+
+    buffer = io.BytesIO()
+    PILImage.new("RGB", (10, 10), (10, 20, 30)).save(buffer, format="JPEG")
+
+    response = client.post(
+        "/settings",
+        data={"name": "Firma s JPEG logom"},
+        files={"logo": ("logo.jpg", buffer.getvalue(), "image/jpeg")},
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+
+
 def test_settings_remove_logo():
 
     png_bytes = make_png_bytes()

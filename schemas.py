@@ -146,9 +146,18 @@ class CompanyRead(CompanyBase):
 class InvoiceItemBase(BaseModel):
 
     description: str
-    quantity: Decimal = Field(default=Decimal("1"), gt=0)
+    quantity: Decimal = Field(
+        default=Decimal("1"),
+        gt=0,
+        max_digits=10,
+        decimal_places=2
+    )
     unit: str = "ks"
-    unit_price: Decimal
+    unit_price: Decimal = Field(
+        ge=0,
+        max_digits=10,
+        decimal_places=2
+    )
     vat_rate: int = 23
 
     @field_validator("vat_rate")

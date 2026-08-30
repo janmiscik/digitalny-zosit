@@ -1,9 +1,11 @@
+from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from models import Invoice
+from schemas import InvoiceStatus
 
 
 def next_invoice_number(db: Session, year: int) -> str:
@@ -140,3 +142,97 @@ def calculate_invoice_totals(items) -> dict:
         )
 
     }
+
+
+# =========================================
+# "PO SPLATNOSTI" - VŽDY LEN POČÍTANÉ, NIKDY NEUKLADANÉ
+#
+# Toto je JEDINÉ miesto v appke, ktoré rozhoduje o tom, či je faktúra
+# po termíne. Stĺpec `status` v databáze nikdy neobsahuje hodnotu
+# "Po splatnosti" - je to čisto odvodená vlastnosť z due_date a aktuálneho
+# stavu, počítaná za behu (nemôže sa preto rozísť s realitou tak, ako by
+# sa mohla rozísť uložená hodnota, ktorú by niekto zabudol prepočítať).
+# =========================================
+
+CLOSED_INVOICE_STATUSES = (
+    InvoiceStatus.PAID.value,
+    InvoiceStatus.CANCELLED.value,
+)
+
+
+def is_invoice_overdue(invoice, today: date | None = None) -> bool:
+    """
+    Faktúra je "po splatnosti" vtedy a len vtedy, keď je jej dátum
+    splatnosti v minulosti A zároveň ešte nie je uzavretá (uhradená
+    alebo stornovaná faktúra sa nepovažuje za "po splatnosti", aj keby
+    mala starý dátum splatnosti).
+    """
+
+    if today is None:
+        today = date.today()
+
+    return (
+        invoice.due_date < today
+        and invoice.status not in CLOSED_INVOICE_STATUSES
+    )
+
+
+# =========================================
+# POVOLENÉ PRECHODY STAVOV FAKTÚRY
+#
+# "Po splatnosti" sa zámerne NIKDY neobjavuje ako cieľový stav v tejto
+# mape - nedá sa nastaviť ručne, len sa počíta (viď is_invoice_overdue
+# vyššie). Appka takúto požiadavku vždy odmietne ešte skôr, než by sa
+# dostala k tejto mape (viď routers/invoices.py).
+#
+# Logika prechodov:
+# - Návrh   -> Odoslaná, Uhradená, Stornovaná (dokument sa ešte len chystá)
+# - Odoslaná -> Uhradená, Stornovaná (poslané, čaká sa na peniaze/stornovanie)
+# - Uhradená -> Stornovaná (výnimočná oprava chyby, napr. duplicitná platba)
+# - Stornovaná -> (nič, je to konečný stav)
+# =========================================
+
+ALLOWED_INVOICE_STATUS_TRANSITIONS: dict[str, set[str]] = {
+
+    InvoiceStatus.DRAFT.value: {
+        InvoiceStatus.SENT.value,
+        InvoiceStatus.PAID.value,
+        InvoiceStatus.CANCELLED.value,
+    },
+
+    InvoiceStatus.SENT.value: {
+        InvoiceStatus.PAID.value,
+        InvoiceStatus.CANCELLED.value,
+    },
+
+    InvoiceStatus.PAID.value: {
+        InvoiceStatus.CANCELLED.value,
+    },
+
+    InvoiceStatus.CANCELLED.value: set(),
+
+}
+
+
+def allowed_next_invoice_statuses(current_status: str) -> set[str]:
+    """
+    Vráti množinu stavov, do ktorých sa dá z aktuálneho stavu legálne
+    prejsť. Neznámy/legacy stav (nemal by nastať, ale pre istotu) sa berie
+    ako stav bez povolených prechodov - bezpečnejší default, než tichý
+    predpoklad, že je dovolené všetko.
+    """
+
+    return ALLOWED_INVOICE_STATUS_TRANSITIONS.get(current_status, set())
+
+
+def is_valid_invoice_status_transition(current_status: str, new_status: str) -> bool:
+    """
+    Nastavenie na ten istý stav, aký už faktúra má, je vždy neškodné
+    no-op a je povolené. Inak musí byť nový stav v množine povolených
+    prechodov z aktuálneho stavu.
+    """
+
+    if new_status == current_status:
+        return True
+
+    return new_status in allowed_next_invoice_statuses(current_status)

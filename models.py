@@ -67,6 +67,21 @@ class Customer(Base):
     )
 
 
+    # =====================================
+    # PEPPOL (fáza 2 - príprava na e-fakturáciu)
+    # Identifikačná schéma odberateľa v Peppol sieti - JE INÁ hodnota
+    # než Company.peppol_scheme_id (to je schéma dodávateľa). Kým appka
+    # nezbiera tento údaj aktívne, ostáva prázdna a appka jednoducho
+    # nevygeneruje EndpointID pre odberateľa (radšej nič, než nesprávny
+    # identifikátor - viď peppol_xml.py).
+    # =====================================
+
+    peppol_scheme_id = Column(
+        String,
+        nullable=True
+    )
+
+
     jobs = relationship(
         "Job",
         back_populates="customer",

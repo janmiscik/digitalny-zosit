@@ -8,7 +8,13 @@ from sqlalchemy.orm import Session, joinedload
 from auth import require_login_api, require_login_page
 from database import get_db
 from invoice_pdf import generate_invoice_pdf
-from invoice_utils import calculate_invoice_totals, next_invoice_number
+from invoice_utils import (
+    allowed_next_invoice_statuses,
+    calculate_invoice_totals,
+    is_invoice_overdue,
+    is_valid_invoice_status_transition,
+    next_invoice_number,
+)
 from models import Company, Customer, Invoice, InvoiceItem, Job
 from peppol_xml import generate_peppol_xml
 from schemas import InvoiceItemCreate, InvoiceRead, InvoiceStatus
@@ -47,6 +53,25 @@ def parse_required_date(raw_value: str, field_label: str) -> date:
         )
 
     return parsed
+
+
+def validate_invoice_dates(issue_date: date, due_date: date) -> None:
+    """
+    Základná logická kontrola dátumov faktúry - splatnosť nemôže byť
+    skôr než vystavenie (bežný preklep pri ručnom zadávaní). Splatnosť
+    v ten istý deň ako vystavenie je v poriadku (napr. platba v hotovosti
+    na mieste).
+    """
+
+    if due_date < issue_date:
+
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Dátum splatnosti nemôže byť skôr než dátum vystavenia "
+                f"({due_date.isoformat()} < {issue_date.isoformat()})"
+            )
+        )
 
 
 def parse_items_from_form(form) -> list:
@@ -147,7 +172,7 @@ def invoices_list_page(
 
     )
 
-    if status is not None:
+    if status is not None and status != InvoiceStatus.OVERDUE.value:
 
         query = query.filter(
             Invoice.status == status
@@ -162,12 +187,33 @@ def invoices_list_page(
 
     today = date.today()
 
+    # Filter "Po splatnosti" nemôže byť obyčajné porovnanie stĺpca status -
+    # tento stav sa nikdy neukladá (viď invoice_utils.is_invoice_overdue),
+    # takže sa musí vyhodnotiť až po natiahnutí faktúr z DB.
+    if status == InvoiceStatus.OVERDUE.value:
+
+        invoices = [
+            invoice
+            for invoice in invoices
+            if is_invoice_overdue(invoice, today)
+        ]
+
+
     invoice_totals = {
 
         invoice.id: calculate_invoice_totals(invoice.items)["total_gross"]
 
         for invoice in invoices
 
+    }
+
+    # Presne tá istá definícia "po splatnosti" ako všade inde v appke
+    # (viď invoice_utils.is_invoice_overdue) - šablóna len kontroluje
+    # členstvo v tejto množine, nepočíta si podmienku znova sama.
+    overdue_invoice_ids = {
+        invoice.id
+        for invoice in invoices
+        if is_invoice_overdue(invoice, today)
     }
 
 
@@ -182,6 +228,8 @@ def invoices_list_page(
             "invoices": invoices,
 
             "invoice_totals": invoice_totals,
+
+            "overdue_invoice_ids": overdue_invoice_ids,
 
             "statuses": list(InvoiceStatus),
 
@@ -355,6 +403,8 @@ async def create_invoice(
         form.get("delivery_date", "")
     )
 
+    validate_invoice_dates(issue_date, due_date)
+
     variable_symbol = form.get("variable_symbol", "").strip() or None
     payment_method = form.get("payment_method", "").strip() or "Prevodom"
     note = form.get("note", "").strip() or None
@@ -450,22 +500,20 @@ def invoice_detail(
     totals = calculate_invoice_totals(invoice.items)
 
 
-    # "Po splatnosti" nie je stav, ktorý by mal používateľ nastavovať ručne -
-    # appka ho počíta automaticky podľa dátumu splatnosti (viď is_overdue
-    # v šablónach zoznamu faktúr aj dashboardu). Ponuka v rozbaľovacom
-    # zozname preto obsahuje len stavy, ktoré dávajú zmysel nastaviť ručne.
-    selectable_statuses = [
-        status
+    # Dropdown na zmenu stavu ponúka len stavy, do ktorých sa dá z
+    # aktuálneho stavu skutočne legálne prejsť (viď
+    # invoice_utils.ALLOWED_INVOICE_STATUS_TRANSITIONS) - nie plný zoznam
+    # všetkých stavov. "Po splatnosti" sa medzi nimi nikdy neobjaví, lebo
+    # sa nikdy neukladá ako skutočný stav (počíta sa za behu).
+    next_statuses = allowed_next_invoice_statuses(invoice.status)
+
+    selectable_statuses = [invoice.status] + [
+        status.value
         for status in InvoiceStatus
-        if status != InvoiceStatus.OVERDUE
+        if status.value in next_statuses
     ]
 
-    # Ak má faktúra (napr. zo staršej verzie appky) už uložený stav
-    # "Po splatnosti", zobrazíme ho v zozname korektne aj naďalej -
-    # len ho neponúkame ako novú voľbu pre ostatné faktúry.
-    if invoice.status == InvoiceStatus.OVERDUE.value:
-
-        selectable_statuses.append(InvoiceStatus.OVERDUE)
+    can_change_status = len(next_statuses) > 0
 
 
     return templates.TemplateResponse(
@@ -480,7 +528,11 @@ def invoice_detail(
 
             "totals": totals,
 
-            "statuses": selectable_statuses
+            "statuses": selectable_statuses,
+
+            "can_change_status": can_change_status,
+
+            "is_overdue": is_invoice_overdue(invoice)
 
         }
 
@@ -609,6 +661,8 @@ async def update_invoice(
     delivery_date = parse_optional_date(
         form.get("delivery_date", "")
     )
+
+    validate_invoice_dates(issue_date, due_date)
 
     variable_symbol = form.get("variable_symbol", "").strip() or None
     payment_method = form.get("payment_method", "").strip() or "Prevodom"
@@ -860,7 +914,7 @@ def update_invoice_status(
 
     try:
 
-        invoice.status = InvoiceStatus(status).value
+        new_status = InvoiceStatus(status).value
 
     except ValueError:
 
@@ -869,6 +923,33 @@ def update_invoice_status(
             detail=f"Neplatný stav faktúry: {status}"
         )
 
+
+    # "Po splatnosti" sa NIKDY nedá nastaviť ručne - je to čisto počítaná
+    # vlastnosť podľa dátumu splatnosti (viď invoice_utils.is_invoice_overdue),
+    # nie stav, ktorý by niekto mal alebo mohol manuálne priradiť.
+    if new_status == InvoiceStatus.OVERDUE.value:
+
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Stav 'Po splatnosti' sa počíta automaticky podľa dátumu "
+                "splatnosti - nedá sa nastaviť ručne."
+            )
+        )
+
+
+    if not is_valid_invoice_status_transition(invoice.status, new_status):
+
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Nepovolený prechod stavu z '{invoice.status}' "
+                f"na '{new_status}'."
+            )
+        )
+
+
+    invoice.status = new_status
 
     db.commit()
 

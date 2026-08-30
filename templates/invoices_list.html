@@ -194,10 +194,7 @@
 
             {% for invoice in invoices %}
 
-                {% set is_overdue = (
-                    invoice.due_date < today
-                    and invoice.status not in ["Uhradená", "Stornovaná"]
-                ) %}
+                {% set is_overdue = invoice.id in overdue_invoice_ids %}
 
                 <a
                     href="/invoices/{{ invoice.id }}"

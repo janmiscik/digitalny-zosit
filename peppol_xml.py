@@ -267,6 +267,18 @@ def generate_peppol_xml(invoice, company) -> bytes:
 
     customer = invoice.customer
 
+    # POZOR: identifikačná schéma odberateľa (Peppol EndpointID scheme)
+    # NESMIE sa preberať od dodávateľa (company_peppol_scheme) - je to
+    # cudzia hodnota, ktorá patrí LEN k identite predávajúceho v Peppol
+    # sieti. Odberateľ potrebuje VLASTný scheme ID, ktorý zatiaľ appka
+    # negeneruje ani nezbiera (bude súčasťou plnej Peppol integrácie).
+    #
+    # Kým appka nemá k dispozícii skutočný Peppol scheme ID odberateľa,
+    # EndpointID sa pre odberateľa jednoducho nevygeneruje (build_party
+    # ho vynechá, ak je peppol_scheme_id None) - je to bezpečnejšie než
+    # vygenerovať nesprávny/zavádzajúci identifikátor.
+    customer_peppol_scheme = getattr(customer, "peppol_scheme_id", None)
+
     build_party(
         "AccountingCustomerParty",
         root,
@@ -276,7 +288,7 @@ def generate_peppol_xml(invoice, company) -> bytes:
         address=customer.address,
         email=customer.email,
         phone=customer.phone,
-        peppol_scheme_id=company_peppol_scheme
+        peppol_scheme_id=customer_peppol_scheme
     )
 
 

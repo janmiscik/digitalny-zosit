@@ -406,6 +406,208 @@ def test_create_invoice_customer_not_found():
     assert response.status_code == 404
 
 
+# =========================================
+# VALIDÁCIA CENY POLOŽKY FAKTÚRY
+# =========================================
+
+def test_create_invoice_negative_price_rejected():
+
+    customer, job = get_test_customer_and_job()
+
+    issue_date = date.today()
+    due_date = issue_date + timedelta(days=14)
+
+    response = post_form(
+        f"/customers/{customer.id}/invoices",
+        [
+            ("issue_date", issue_date.isoformat()),
+            ("due_date", due_date.isoformat()),
+            ("description", "Práca"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "-50.00"),
+            ("vat_rate", "23"),
+        ]
+    )
+
+    assert response.status_code == 422
+
+
+def test_create_invoice_zero_price_allowed():
+    """Cena 0 je legitímna (napr. bezplatná položka/zľava do 100%),
+    len záporná cena nedáva zmysel."""
+
+    customer, job = get_test_customer_and_job()
+
+    issue_date = date.today()
+    due_date = issue_date + timedelta(days=14)
+
+    response = post_form(
+        f"/customers/{customer.id}/invoices",
+        [
+            ("issue_date", issue_date.isoformat()),
+            ("due_date", due_date.isoformat()),
+            ("description", "Bezplatná obhliadka"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "0"),
+            ("vat_rate", "23"),
+        ],
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+
+
+def test_create_invoice_zero_quantity_rejected():
+
+    customer, job = get_test_customer_and_job()
+
+    issue_date = date.today()
+    due_date = issue_date + timedelta(days=14)
+
+    response = post_form(
+        f"/customers/{customer.id}/invoices",
+        [
+            ("issue_date", issue_date.isoformat()),
+            ("due_date", due_date.isoformat()),
+            ("description", "Práca"),
+            ("quantity", "0"),
+            ("unit", "ks"),
+            ("unit_price", "10.00"),
+            ("vat_rate", "23"),
+        ]
+    )
+
+    assert response.status_code == 422
+
+
+def test_create_invoice_price_too_many_decimal_places_rejected():
+
+    customer, job = get_test_customer_and_job()
+
+    issue_date = date.today()
+    due_date = issue_date + timedelta(days=14)
+
+    response = post_form(
+        f"/customers/{customer.id}/invoices",
+        [
+            ("issue_date", issue_date.isoformat()),
+            ("due_date", due_date.isoformat()),
+            ("description", "Práca"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "10.999"),
+            ("vat_rate", "23"),
+        ]
+    )
+
+    assert response.status_code == 422
+
+
+def test_create_invoice_absurdly_large_price_rejected():
+    """Cena, ktorá by sa nezmestila do DB stĺpca Numeric(10, 2),
+    sa musí odmietnuť pri validácii, nie zlyhať až pri zápise do DB."""
+
+    customer, job = get_test_customer_and_job()
+
+    issue_date = date.today()
+    due_date = issue_date + timedelta(days=14)
+
+    response = post_form(
+        f"/customers/{customer.id}/invoices",
+        [
+            ("issue_date", issue_date.isoformat()),
+            ("due_date", due_date.isoformat()),
+            ("description", "Práca"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "123456789.00"),
+            ("vat_rate", "23"),
+        ]
+    )
+
+    assert response.status_code == 422
+
+
+# =========================================
+# VALIDÁCIA DÁTUMOV FAKTÚRY
+# =========================================
+
+def test_create_invoice_due_date_before_issue_date_rejected():
+
+    customer, job = get_test_customer_and_job()
+
+    issue_date = date.today()
+    due_date = issue_date - timedelta(days=5)
+
+    response = post_form(
+        f"/customers/{customer.id}/invoices",
+        [
+            ("issue_date", issue_date.isoformat()),
+            ("due_date", due_date.isoformat()),
+            ("description", "Práca"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "10.00"),
+            ("vat_rate", "23"),
+        ]
+    )
+
+    assert response.status_code == 422
+
+
+def test_create_invoice_due_date_equal_issue_date_allowed():
+    """Splatnosť v deň vystavenia (napr. platba v hotovosti na mieste)
+    je legitímny prípad, nemá zmysel to blokovať."""
+
+    customer, job = get_test_customer_and_job()
+
+    issue_date = date.today()
+
+    response = post_form(
+        f"/customers/{customer.id}/invoices",
+        [
+            ("issue_date", issue_date.isoformat()),
+            ("due_date", issue_date.isoformat()),
+            ("description", "Hotovostná platba"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "10.00"),
+            ("vat_rate", "23"),
+        ],
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+
+
+def test_update_invoice_due_date_before_issue_date_rejected():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice_id = invoice.id
+    db.close()
+
+    issue_date = date.today()
+    due_date = issue_date - timedelta(days=1)
+
+    response = post_form(
+        f"/invoices/{invoice_id}/edit",
+        [
+            ("issue_date", issue_date.isoformat()),
+            ("due_date", due_date.isoformat()),
+            ("description", "Práca"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "10.00"),
+            ("vat_rate", "23"),
+        ]
+    )
+
+    assert response.status_code == 422
+
+
 def test_create_invoice_numbers_increment():
 
     customer, job = get_test_customer_and_job()
@@ -588,7 +790,7 @@ def test_update_invoice_status():
 
     response = client.post(
         f"/invoices/{invoice_id}/status",
-        data={"status": "Uhradená"},
+        data={"status": "Odoslaná"},
         follow_redirects=False
     )
 
@@ -598,7 +800,7 @@ def test_update_invoice_status():
     updated = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     db.close()
 
-    assert updated.status == "Uhradená"
+    assert updated.status == "Odoslaná"
 
 
 def test_update_invoice_status_invalid():
@@ -614,6 +816,145 @@ def test_update_invoice_status_invalid():
     )
 
     assert response.status_code == 422
+
+
+# =========================================
+# PRECHODY STAVOV FAKTÚRY
+# =========================================
+
+def set_invoice_status_directly(invoice_id: int, status: str) -> None:
+
+    db = TestingSessionLocal()
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    invoice.status = status
+    db.commit()
+    db.close()
+
+
+def get_invoice_status(invoice_id: int) -> str:
+
+    db = TestingSessionLocal()
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    status = invoice.status
+    db.close()
+
+    return status
+
+
+@pytest.mark.parametrize(
+    "current_status,new_status",
+    [
+        ("Návrh", "Odoslaná"),
+        ("Návrh", "Uhradená"),
+        ("Návrh", "Stornovaná"),
+        ("Odoslaná", "Uhradená"),
+        ("Odoslaná", "Stornovaná"),
+        ("Uhradená", "Stornovaná"),
+    ]
+)
+def test_allowed_status_transitions_succeed(current_status, new_status):
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.status = current_status
+    invoice_id = invoice.id
+    db.commit()
+    db.close()
+
+    response = client.post(
+        f"/invoices/{invoice_id}/status",
+        data={"status": new_status},
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert get_invoice_status(invoice_id) == new_status
+
+
+@pytest.mark.parametrize(
+    "current_status,forbidden_status",
+    [
+        # nedá sa vrátiť späť do Návrhu (obchádzalo by to ochranu
+        # require_draft_invoice pre editáciu/zmazanie)
+        ("Odoslaná", "Návrh"),
+        ("Uhradená", "Návrh"),
+        ("Uhradená", "Odoslaná"),
+        ("Stornovaná", "Návrh"),
+        # Stornovaná je konečný stav - nedá sa z nej nikam prejsť
+        ("Stornovaná", "Odoslaná"),
+        ("Stornovaná", "Uhradená"),
+    ]
+)
+def test_forbidden_status_transitions_rejected(current_status, forbidden_status):
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.status = current_status
+    invoice_id = invoice.id
+    db.commit()
+    db.close()
+
+    response = client.post(
+        f"/invoices/{invoice_id}/status",
+        data={"status": forbidden_status}
+    )
+
+    assert response.status_code == 409
+    assert get_invoice_status(invoice_id) == current_status
+
+
+def test_status_noop_transition_allowed():
+    """Nastavenie na ten istý stav, aký faktúra už má, je neškodné
+    no-op a nemá zmysel ho blokovať."""
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.status = "Odoslaná"
+    invoice_id = invoice.id
+    db.commit()
+    db.close()
+
+    response = client.post(
+        f"/invoices/{invoice_id}/status",
+        data={"status": "Odoslaná"},
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert get_invoice_status(invoice_id) == "Odoslaná"
+
+
+def test_overdue_status_cannot_be_set_manually_from_any_state():
+    """'Po splatnosti' sa nedá nastaviť ručne, nech je faktúra v
+    akomkoľvek stave - je to čisto počítaná vlastnosť."""
+
+    for current_status in ("Návrh", "Odoslaná", "Uhradená", "Stornovaná"):
+
+        db = TestingSessionLocal()
+        invoice = create_sample_invoice(db)
+        invoice.status = current_status
+        invoice_id = invoice.id
+        db.commit()
+        db.close()
+
+        response = client.post(
+            f"/invoices/{invoice_id}/status",
+            data={"status": "Po splatnosti"}
+        )
+
+        assert response.status_code == 422, (
+            f"Očakával som 422 pri prechode z '{current_status}' "
+            f"na 'Po splatnosti'"
+        )
+        assert get_invoice_status(invoice_id) == current_status
+
+        # create_sample_invoice() vždy použije rovnaké číslo faktúry -
+        # pred ďalšou iterciou ju treba zmazať, inak spadne na
+        # UNIQUE constraint pri ďalšom vytváraní.
+        db = TestingSessionLocal()
+        db.query(Invoice).filter(Invoice.id == invoice_id).delete()
+        db.commit()
+        db.close()
 
 
 def test_overdue_status_not_manually_selectable():
@@ -637,10 +978,11 @@ def test_overdue_status_not_manually_selectable():
 
 def test_overdue_status_still_shown_if_already_set():
     """
-    Ak faktúra už má (napr. z importu staršej verzie) uložený stav
-    'Po splatnosti', formulár ju musí zobraziť korektne - len ju
-    neponúka ako novú voľbu pre iné faktúry.
-    """
+    Ak faktúra už má (napr. z importu staršej verzie, pred touto opravou)
+    uložený stav 'Po splatnosti', appka ho musí zobraziť korektne ako
+    statický (needitovateľný) štítok - nie ako položku v rozbaľovacom
+    zozname, lebo tento stav sa už nikdy nedá ručne nastaviť ani ponechať
+    prostredníctvom formulára."""
 
     db = TestingSessionLocal()
     invoice = create_sample_invoice(db)
@@ -652,7 +994,8 @@ def test_overdue_status_still_shown_if_already_set():
     response = client.get(f"/invoices/{invoice_id}")
 
     assert response.status_code == 200
-    assert 'value="Po splatnosti"' in response.text
+    assert "Po splatnosti" in response.text
+    assert 'value="Po splatnosti"' not in response.text
 
 
 # =========================================
@@ -812,6 +1155,147 @@ def test_peppol_xml_well_formed_and_valid_structure():
     # Celková suma s DPH: (2*25*1.23) + 100 = 61.50 + 100 = 161.50
     payable = root.find("cac:LegalMonetaryTotal/cbc:PayableAmount", ns)
     assert payable.text == "161.50"
+
+
+def test_peppol_xml_does_not_reuse_supplier_scheme_for_customer():
+    """
+    Regresný test na konkrétny bug: generátor predtým OMYLOM použil
+    Peppol schému DODÁVATEĽA (company.peppol_scheme_id) aj na
+    EndpointID ODBERATEĽA. Tieto dve schémy nemajú nič spoločné a
+    odberateľ svoju vlastnú (zatiaľ) nemá nastavenú - EndpointID sa
+    preto pre odberateľa nemá vôbec vygenerovať, kým appka nezbiera
+    jeho skutočnú Peppol identifikáciu.
+    """
+
+    import xml.etree.ElementTree as ET
+
+    db = TestingSessionLocal()
+
+    customer = db.query(Customer).first()
+    # explicitne overíme, že zákazník NEMÁ nastavenú vlastnú Peppol schému
+    assert customer.peppol_scheme_id is None
+
+    invoice = Invoice(
+        invoice_number="2026201",
+        customer_id=customer.id,
+        status="Návrh",
+        issue_date=date.today(),
+        due_date=date.today() + timedelta(days=14)
+    )
+
+    invoice.items.append(
+        InvoiceItem(
+            description="Práca",
+            quantity=Decimal("1"),
+            unit="ks",
+            unit_price=Decimal("100.00"),
+            vat_rate=23
+        )
+    )
+
+    company = Company(
+        name="Firma XY",
+        ico="11223344",
+        peppol_scheme_id="9946"
+    )
+
+    db.add(company)
+    db.add(invoice)
+    db.commit()
+    db.refresh(invoice)
+
+    from peppol_xml import generate_peppol_xml
+
+    xml_bytes = generate_peppol_xml(invoice, company)
+
+    db.close()
+
+    root = ET.fromstring(xml_bytes)
+
+    ns = {
+        "cac": "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2",
+        "cbc": "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2",
+    }
+
+    supplier_endpoint = root.find(
+        "cac:AccountingSupplierParty/cac:Party/cbc:EndpointID",
+        ns
+    )
+    customer_endpoint = root.find(
+        "cac:AccountingCustomerParty/cac:Party/cbc:EndpointID",
+        ns
+    )
+
+    # Dodávateľ svoj EndpointID (so svojou schémou) má...
+    assert supplier_endpoint is not None
+    assert supplier_endpoint.get("schemeID") == "9946"
+
+    # ...ale odberateľ NESMIE dostať schému dodávateľa - keďže vlastnú
+    # nemá, element sa má úplne vynechať, nie obsahovať "9946".
+    assert customer_endpoint is None
+
+
+def test_peppol_xml_uses_customers_own_scheme_when_set():
+
+    import xml.etree.ElementTree as ET
+
+    db = TestingSessionLocal()
+
+    customer = db.query(Customer).first()
+    customer.ico = "99887766"
+    customer.peppol_scheme_id = "0088"
+    db.commit()
+
+    invoice = Invoice(
+        invoice_number="2026202",
+        customer_id=customer.id,
+        status="Návrh",
+        issue_date=date.today(),
+        due_date=date.today() + timedelta(days=14)
+    )
+
+    invoice.items.append(
+        InvoiceItem(
+            description="Práca",
+            quantity=Decimal("1"),
+            unit="ks",
+            unit_price=Decimal("100.00"),
+            vat_rate=23
+        )
+    )
+
+    company = Company(
+        name="Firma XY",
+        ico="11223344",
+        peppol_scheme_id="9946"
+    )
+
+    db.add(company)
+    db.add(invoice)
+    db.commit()
+    db.refresh(invoice)
+
+    from peppol_xml import generate_peppol_xml
+
+    xml_bytes = generate_peppol_xml(invoice, company)
+
+    db.close()
+
+    root = ET.fromstring(xml_bytes)
+
+    ns = {
+        "cac": "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2",
+        "cbc": "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2",
+    }
+
+    customer_endpoint = root.find(
+        "cac:AccountingCustomerParty/cac:Party/cbc:EndpointID",
+        ns
+    )
+
+    assert customer_endpoint is not None
+    assert customer_endpoint.get("schemeID") == "0088"
+    assert customer_endpoint.text == "99887766"
 
 
 def test_peppol_xml_without_company():

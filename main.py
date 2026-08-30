@@ -1,4 +1,5 @@
 import os
+from contextlib import asynccontextmanager
 from datetime import date
 from decimal import Decimal
 
@@ -7,12 +8,12 @@ from fastapi.exceptions import HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
-from sqlalchemy import func
+from sqlalchemy import func, inspect
 from sqlalchemy.orm import Session, joinedload
 
 from auth import require_login_page
 from database import Base, engine, get_db
-from invoice_utils import calculate_invoice_totals
+from invoice_utils import CLOSED_INVOICE_STATUSES, calculate_invoice_totals
 
 from models import Customer, Invoice, Job
 
@@ -27,16 +28,41 @@ from templates_config import templates
 
 # =========================================
 # DATABASE
+#
+# ZÁMERNE tu nie je Base.metadata.create_all(bind=engine) - schéma DB sa
+# spravuje VÝHRADNE cez Alembic migrácie (viď README, "alembic upgrade
+# head"). create_all() by na čerstvej databáze potichu vytvorilo tabuľky
+# priamo z aktuálnych modelov (bez zápisu do alembic_version), takže by
+# appka fungovala navonok rovnako, ale alembic by si "myslel", že žiadna
+# migrácia ešte neprebehla - pri ďalšej reálnej migrácii by to viedlo k
+# chybám ("tabuľka už existuje") alebo k rozídeniu sa skutočnej schémy
+# od toho, čo si Alembic o nej myslí.
+#
+# Namiesto toho appka pri štarte (nie pri importe - viď lifespan nižšie)
+# len skontroluje, že migrácie boli spustené, a ak nie, zlyhá s jasnou
+# hláškou - radšej hneď pri štarte, než neskôr nezrozumiteľnou SQL
+# chybou "no such table" pri prvej požiadavke.
 # =========================================
 
-Base.metadata.create_all(bind=engine)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+
+    if not inspect(engine).has_table("alembic_version"):
+
+        raise RuntimeError(
+            "Databázová schéma nie je inicializovaná (chýba tabuľka "
+            "alembic_version). Pred spustením appky spusti databázové "
+            "migrácie:\n\n    alembic upgrade head\n"
+        )
+
+    yield
 
 
 # =========================================
 # APP
 # =========================================
 
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 
 
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -209,7 +235,7 @@ def home(
         .query(func.count(Invoice.id))
         .filter(
             Invoice.due_date < today,
-            Invoice.status.notin_(("Uhradená", "Stornovaná"))
+            Invoice.status.notin_(CLOSED_INVOICE_STATUSES)
         )
         .scalar()
     )
@@ -230,7 +256,7 @@ def home(
         .query(Invoice)
         .options(joinedload(Invoice.items))
         .filter(
-            Invoice.status.notin_(("Uhradená", "Stornovaná"))
+            Invoice.status.notin_(CLOSED_INVOICE_STATUSES)
         )
         .all()
     )

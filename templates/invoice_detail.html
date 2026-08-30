@@ -192,26 +192,47 @@
                     style="display: inline-flex; align-items: center; gap: 8px;"
                 >
 
-                    <select
-                        name="status"
-                        onchange="this.form.submit()"
-                        class="job-status status-{{ invoice.status | lower | replace(' ', '-') }}"
-                    >
+                    {% if can_change_status %}
 
-                        {% for status_option in statuses %}
+                        <select
+                            name="status"
+                            onchange="this.form.submit()"
+                            class="job-status status-{{ invoice.status | lower | replace(' ', '-') }}"
+                        >
 
-                            <option
-                                value="{{ status_option.value }}"
-                                {% if invoice.status == status_option.value %}
-                                    selected
-                                {% endif %}
-                            >
-                                {{ status_option.value }}
-                            </option>
+                            {% for status_option in statuses %}
 
-                        {% endfor %}
+                                <option
+                                    value="{{ status_option }}"
+                                    {% if invoice.status == status_option %}
+                                        selected
+                                    {% endif %}
+                                >
+                                    {{ status_option }}
+                                </option>
 
-                    </select>
+                            {% endfor %}
+
+                        </select>
+
+                    {% else %}
+
+                        <span
+                            class="job-status status-{{ invoice.status | lower | replace(' ', '-') }}"
+                            title="Táto faktúra je v konečnom stave a jej stav sa už nedá zmeniť."
+                        >
+                            {{ invoice.status }}
+                        </span>
+
+                    {% endif %}
+
+                    {% if is_overdue %}
+
+                        <span class="invoice-row-overdue" style="color: var(--danger);">
+                            · po splatnosti
+                        </span>
+
+                    {% endif %}
 
                 </form>
 
