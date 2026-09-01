@@ -32,6 +32,20 @@ class InvoiceStatus(str, Enum):
 
 
 # =========================================
+# STAV CENOVEJ PONUKY
+# =========================================
+
+class QuoteStatus(str, Enum):
+
+    DRAFT = "Návrh"
+    SENT = "Odoslaná"
+    ACCEPTED = "Akceptovaná"
+    REJECTED = "Zamietnutá"
+    CONVERTED = "Prevedená na faktúru"
+    EXPIRED = "Po platnosti"
+
+
+# =========================================
 # SLOVENSKÉ SADZBY DPH (platné od 1.1.2025)
 # =========================================
 
@@ -179,6 +193,54 @@ class InvoiceItemCreate(InvoiceItemBase):
 
 
 class InvoiceItemRead(InvoiceItemBase):
+
+    id: int
+
+    model_config = ConfigDict(
+        from_attributes=True
+    )
+
+
+# =========================================
+# QUOTE ITEM (rovnaká validácia ako InvoiceItem)
+# =========================================
+
+class QuoteItemBase(BaseModel):
+
+    description: str
+    quantity: Decimal = Field(
+        default=Decimal("1"),
+        gt=0,
+        max_digits=10,
+        decimal_places=2
+    )
+    unit: str = "ks"
+    unit_price: Decimal = Field(
+        ge=0,
+        max_digits=10,
+        decimal_places=2
+    )
+    vat_rate: int = 23
+
+    @field_validator("vat_rate")
+    @classmethod
+    def check_vat_rate(cls, value: int) -> int:
+
+        if value not in VAT_RATES:
+
+            raise ValueError(
+                f"Neplatná sadzba DPH: {value}. "
+                f"Povolené sú: {', '.join(str(r) for r in VAT_RATES)}"
+            )
+
+        return value
+
+
+class QuoteItemCreate(QuoteItemBase):
+    pass
+
+
+class QuoteItemRead(QuoteItemBase):
 
     id: int
 

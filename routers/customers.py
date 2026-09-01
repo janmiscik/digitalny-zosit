@@ -137,6 +137,12 @@ def customer_detail(
         reverse=True
     )
 
+    quotes = sorted(
+        customer.quotes,
+        key=lambda quote: quote.issue_date,
+        reverse=True
+    )
+
 
     # =====================================
     # HISTÓRIA - fakturované a neuhradené sumy
@@ -146,6 +152,7 @@ def customer_detail(
         invoice
         for invoice in invoices
         if invoice.status != InvoiceStatus.CANCELLED.value
+        and not invoice.is_proforma
     ]
 
     unpaid_invoices = [
@@ -184,6 +191,8 @@ def customer_detail(
             "jobs": jobs,
 
             "invoices": invoices,
+
+            "quotes": quotes,
 
             "total_invoiced": total_invoiced,
 

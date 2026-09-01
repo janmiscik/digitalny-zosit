@@ -443,6 +443,121 @@
 
 
         <!-- =====================================
+             CENOVÉ PONUKY
+             ===================================== -->
+
+
+        <div class="jobs-header">
+
+
+            <div>
+
+                <h2>
+                    Cenové ponuky
+                </h2>
+
+                <p>
+                    Ponuky vytvorené pre tohto zákazníka
+                </p>
+
+            </div>
+
+
+            <a
+                href="/customers/{{ customer.id }}/quotes/new"
+                class="new-customer-button"
+            >
+                + Nová ponuka
+            </a>
+
+
+        </div>
+
+
+        <section class="jobs">
+
+
+            {% if quotes %}
+
+
+                {% for quote in quotes %}
+
+
+                    <a
+                        href="/quotes/{{ quote.id }}"
+                        class="job-card customer-job-card"
+                        style="text-decoration: none; color: inherit; display: flex;"
+                    >
+
+
+                        <div class="job-info">
+
+
+                            <div class="customer-job-title-row">
+
+                                <h3>
+                                    Ponuka č. {{ quote.quote_number }}
+                                </h3>
+
+                            </div>
+
+
+                            <p>
+                                Vystavená {{ quote.issue_date.strftime("%d.%m.%Y") }}
+
+                                {% if quote.valid_until %}
+                                    · platná do {{ quote.valid_until.strftime("%d.%m.%Y") }}
+                                {% endif %}
+                            </p>
+
+
+                        </div>
+
+
+                        <div class="job-actions">
+
+                            <span
+                                class="job-status status-{{ quote.status | lower | replace(' ', '-') }}"
+                            >
+                                {{ quote.status }}
+                            </span>
+
+                        </div>
+
+
+                    </a>
+
+
+                {% endfor %}
+
+
+            {% else %}
+
+
+                <div class="empty-state">
+
+                    <div class="empty-icon">
+                        📋
+                    </div>
+
+                    <h2>
+                        Zatiaľ žiadne ponuky
+                    </h2>
+
+                    <p>
+                        Vytvorte prvú cenovú ponuku pre tohto zákazníka.
+                    </p>
+
+                </div>
+
+
+            {% endif %}
+
+
+        </section>
+
+
+        <!-- =====================================
              FAKTÚRY
              ===================================== -->
 

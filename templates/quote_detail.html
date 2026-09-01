@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="sk">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        Ponuka č. {{ quote.quote_number }} - Digitálny zošit
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', path='style.css') }}"
+    >
+
+    <style>
+
+        .invoice-view-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 12px 0 20px 0;
+        }
+
+        .invoice-view-table th {
+            text-align: left;
+            font-size: 12px;
+            color: var(--text-muted);
+            padding: 8px 6px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .invoice-view-table td {
+            padding: 8px 6px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .invoice-view-table th:not(:first-child),
+        .invoice-view-table td:not(:first-child) {
+            text-align: right;
+        }
+
+        .invoice-total-line {
+            display: flex;
+            justify-content: flex-end;
+            gap: 24px;
+            font-family: var(--font-mono);
+            font-size: 22px;
+            font-weight: 600;
+            margin-top: 8px;
+        }
+
+        .invoice-meta-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .invoice-meta-grid div span {
+            display: block;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .invoice-actions-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .convert-box {
+            background: var(--surface-secondary);
+            border: 1.5px dashed var(--border);
+            border-radius: 10px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
+        }
+
+        .convert-box h3 {
+            margin: 0 0 8px 0;
+            font-size: 15px;
+        }
+
+        .convert-box p {
+            margin: 0 0 12px 0;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .convert-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+
+<header class="topbar">
+
+    <div class="logo">
+        📒 Digitálny zošit
+    </div>
+
+
+    <div class="topbar-actions">
+
+        <button
+            type="button"
+            class="theme-button"
+            id="themeButton"
+            onclick="toggleTheme()"
+            title="Prepnúť tému"
+        >
+            🌙
+        </button>
+
+
+        <a
+            href="/customers/{{ quote.customer_id }}"
+            class="back-button"
+        >
+            ← Späť k zákazníkovi
+        </a>
+
+    </div>
+
+</header>
+
+
+<main class="container">
+
+
+    <section class="edit-customer-page">
+
+
+        <div class="page-header">
+
+            <h1>
+                Ponuka č. {{ quote.quote_number }}
+            </h1>
+
+            <p>
+                {{ quote.customer.name }}
+            </p>
+
+        </div>
+
+
+        <div class="edit-customer-card">
+
+
+            <div class="invoice-actions-row">
+
+                {% if quote.status == "Návrh" %}
+
+                    <a
+                        href="/quotes/{{ quote.id }}/edit"
+                        class="edit-job-button"
+                    >
+                        ✏️ Upraviť
+                    </a>
+
+
+                    <form
+                        action="/quotes/{{ quote.id }}/delete"
+                        method="post"
+                        onsubmit="return confirm('Naozaj chceš zmazať túto ponuku? Táto akcia sa nedá vrátiť späť.');"
+                        style="display: inline;"
+                    >
+                        <button
+                            type="submit"
+                            class="edit-job-button"
+                            style="color: var(--danger); border-color: var(--danger);"
+                        >
+                            🗑️ Zmazať
+                        </button>
+                    </form>
+
+                {% endif %}
+
+
+                <a
+                    href="/quotes/{{ quote.id }}/pdf"
+                    class="save-button"
+                    target="_blank"
+                >
+                    📄 Stiahnuť PDF
+                </a>
+
+
+                <form
+                    action="/quotes/{{ quote.id }}/status"
+                    method="post"
+                    style="display: inline-flex; align-items: center; gap: 8px;"
+                >
+
+                    {% if can_change_status %}
+
+                        <select
+                            name="status"
+                            onchange="this.form.submit()"
+                            class="job-status status-{{ quote.status | lower | replace(' ', '-') }}"
+                        >
+
+                            {% for status_option in statuses %}
+
+                                <option
+                                    value="{{ status_option }}"
+                                    {% if quote.status == status_option %}
+                                        selected
+                                    {% endif %}
+                                >
+                                    {{ status_option }}
+                                </option>
+
+                            {% endfor %}
+
+                        </select>
+
+                    {% else %}
+
+                        <span
+                            class="job-status status-{{ quote.status | lower | replace(' ', '-') }}"
+                        >
+                            {{ quote.status }}
+                        </span>
+
+                    {% endif %}
+
+                    {% if is_expired %}
+
+                        <span class="invoice-row-overdue" style="color: var(--danger);">
+                            · po platnosti
+                        </span>
+
+                    {% endif %}
+
+                </form>
+
+
+                {% if quote.job %}
+
+                    <a
+                        href="/jobs/{{ quote.job.id }}/edit"
+                        class="edit-job-button"
+                    >
+                        Súvisiaca zákazka: {{ quote.job.title }}
+                    </a>
+
+                {% endif %}
+
+            </div>
+
+
+            {% if can_convert_to_invoice %}
+
+                <div class="convert-box">
+
+                    <h3>Ponuka je akceptovaná — vygeneruj faktúru</h3>
+
+                    <p>
+                        Jedným klikom vytvoríš novú faktúru s rovnakými
+                        položkami ako táto ponuka. Ostrá faktúra dostane
+                        nasledujúce číslo z fakturačnej rady, zálohová
+                        (proforma) má vlastný číselný rad a nepočíta sa
+                        do tržieb.
+                    </p>
+
+                    <div class="convert-buttons">
+
+                        <form action="/quotes/{{ quote.id }}/convert-to-invoice" method="post">
+                            <button type="submit" class="save-button">
+                                🧾 Vygenerovať ostrú faktúru
+                            </button>
+                        </form>
+
+                        <form action="/quotes/{{ quote.id }}/convert-to-invoice" method="post">
+                            <input type="hidden" name="is_proforma" value="on">
+                            <button type="submit" class="edit-job-button">
+                                📄 Vygenerovať zálohovú faktúru
+                            </button>
+                        </form>
+
+                    </div>
+
+                </div>
+
+            {% endif %}
+
+
+            <div class="invoice-meta-grid">
+
+                <div>
+                    <span>Dátum vystavenia</span>
+                    {{ quote.issue_date.strftime("%d.%m.%Y") }}
+                </div>
+
+                <div>
+                    <span>Platná do</span>
+                    {{ quote.valid_until.strftime("%d.%m.%Y") if quote.valid_until else "neobmedzene" }}
+                </div>
+
+            </div>
+
+
+            <table class="invoice-view-table">
+
+                <thead>
+
+                    <tr>
+
+                        <th>Popis</th>
+                        <th>Množ.</th>
+                        <th>MJ</th>
+                        <th>Cena/MJ</th>
+                        <th>DPH</th>
+                        <th>Spolu</th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
+                    {% for item in quote.items %}
+
+                        <tr>
+
+                            <td>{{ item.description }}</td>
+                            <td>{{ item.quantity }}</td>
+                            <td>{{ item.unit }}</td>
+                            <td>{{ "%.2f"|format(item.unit_price) }} €</td>
+                            <td>{{ item.vat_rate }} %</td>
+                            <td>{{ "%.2f"|format(item.quantity * item.unit_price) }} €</td>
+
+                        </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+
+            <div style="max-width: 400px; margin-left: auto;">
+
+                {% for row in totals.vat_breakdown %}
+
+                    <div style="display: flex; justify-content: space-between; font-size: 14px; color: var(--text-secondary); margin-bottom: 4px;">
+
+                        <span>DPH {{ row.rate }} % (základ {{ "%.2f"|format(row.base) }} €)</span>
+                        <span>{{ "%.2f"|format(row.vat) }} €</span>
+
+                    </div>
+
+                {% endfor %}
+
+            </div>
+
+
+            <div class="invoice-total-line">
+                Celkom: {{ "%.2f"|format(totals.total_gross) }} €
+            </div>
+
+
+            {% if quote.note %}
+
+                <div style="margin-top: 24px;">
+
+                    <label>Poznámka</label>
+                    <p>{{ quote.note }}</p>
+
+                </div>
+
+            {% endif %}
+
+
+        </div>
+
+
+    </section>
+
+
+</main>
+
+
+<script>
+
+function applyTheme(theme) {
+
+    document.documentElement.setAttribute(
+        "data-theme",
+        theme
+    );
+
+    const button =
+        document.getElementById("themeButton");
+
+    if (theme === "dark") {
+
+        button.textContent = "☀️";
+
+    } else {
+
+        button.textContent = "🌙";
+
+    }
+
+}
+
+
+function toggleTheme() {
+
+    const currentTheme =
+        document.documentElement.getAttribute(
+            "data-theme"
+        );
+
+    const newTheme =
+        currentTheme === "dark"
+            ? "light"
+            : "dark";
+
+    localStorage.setItem(
+        "digitalnyZositTheme",
+        newTheme
+    );
+
+    applyTheme(newTheme);
+
+}
+
+
+const savedTheme =
+    localStorage.getItem(
+        "digitalnyZositTheme"
+    );
+
+
+if (savedTheme === "dark") {
+
+    applyTheme("dark");
+
+} else {
+
+    applyTheme("light");
+
+}
+
+</script>
+
+
+</body>
+
+</html>

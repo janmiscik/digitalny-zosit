@@ -2,11 +2,12 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse, Response
-from pydantic import ValidationError
 from sqlalchemy.orm import Session, joinedload
 
 from auth import require_login_api, require_login_page
 from database import get_db
+from delivery_note_pdf import generate_delivery_note_pdf
+from form_utils import parse_items_from_form, parse_optional_date, parse_required_date
 from invoice_pdf import generate_invoice_pdf
 from invoice_utils import (
     allowed_next_invoice_statuses,
@@ -26,37 +27,6 @@ from templates_config import templates
 router = APIRouter()
 
 
-def parse_optional_date(raw_value: str) -> date | None:
-
-    if not raw_value:
-        return None
-
-    try:
-
-        return date.fromisoformat(raw_value)
-
-    except ValueError:
-
-        raise HTTPException(
-            status_code=400,
-            detail="Neplatný formát dátumu (očakávaný formát: RRRR-MM-DD)"
-        )
-
-
-def parse_required_date(raw_value: str, field_label: str) -> date:
-
-    parsed = parse_optional_date(raw_value)
-
-    if parsed is None:
-
-        raise HTTPException(
-            status_code=400,
-            detail=f"Pole '{field_label}' je povinné"
-        )
-
-    return parsed
-
-
 def validate_invoice_dates(issue_date: date, due_date: date) -> None:
     """
     Základná logická kontrola dátumov faktúry - splatnosť nemôže byť
@@ -74,59 +44,6 @@ def validate_invoice_dates(issue_date: date, due_date: date) -> None:
                 f"({due_date.isoformat()} < {issue_date.isoformat()})"
             )
         )
-
-
-def parse_items_from_form(form) -> list:
-    """
-    Zdieľaná logika parsovania riadkov položiek faktúry z formulára -
-    používa create_invoice aj update_invoice, aby sa nedublovala.
-    Vyhodí HTTPException 422, ak nie je zadaná ani jedna platná položka.
-    """
-
-    descriptions = form.getlist("description")
-    quantities = form.getlist("quantity")
-    units = form.getlist("unit")
-    unit_prices = form.getlist("unit_price")
-    vat_rates = form.getlist("vat_rate")
-
-
-    items_data = []
-
-    for i in range(len(descriptions)):
-
-        description = descriptions[i].strip()
-
-        if not description:
-            continue
-
-        try:
-
-            item = InvoiceItemCreate(
-                description=description,
-                quantity=quantities[i] or "1",
-                unit=units[i] or "ks",
-                unit_price=unit_prices[i] or "0",
-                vat_rate=int(vat_rates[i] or 23)
-            )
-
-        except (ValidationError, ValueError, IndexError) as exc:
-
-            raise HTTPException(
-                status_code=422,
-                detail=f"Neplatná položka faktúry: {exc}"
-            )
-
-        items_data.append(item)
-
-
-    if not items_data:
-
-        raise HTTPException(
-            status_code=422,
-            detail="Faktúra musí obsahovať aspoň jednu položku"
-        )
-
-    return items_data
 
 
 def require_draft_invoice(invoice) -> None:
@@ -371,7 +288,7 @@ async def create_invoice(
 
     form = await request.form()
 
-    items_data = parse_items_from_form(form)
+    items_data = parse_items_from_form(form, InvoiceItemCreate, "Faktúra musí obsahovať aspoň jednu položku")
 
 
     job_id_raw = form.get("job_id", "")
@@ -692,7 +609,7 @@ async def update_invoice(
 
     form = await request.form()
 
-    items_data = parse_items_from_form(form)
+    items_data = parse_items_from_form(form, InvoiceItemCreate, "Faktúra musí obsahovať aspoň jednu položku")
 
 
     issue_date = parse_required_date(
@@ -883,6 +800,67 @@ def invoice_pdf(
 
         headers={
             "Content-Disposition": f'inline; filename="faktura-{invoice.invoice_number}.pdf"'
+        }
+
+    )
+
+
+# =========================================
+# DODACÍ LIST (z faktúry)
+# =========================================
+
+@router.get("/invoices/{invoice_id}/delivery-note")
+def invoice_delivery_note(
+
+    invoice_id: int,
+
+    db: Session = Depends(get_db),
+
+    user: str = Depends(require_login_page)
+
+):
+
+    invoice = (
+
+        db
+        .query(Invoice)
+        .options(
+            joinedload(Invoice.items),
+            joinedload(Invoice.customer)
+        )
+        .filter(
+            Invoice.id == invoice_id
+        )
+        .first()
+
+    )
+
+    if invoice is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Faktúra neexistuje"
+        )
+
+    company = get_or_create_company(db)
+
+    pdf_bytes = generate_delivery_note_pdf(
+        customer=invoice.customer,
+        items=invoice.items,
+        document_number=invoice.invoice_number,
+        document_label=f"Faktúra č. {invoice.invoice_number}",
+        issue_date=invoice.issue_date,
+        company=company
+    )
+
+    return Response(
+
+        content=pdf_bytes,
+
+        media_type="application/pdf",
+
+        headers={
+            "Content-Disposition": f'inline; filename="dodaci-list-{invoice.invoice_number}.pdf"'
         }
 
     )

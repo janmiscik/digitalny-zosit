@@ -94,6 +94,12 @@ class Customer(Base):
         cascade="all, delete-orphan"
     )
 
+    quotes = relationship(
+        "Quote",
+        back_populates="customer",
+        cascade="all, delete-orphan"
+    )
+
 
 class Job(Base):
 
@@ -146,6 +152,11 @@ class Job(Base):
 
     invoices = relationship(
         "Invoice",
+        back_populates="job"
+    )
+
+    quotes = relationship(
+        "Quote",
         back_populates="job"
     )
 
@@ -355,6 +366,24 @@ class Invoice(Base):
         default=False
     )
 
+    # Zálohová (proforma) faktúra nie je daňový doklad - nesmie čerpať
+    # čísla z ostrej fakturačnej rady (viď invoice_utils.next_invoice_number
+    # vs. next_proforma_number) a nesmie sa počítať do tržieb na dashboarde.
+    is_proforma = Column(
+        Boolean,
+        nullable=False,
+        default=False
+    )
+
+    # Ak faktúra vznikla jedným klikom z cenovej ponuky, appka si tu
+    # drží odkaz na pôvodnú ponuku (len pre dohľadateľnosť, nič sa tým
+    # nevynucuje).
+    quote_id = Column(
+        Integer,
+        ForeignKey("quotes.id"),
+        nullable=True
+    )
+
     note = Column(
         Text,
         nullable=True
@@ -426,5 +455,135 @@ class InvoiceItem(Base):
 
     invoice = relationship(
         "Invoice",
+        back_populates="items"
+    )
+
+
+# =========================================
+# CENOVÁ PONUKA
+#
+# Samostatný koncept od faktúry (nie len "faktúra s iným stavom") -
+# ponuka má úplne iný životný cyklus (Návrh -> Odoslaná -> Akceptovaná/
+# Zamietnutá -> Prevedená na faktúru) a vlastné číslovanie, ktoré sa
+# nesmie miešať s fakturačnou radou.
+# =========================================
+
+class Quote(Base):
+
+    __tablename__ = "quotes"
+
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True
+    )
+
+    quote_number = Column(
+        String,
+        nullable=False,
+        unique=True,
+        index=True
+    )
+
+    customer_id = Column(
+        Integer,
+        ForeignKey("customers.id"),
+        nullable=False
+    )
+
+    job_id = Column(
+        Integer,
+        ForeignKey("jobs.id"),
+        nullable=True
+    )
+
+    status = Column(
+        String,
+        nullable=False,
+        default="Návrh"
+    )
+
+    issue_date = Column(
+        Date,
+        nullable=False
+    )
+
+    valid_until = Column(
+        Date,
+        nullable=True
+    )
+
+    note = Column(
+        Text,
+        nullable=True
+    )
+
+
+    customer = relationship(
+        "Customer",
+        back_populates="quotes"
+    )
+
+    job = relationship(
+        "Job",
+        back_populates="quotes"
+    )
+
+    items = relationship(
+        "QuoteItem",
+        back_populates="quote",
+        cascade="all, delete-orphan"
+    )
+
+
+class QuoteItem(Base):
+
+    __tablename__ = "quote_items"
+
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True
+    )
+
+    quote_id = Column(
+        Integer,
+        ForeignKey("quotes.id"),
+        nullable=False
+    )
+
+    description = Column(
+        String,
+        nullable=False
+    )
+
+    quantity = Column(
+        Numeric(10, 2),
+        nullable=False,
+        default=1
+    )
+
+    unit = Column(
+        String,
+        nullable=False,
+        default="ks"
+    )
+
+    unit_price = Column(
+        Numeric(10, 2),
+        nullable=False
+    )
+
+    vat_rate = Column(
+        Integer,
+        nullable=False,
+        default=23
+    )
+
+
+    quote = relationship(
+        "Quote",
         back_populates="items"
     )

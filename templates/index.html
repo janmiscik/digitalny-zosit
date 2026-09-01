@@ -62,6 +62,13 @@
         </a>
 
         <a
+            href="/ponuky"
+            class="logout-button"
+        >
+            📋 Ponuky
+        </a>
+
+        <a
             href="/settings"
             class="logout-button"
             title="Fakturačné údaje firmy"
@@ -223,6 +230,41 @@
 
                     {% if overdue_invoices > 0 %}
                         · <span class="quick-link-warning">{{ overdue_invoices }} po splatnosti</span>
+                    {% endif %}
+                </p>
+
+            </div>
+
+            <div class="quick-link-arrow">
+                →
+            </div>
+
+        </a>
+
+
+        <a
+            href="/ponuky"
+            class="quick-link-card"
+        >
+
+            <div class="quick-link-icon">
+                📋
+            </div>
+
+            <div class="quick-link-info">
+
+                <h3>
+                    Cenové ponuky
+                </h3>
+
+                <p>
+                    {{ total_quotes }}
+                    {% if total_quotes == 1 %}
+                        ponuka
+                    {% elif total_quotes >= 2 and total_quotes <= 4 %}
+                        ponuky
+                    {% else %}
+                        ponúk
                     {% endif %}
                 </p>
 

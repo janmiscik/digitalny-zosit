@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="sk">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        Nová ponuka - {{ customer.name }} - Digitálny zošit
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', path='style.css') }}"
+    >
+
+    <style>
+
+        .invoice-items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 12px 0 20px 0;
+        }
+
+        .invoice-items-table th {
+            text-align: left;
+            font-size: 12px;
+            color: var(--text-muted);
+            padding: 6px 6px;
+            font-weight: 600;
+        }
+
+        .invoice-items-table td {
+            padding: 4px 6px;
+            vertical-align: top;
+        }
+
+        .invoice-items-table input,
+        .invoice-items-table select {
+            width: 100%;
+            margin: 0;
+        }
+
+        .invoice-item-description {
+            min-width: 180px;
+        }
+
+        .invoice-item-remove {
+            background: none;
+            border: none;
+            color: var(--danger);
+            font-size: 18px;
+            cursor: pointer;
+            padding: 4px 8px;
+        }
+
+        .add-item-button {
+            background: var(--surface-secondary);
+            border: 1px dashed var(--border);
+            border-radius: 9px;
+            padding: 10px 14px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text);
+            cursor: pointer;
+            width: 100%;
+        }
+
+        .invoice-form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .invoice-form-grid label {
+            margin-top: 0;
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+
+<header class="topbar">
+
+    <div class="logo">
+        📒 Digitálny zošit
+    </div>
+
+
+    <div class="topbar-actions">
+
+        <button
+            type="button"
+            class="theme-button"
+            id="themeButton"
+            onclick="toggleTheme()"
+            title="Prepnúť tému"
+        >
+            🌙
+        </button>
+
+
+        <a
+            href="/customers/{{ customer.id }}"
+            class="back-button"
+        >
+            ← Späť k zákazníkovi
+        </a>
+
+    </div>
+
+</header>
+
+
+<main class="container">
+
+
+    <section class="edit-customer-page">
+
+
+        <div class="page-header">
+
+            <h1>
+                {% if quote %}
+                    Upraviť ponuku č. {{ quote.quote_number }}
+                {% else %}
+                    Nová cenová ponuka
+                {% endif %}
+            </h1>
+
+            <p>
+                Zákazník: {{ customer.name }}
+                {% if job %}
+                    · zákazka: {{ job.title }}
+                {% endif %}
+            </p>
+
+        </div>
+
+
+        <div class="edit-customer-card">
+
+
+            <form
+                action="{{ '/quotes/' ~ quote.id ~ '/edit' if quote else '/customers/' ~ customer.id ~ '/quotes' }}"
+                method="post"
+                id="quoteForm"
+            >
+
+
+                {% if job %}
+
+                    <input
+                        type="hidden"
+                        name="job_id"
+                        value="{{ job.id }}"
+                    >
+
+                {% endif %}
+
+
+                <div class="invoice-form-grid">
+
+
+                    <div>
+
+                        <label>
+                            Dátum vystavenia *
+                        </label>
+
+                        <input
+                            type="date"
+                            name="issue_date"
+                            value="{{ quote.issue_date.isoformat() if quote else today.isoformat() }}"
+                            required
+                        >
+
+                    </div>
+
+
+                    <div>
+
+                        <label>
+                            Platná do <span style="font-weight: 400; color: var(--text-muted);">(nepovinné)</span>
+                        </label>
+
+                        <input
+                            type="date"
+                            name="valid_until"
+                            value="{{ quote.valid_until.isoformat() if quote and quote.valid_until else '' }}"
+                        >
+
+                    </div>
+
+
+                </div>
+
+
+                <label>
+                    Položky ponuky *
+                </label>
+
+
+                <table
+                    class="invoice-items-table"
+                    id="itemsTable"
+                >
+
+                    <thead>
+
+                        <tr>
+
+                            <th>Popis</th>
+                            <th style="width: 70px;">Množ.</th>
+                            <th style="width: 70px;">MJ</th>
+                            <th style="width: 100px;">Cena/MJ (€)</th>
+                            <th style="width: 90px;">DPH</th>
+                            <th style="width: 30px;"></th>
+
+                        </tr>
+
+                    </thead>
+
+                    <tbody id="itemsBody">
+
+
+                        {% if quote and quote.items %}
+
+                            {% for existing_item in quote.items %}
+
+                                <tr class="invoice-item-row">
+
+                                    <td class="invoice-item-description">
+                                        <input
+                                            type="text"
+                                            name="description"
+                                            placeholder="Napr. Práca, materiál..."
+                                            value="{{ existing_item.description }}"
+                                            required
+                                        >
+                                    </td>
+
+                                    <td>
+                                        <input
+                                            type="number"
+                                            name="quantity"
+                                            value="{{ existing_item.quantity }}"
+                                            step="0.01"
+                                            min="0.01"
+                                            required
+                                        >
+                                    </td>
+
+                                    <td>
+                                        <input
+                                            type="text"
+                                            name="unit"
+                                            value="{{ existing_item.unit }}"
+                                        >
+                                    </td>
+
+                                    <td>
+                                        <input
+                                            type="number"
+                                            name="unit_price"
+                                            value="{{ existing_item.unit_price }}"
+                                            step="0.01"
+                                            min="0"
+                                            required
+                                        >
+                                    </td>
+
+                                    <td>
+
+                                        <select
+                                            name="vat_rate"
+                                            {% if not company_is_vat_payer %}disabled{% endif %}
+                                        >
+
+                                            {% if company_is_vat_payer %}
+
+                                                <option value="23" {% if existing_item.vat_rate == 23 %}selected{% endif %}>23 %</option>
+                                                <option value="19" {% if existing_item.vat_rate == 19 %}selected{% endif %}>19 %</option>
+                                                <option value="5" {% if existing_item.vat_rate == 5 %}selected{% endif %}>5 %</option>
+                                                <option value="0" {% if existing_item.vat_rate == 0 %}selected{% endif %}>0 %</option>
+
+                                            {% else %}
+
+                                                <option value="0" selected>0 % (neplatca DPH)</option>
+
+                                            {% endif %}
+
+                                        </select>
+
+                                        {% if not company_is_vat_payer %}
+                                            <input type="hidden" name="vat_rate" value="0">
+                                        {% endif %}
+
+                                    </td>
+
+                                    <td>
+                                        <button
+                                            type="button"
+                                            class="invoice-item-remove"
+                                            onclick="removeItemRow(this)"
+                                            title="Odstrániť položku"
+                                        >
+                                            ×
+                                        </button>
+                                    </td>
+
+                                </tr>
+
+                            {% endfor %}
+
+                        {% else %}
+
+                            <tr class="invoice-item-row">
+
+                                <td class="invoice-item-description">
+                                    <input
+                                        type="text"
+                                        name="description"
+                                        placeholder="Napr. Práca, materiál..."
+                                        required
+                                    >
+                                </td>
+
+                                <td>
+                                    <input
+                                        type="number"
+                                        name="quantity"
+                                        value="1"
+                                        step="0.01"
+                                        min="0.01"
+                                        required
+                                    >
+                                </td>
+
+                                <td>
+                                    <input
+                                        type="text"
+                                        name="unit"
+                                        value="ks"
+                                    >
+                                </td>
+
+                                <td>
+                                    <input
+                                        type="number"
+                                        name="unit_price"
+                                        value="0"
+                                        step="0.01"
+                                        min="0"
+                                        required
+                                    >
+                                </td>
+
+                                <td>
+
+                                    <select
+                                        name="vat_rate"
+                                        {% if not company_is_vat_payer %}disabled{% endif %}
+                                    >
+
+                                        {% if company_is_vat_payer %}
+
+                                            <option value="23" selected>23 %</option>
+                                            <option value="19">19 %</option>
+                                            <option value="5">5 %</option>
+                                            <option value="0">0 %</option>
+
+                                        {% else %}
+
+                                            <option value="0" selected>0 % (neplatca DPH)</option>
+
+                                        {% endif %}
+
+                                    </select>
+
+                                    {% if not company_is_vat_payer %}
+                                        <input type="hidden" name="vat_rate" value="0">
+                                    {% endif %}
+
+                                </td>
+
+                                <td>
+                                    <button
+                                        type="button"
+                                        class="invoice-item-remove"
+                                        onclick="removeItemRow(this)"
+                                        title="Odstrániť položku"
+                                    >
+                                        ×
+                                    </button>
+                                </td>
+
+                            </tr>
+
+                        {% endif %}
+
+
+                    </tbody>
+
+                </table>
+
+
+                <button
+                    type="button"
+                    class="add-item-button"
+                    onclick="addItemRow()"
+                >
+                    + Pridať položku
+                </button>
+
+
+                <label style="margin-top: 20px;">
+                    Poznámka
+                </label>
+
+                <textarea
+                    name="note"
+                    rows="3"
+                    placeholder="Nepovinná poznámka na ponuke"
+                >{{ quote.note or '' if quote else '' }}</textarea>
+
+
+                <div class="form-buttons">
+
+                    <a
+                        href="{{ '/quotes/' ~ quote.id if quote else '/customers/' ~ customer.id }}"
+                        class="cancel-button edit-cancel-link"
+                    >
+                        Zrušiť
+                    </a>
+
+                    <button
+                        type="submit"
+                        class="save-button"
+                    >
+                        {% if quote %}
+                            Uložiť zmeny
+                        {% else %}
+                            Vytvoriť ponuku
+                        {% endif %}
+                    </button>
+
+                </div>
+
+
+            </form>
+
+
+        </div>
+
+
+    </section>
+
+
+</main>
+
+
+<template id="itemRowTemplate">
+
+    <tr class="invoice-item-row">
+
+        <td class="invoice-item-description">
+            <input
+                type="text"
+                name="description"
+                placeholder="Napr. Práca, materiál..."
+                required
+            >
+        </td>
+
+        <td>
+            <input
+                type="number"
+                name="quantity"
+                value="1"
+                step="0.01"
+                min="0.01"
+                required
+            >
+        </td>
+
+        <td>
+            <input
+                type="text"
+                name="unit"
+                value="ks"
+            >
+        </td>
+
+        <td>
+            <input
+                type="number"
+                name="unit_price"
+                value="0"
+                step="0.01"
+                min="0"
+                required
+            >
+        </td>
+
+        <td>
+
+            <select
+                name="vat_rate"
+                {% if not company_is_vat_payer %}disabled{% endif %}
+            >
+
+                {% if company_is_vat_payer %}
+
+                    <option value="23" selected>23 %</option>
+                    <option value="19">19 %</option>
+                    <option value="5">5 %</option>
+                    <option value="0">0 %</option>
+
+                {% else %}
+
+                    <option value="0" selected>0 % (neplatca DPH)</option>
+
+                {% endif %}
+
+            </select>
+
+            {% if not company_is_vat_payer %}
+                <input type="hidden" name="vat_rate" value="0">
+            {% endif %}
+
+        </td>
+
+        <td>
+            <button
+                type="button"
+                class="invoice-item-remove"
+                onclick="removeItemRow(this)"
+                title="Odstrániť položku"
+            >
+                ×
+            </button>
+        </td>
+
+    </tr>
+
+</template>
+
+
+<script>
+
+/* =====================================
+   DYNAMICKÉ RIADKY POLOŽIEK
+   ===================================== */
+
+function addItemRow() {
+
+    const template =
+        document.getElementById("itemRowTemplate");
+
+    const clone =
+        template.content.cloneNode(true);
+
+    document
+        .getElementById("itemsBody")
+        .appendChild(clone);
+
+}
+
+
+function removeItemRow(button) {
+
+    const rows =
+        document.querySelectorAll(".invoice-item-row");
+
+    if (rows.length <= 1) {
+        return;
+    }
+
+    button
+        .closest("tr")
+        .remove();
+
+}
+
+
+/* =====================================
+   TÉMA
+   ===================================== */
+
+
+function applyTheme(theme) {
+
+    document.documentElement.setAttribute(
+        "data-theme",
+        theme
+    );
+
+    const button =
+        document.getElementById("themeButton");
+
+    if (theme === "dark") {
+
+        button.textContent = "☀️";
+
+    } else {
+
+        button.textContent = "🌙";
+
+    }
+
+}
+
+
+function toggleTheme() {
+
+    const currentTheme =
+        document.documentElement.getAttribute(
+            "data-theme"
+        );
+
+    const newTheme =
+        currentTheme === "dark"
+            ? "light"
+            : "dark";
+
+    localStorage.setItem(
+        "digitalnyZositTheme",
+        newTheme
+    );
+
+    applyTheme(newTheme);
+
+}
+
+
+const savedTheme =
+    localStorage.getItem(
+        "digitalnyZositTheme"
+    );
+
+
+if (savedTheme === "dark") {
+
+    applyTheme("dark");
+
+} else {
+
+    applyTheme("light");
+
+}
+
+</script>
+
+
+</body>
+
+</html>

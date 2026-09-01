@@ -4,27 +4,26 @@ from decimal import ROUND_HALF_UP, Decimal
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from models import Invoice
-from schemas import InvoiceStatus
+from models import Invoice, Quote
+from schemas import InvoiceStatus, QuoteStatus
 
 
-def next_invoice_number(db: Session, year: int) -> str:
+def _next_sequential_number(db: Session, column, prefix: str) -> str:
     """
-    Vygeneruje ďalšie číslo faktúry pre daný rok vo formáte RRRRPPP
-    (napr. 2026001, 2026002, ...). Číslovanie je nezávislé pre každý rok.
+    Spoločná logika číslovania pre faktúry, ponuky aj zálohové faktúry -
+    nájde najväčšie existujúce číslo so zadaným prefixom a vráti ďalšie
+    v poradí, vo formáte {prefix}{poradie:03d}.
     """
-
-    prefix = str(year)
 
     latest = (
 
         db
-        .query(Invoice.invoice_number)
+        .query(column)
         .filter(
-            Invoice.invoice_number.like(f"{prefix}%")
+            column.like(f"{prefix}%")
         )
         .order_by(
-            Invoice.invoice_number.desc()
+            column.desc()
         )
         .first()
 
@@ -51,6 +50,35 @@ def next_invoice_number(db: Session, year: int) -> str:
 
 
     return f"{prefix}{next_sequence:03d}"
+
+
+def next_invoice_number(db: Session, year: int) -> str:
+    """
+    Vygeneruje ďalšie číslo faktúry pre daný rok vo formáte RRRRPPP
+    (napr. 2026001, 2026002, ...). Číslovanie je nezávislé pre každý rok.
+    """
+
+    return _next_sequential_number(db, Invoice.invoice_number, str(year))
+
+
+def next_proforma_number(db: Session, year: int) -> str:
+    """
+    Vygeneruje ďalšie číslo zálohovej (proforma) faktúry vo formáte
+    ZFRRRRPPP (napr. ZF2026001). Zámerne VLASTNÝ číselný rad, oddelený
+    od ostrých faktúr - proforma nie je daňový doklad a nesmie "spotrebovať"
+    číslo z fakturačnej rady, ktorá musí byť súvislá.
+    """
+
+    return _next_sequential_number(db, Invoice.invoice_number, f"ZF{year}")
+
+
+def next_quote_number(db: Session, year: int) -> str:
+    """
+    Vygeneruje ďalšie číslo cenovej ponuky vo formáte CPRRRRPPP
+    (napr. CP2026001).
+    """
+
+    return _next_sequential_number(db, Quote.quote_number, f"CP{year}")
 
 
 def calculate_item_totals(quantity: Decimal, unit_price: Decimal, vat_rate: int) -> dict:
@@ -328,3 +356,74 @@ def validate_invoice_vat(
         return
 
     validate_vat_regime(company_is_vat_payer, item_vat_rates)
+
+
+# =========================================
+# CENOVÁ PONUKA - STAVY A PLATNOSŤ
+#
+# Rovnaký princíp ako pri faktúrach (Fáza 1): "Po platnosti" sa nikdy
+# neukladá ako skutočný stav, len sa počíta z valid_until. Prechody
+# medzi stavmi sú explicitne vymenované, nie "čokoľvek na čokoľvek".
+# =========================================
+
+def is_quote_expired(quote, today: date | None = None) -> bool:
+    """
+    Ponuka je "po platnosti" vtedy, keď má nastavený dátum platnosti,
+    ten je v minulosti, a ponuka ešte nebola nijako uzavretá (prijatá/
+    zamietnutá/prevedená na faktúru).
+    """
+
+    if today is None:
+        today = date.today()
+
+    if quote.valid_until is None:
+        return False
+
+    closed_statuses = (
+        QuoteStatus.ACCEPTED.value,
+        QuoteStatus.REJECTED.value,
+        QuoteStatus.CONVERTED.value,
+    )
+
+    return (
+        quote.valid_until < today
+        and quote.status not in closed_statuses
+    )
+
+
+ALLOWED_QUOTE_STATUS_TRANSITIONS: dict[str, set[str]] = {
+
+    QuoteStatus.DRAFT.value: {
+        QuoteStatus.SENT.value,
+        QuoteStatus.ACCEPTED.value,
+        QuoteStatus.REJECTED.value,
+    },
+
+    QuoteStatus.SENT.value: {
+        QuoteStatus.ACCEPTED.value,
+        QuoteStatus.REJECTED.value,
+    },
+
+    QuoteStatus.ACCEPTED.value: {
+        QuoteStatus.CONVERTED.value,
+        QuoteStatus.REJECTED.value,
+    },
+
+    QuoteStatus.REJECTED.value: set(),
+
+    QuoteStatus.CONVERTED.value: set(),
+
+}
+
+
+def allowed_next_quote_statuses(current_status: str) -> set[str]:
+
+    return ALLOWED_QUOTE_STATUS_TRANSITIONS.get(current_status, set())
+
+
+def is_valid_quote_status_transition(current_status: str, new_status: str) -> bool:
+
+    if new_status == current_status:
+        return True
+
+    return new_status in allowed_next_quote_statuses(current_status)

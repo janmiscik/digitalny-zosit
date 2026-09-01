@@ -15,13 +15,14 @@ from auth import require_login_page
 from database import Base, engine, get_db
 from invoice_utils import CLOSED_INVOICE_STATUSES, calculate_invoice_totals
 
-from models import Customer, Invoice, Job
+from models import Customer, Invoice, Job, Quote
 
 from routers.auth import router as auth_router
 from routers.company import router as company_router
 from routers.customers import router as customers_router
 from routers.invoices import router as invoices_router
 from routers.jobs import router as jobs_router
+from routers.quotes import router as quotes_router
 
 from templates_config import templates
 
@@ -181,6 +182,10 @@ app.include_router(
 )
 
 app.include_router(
+    quotes_router
+)
+
+app.include_router(
     company_router
 )
 
@@ -230,12 +235,15 @@ def home(
 
     total_invoices = db.query(func.count(Invoice.id)).scalar()
 
+    total_quotes = db.query(func.count(Quote.id)).scalar()
+
     overdue_invoices = (
         db
         .query(func.count(Invoice.id))
         .filter(
             Invoice.due_date < today,
-            Invoice.status.notin_(CLOSED_INVOICE_STATUSES)
+            Invoice.status.notin_(CLOSED_INVOICE_STATUSES),
+            Invoice.is_proforma.is_(False)
         )
         .scalar()
     )
@@ -256,7 +264,8 @@ def home(
         .query(Invoice)
         .options(joinedload(Invoice.items))
         .filter(
-            Invoice.status.notin_(CLOSED_INVOICE_STATUSES)
+            Invoice.status.notin_(CLOSED_INVOICE_STATUSES),
+            Invoice.is_proforma.is_(False)
         )
         .all()
     )
@@ -279,7 +288,8 @@ def home(
         .filter(
             Invoice.status == "Uhradená",
             Invoice.issue_date >= month_start,
-            Invoice.issue_date <= today
+            Invoice.issue_date <= today,
+            Invoice.is_proforma.is_(False)
         )
         .all()
     )
@@ -302,7 +312,8 @@ def home(
         .filter(
             Invoice.status == "Uhradená",
             Invoice.issue_date >= year_start,
-            Invoice.issue_date <= today
+            Invoice.issue_date <= today,
+            Invoice.is_proforma.is_(False)
         )
         .all()
     )
@@ -398,6 +409,8 @@ def home(
             "total_customers": total_customers,
 
             "total_invoices": total_invoices,
+
+            "total_quotes": total_quotes,
 
             "overdue_invoices": overdue_invoices,
 
