@@ -13,9 +13,10 @@ from sqlalchemy.orm import Session, joinedload
 
 from auth import require_login_page
 from database import Base, engine, get_db
-from invoice_utils import CLOSED_INVOICE_STATUSES, calculate_invoice_totals
+from invoice_utils import CLOSED_INVOICE_STATUSES, calculate_invoice_totals, is_invoice_overdue
 
 from models import Customer, Invoice, Job, Quote
+from schemas import InvoiceStatus
 
 from routers.auth import router as auth_router
 from routers.company import router as company_router
@@ -252,28 +253,47 @@ def home(
     # =====================================
     # FINANCIE
     #
+    # "Na inkaso" = faktúry v stave Odoslaná (Návrh sa nepočíta - ešte
+    # nemusí byť reálne vystavená zákazníkovi; Uhradená/Stornovaná sú už
+    # uzavreté). "Po splatnosti" je podmnožina tohto istého zoznamu,
+    # kde už uplynul dátum splatnosti - viď invoice_utils.is_invoice_overdue.
+    #
     # Súčty sa počítajú v Pythone (nie priamo v SQL), aby sme použili
     # tú istú, už otestovanú Decimal-presnú logiku (calculate_invoice_totals)
     # ako všade inde v appke. Dotazy sú ale zámerne ohraničené (len
-    # neuhradené / len tento mesiac / len tento rok), nie celá tabuľka -
+    # odoslané / len tento mesiac / len tento rok), nie celá tabuľka -
     # v duchu rovnakej výkonovej opravy ako vyššie.
     # =====================================
 
-    unpaid_invoices = (
+    collection_invoices = (
         db
         .query(Invoice)
         .options(joinedload(Invoice.items))
         .filter(
-            Invoice.status.notin_(CLOSED_INVOICE_STATUSES),
+            Invoice.status == InvoiceStatus.SENT.value,
             Invoice.is_proforma.is_(False)
         )
         .all()
     )
 
-    unpaid_total = sum(
+    collection_total = sum(
         (
             calculate_invoice_totals(invoice.items)["total_gross"]
-            for invoice in unpaid_invoices
+            for invoice in collection_invoices
+        ),
+        Decimal("0")
+    )
+
+    overdue_collection_invoices = [
+        invoice
+        for invoice in collection_invoices
+        if is_invoice_overdue(invoice, today)
+    ]
+
+    overdue_total = sum(
+        (
+            calculate_invoice_totals(invoice.items)["total_gross"]
+            for invoice in overdue_collection_invoices
         ),
         Decimal("0")
     )
@@ -414,9 +434,13 @@ def home(
 
             "overdue_invoices": overdue_invoices,
 
-            "unpaid_total": unpaid_total,
+            "collection_total": collection_total,
 
-            "unpaid_count": len(unpaid_invoices),
+            "collection_count": len(collection_invoices),
+
+            "overdue_total": overdue_total,
+
+            "overdue_count": len(overdue_collection_invoices),
 
             "revenue_this_month": revenue_this_month,
 

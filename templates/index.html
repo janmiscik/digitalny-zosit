@@ -291,23 +291,50 @@
 
         <div class="finance-cards">
 
-            <div class="finance-card {% if unpaid_count > 0 %}finance-card-warning{% endif %}">
+            <a
+                href="/faktury?status=Odoslaná"
+                class="finance-card {% if collection_count > 0 %}finance-card-warning{% endif %}"
+                style="text-decoration: none; color: inherit; display: block;"
+            >
 
                 <div class="finance-number">
-                    {{ "%.2f"|format(unpaid_total) }} €
+                    {{ "%.2f"|format(collection_total) }} €
                 </div>
 
                 <div class="finance-label">
 
-                    {% if unpaid_count == 1 %}
-                        Neuhradená 1 faktúra
+                    {% if collection_count == 1 %}
+                        Na inkaso · 1 faktúra
                     {% else %}
-                        Neuhradené faktúry ({{ unpaid_count }})
+                        Na inkaso · {{ collection_count }} faktúr
                     {% endif %}
 
                 </div>
 
-            </div>
+            </a>
+
+
+            <a
+                href="/faktury?status=Po splatnosti"
+                class="finance-card {% if overdue_count > 0 %}finance-card-warning{% endif %}"
+                style="text-decoration: none; color: inherit; display: block;"
+            >
+
+                <div class="finance-number">
+                    {{ "%.2f"|format(overdue_total) }} €
+                </div>
+
+                <div class="finance-label">
+
+                    {% if overdue_count == 1 %}
+                        Po splatnosti · 1 faktúra
+                    {% else %}
+                        Po splatnosti · {{ overdue_count }} faktúr
+                    {% endif %}
+
+                </div>
+
+            </a>
 
 
             <div class="finance-card">
@@ -317,7 +344,7 @@
                 </div>
 
                 <div class="finance-label">
-                    Tržba tento mesiac
+                    Uhradené tento mesiac
                 </div>
 
             </div>

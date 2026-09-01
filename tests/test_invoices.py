@@ -2061,7 +2061,7 @@ def test_delete_invoice_not_found():
 # FINANCIE - DASHBOARD
 # =========================================
 
-def test_dashboard_shows_unpaid_total():
+def test_dashboard_shows_on_collection_total():
 
     db = TestingSessionLocal()
 
@@ -2075,7 +2075,41 @@ def test_dashboard_shows_unpaid_total():
     assert response.status_code == 200
     # 3 * 15.50 = 46.50 základ, +19% DPH = 55.335 -> 55.34 zaokrúhlené
     assert "55.34" in response.text
-    assert "Neuhradená 1 faktúra" in response.text
+    assert "Na inkaso · 1 faktúra" in response.text
+
+
+def test_dashboard_excludes_draft_from_on_collection():
+    """Faktúra v stave Návrh sa do 'Na inkaso' nemá počítať - ešte
+    nemusí byť reálne vystavená zákazníkovi."""
+
+    db = TestingSessionLocal()
+
+    invoice = create_sample_invoice(db)
+    invoice.status = "Návrh"
+    db.commit()
+    db.close()
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "Na inkaso · 1 faktúra" not in response.text
+    assert "Na inkaso · 0 faktúr" in response.text
+
+
+def test_dashboard_shows_overdue_collection_total():
+
+    db = TestingSessionLocal()
+
+    invoice = create_sample_invoice(db)
+    invoice.status = "Odoslaná"
+    invoice.due_date = date.today() - timedelta(days=5)
+    db.commit()
+    db.close()
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "Po splatnosti · 1 faktúra" in response.text
 
 
 def test_dashboard_shows_revenue_this_month():
@@ -2091,11 +2125,11 @@ def test_dashboard_shows_revenue_this_month():
     response = client.get("/")
 
     assert response.status_code == 200
-    assert "Tržba tento mesiac" in response.text
+    assert "Uhradené tento mesiac" in response.text
     assert "55.34" in response.text
 
 
-def test_dashboard_excludes_cancelled_from_unpaid():
+def test_dashboard_excludes_cancelled_from_on_collection():
 
     db = TestingSessionLocal()
 
@@ -2107,8 +2141,8 @@ def test_dashboard_excludes_cancelled_from_unpaid():
     response = client.get("/")
 
     assert response.status_code == 200
-    # Stornovaná faktúra sa nesmie počítať ako neuhradená
-    assert "Neuhradená 1 faktúra" not in response.text
+    # Stornovaná faktúra sa nesmie počítať ako "na inkaso"
+    assert "Na inkaso · 1 faktúra" not in response.text
 
 
 def test_dashboard_shows_overdue_jobs_count():
