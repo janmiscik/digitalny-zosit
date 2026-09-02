@@ -217,6 +217,176 @@
         </div>
 
 
+        <!-- =====================================
+             NÁKLADY A REÁLNY ZISK
+             ===================================== -->
+
+        <div class="edit-customer-card">
+
+            <h2 style="margin-top: 0;">
+                Náklady a zisk
+            </h2>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 20px;">
+
+                <div class="finance-card" style="margin: 0;">
+                    <div class="finance-number">{{ "%.2f"|format(invoiced_total) }} €</div>
+                    <div class="finance-label">Fakturovaná suma</div>
+                </div>
+
+                <div class="finance-card" style="margin: 0;">
+                    <div class="finance-number">{{ "%.2f"|format(total_costs) }} €</div>
+                    <div class="finance-label">Náklady spolu</div>
+                </div>
+
+                <div class="finance-card {% if profit < 0 %}finance-card-warning{% endif %}" style="margin: 0;">
+                    <div class="finance-number">{{ "%.2f"|format(profit) }} €</div>
+                    <div class="finance-label">Čistý zisk</div>
+                </div>
+
+            </div>
+
+            <p style="font-size: 0.85em; color: var(--text-muted); margin: -12px 0 20px 0;">
+                Fakturovaná suma = súčet odoslaných/uhradených faktúr k tejto zákazke
+                (bez návrhov, stornovaných a zálohových). Zisk = fakturovaná suma − náklady.
+            </p>
+
+
+            {% if job.costs %}
+
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px;">
+
+                    <thead>
+                        <tr style="text-align: left; font-size: 12px; color: var(--text-muted);">
+                            <th style="padding: 6px;">Popis</th>
+                            <th style="padding: 6px;">Dátum</th>
+                            <th style="padding: 6px; text-align: right;">Suma</th>
+                            <th style="padding: 6px; width: 30px;"></th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        {% for cost in job.costs %}
+
+                            <tr style="border-top: 1px solid var(--border);">
+                                <td style="padding: 8px 6px;">{{ cost.description }}</td>
+                                <td style="padding: 8px 6px;">{{ cost.cost_date.strftime("%d.%m.%Y") }}</td>
+                                <td style="padding: 8px 6px; text-align: right;">{{ "%.2f"|format(cost.amount) }} €</td>
+                                <td style="padding: 8px 6px;">
+                                    <form action="/jobs/{{ job.id }}/costs/{{ cost.id }}/delete" method="post" onsubmit="return confirm('Zmazať tento náklad?');">
+                                        <button type="submit" class="invoice-item-remove" title="Zmazať">×</button>
+                                    </form>
+                                </td>
+                            </tr>
+
+                        {% endfor %}
+
+                    </tbody>
+
+                </table>
+
+            {% endif %}
+
+
+            <form action="/jobs/{{ job.id }}/costs" method="post" style="display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap;">
+
+                <div style="flex: 2; min-width: 160px;">
+                    <label>Popis nákladu</label>
+                    <input type="text" name="description" placeholder="Napr. materiál, subdodávka" required>
+                </div>
+
+                <div style="flex: 1; min-width: 100px;">
+                    <label>Suma (€)</label>
+                    <input type="number" name="amount" step="0.01" min="0" required>
+                </div>
+
+                <div style="flex: 1; min-width: 130px;">
+                    <label>Dátum</label>
+                    <input type="date" name="cost_date" value="{{ today.isoformat() if today else '' }}">
+                </div>
+
+                <button type="submit" class="save-button" style="height: 42px;">
+                    + Pridať náklad
+                </button>
+
+            </form>
+
+        </div>
+
+
+        <!-- =====================================
+             FOTODOKUMENTÁCIA (PRED / PO)
+             ===================================== -->
+
+        <div class="edit-customer-card">
+
+            <h2 style="margin-top: 0;">
+                Fotodokumentácia
+            </h2>
+
+            <div style="display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 20px;">
+
+                <div style="flex: 1; min-width: 260px;">
+
+                    <h3 style="font-size: 14px; color: var(--text-muted); text-transform: uppercase;">Pred</h3>
+
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+
+                        {% for photo in job.photos if photo.photo_type == "pred" %}
+
+                            <div style="position: relative;">
+                                <img src="/jobs/photos/{{ photo.filename }}" style="width: 120px; height: 120px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border);">
+                                <form action="/jobs/{{ job.id }}/photos/{{ photo.id }}/delete" method="post" onsubmit="return confirm('Zmazať túto fotku?');" style="position: absolute; top: 4px; right: 4px;">
+                                    <button type="submit" style="background: rgba(0,0,0,0.6); color: white; border: none; border-radius: 50%; width: 22px; height: 22px; cursor: pointer;">×</button>
+                                </form>
+                            </div>
+
+                        {% endfor %}
+
+                    </div>
+
+                    <form action="/jobs/{{ job.id }}/photos" method="post" enctype="multipart/form-data" style="margin-top: 10px;">
+                        <input type="hidden" name="photo_type" value="pred">
+                        <input type="file" name="photo" accept="image/png,image/jpeg" required>
+                        <button type="submit" class="cancel-button" style="margin-top: 6px;">+ Nahrať fotku (pred)</button>
+                    </form>
+
+                </div>
+
+
+                <div style="flex: 1; min-width: 260px;">
+
+                    <h3 style="font-size: 14px; color: var(--text-muted); text-transform: uppercase;">Po</h3>
+
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+
+                        {% for photo in job.photos if photo.photo_type == "po" %}
+
+                            <div style="position: relative;">
+                                <img src="/jobs/photos/{{ photo.filename }}" style="width: 120px; height: 120px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border);">
+                                <form action="/jobs/{{ job.id }}/photos/{{ photo.id }}/delete" method="post" onsubmit="return confirm('Zmazať túto fotku?');" style="position: absolute; top: 4px; right: 4px;">
+                                    <button type="submit" style="background: rgba(0,0,0,0.6); color: white; border: none; border-radius: 50%; width: 22px; height: 22px; cursor: pointer;">×</button>
+                                </form>
+                            </div>
+
+                        {% endfor %}
+
+                    </div>
+
+                    <form action="/jobs/{{ job.id }}/photos" method="post" enctype="multipart/form-data" style="margin-top: 10px;">
+                        <input type="hidden" name="photo_type" value="po">
+                        <input type="file" name="photo" accept="image/png,image/jpeg" required>
+                        <button type="submit" class="cancel-button" style="margin-top: 6px;">+ Nahrať fotku (po)</button>
+                    </form>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
     </section>
 
 

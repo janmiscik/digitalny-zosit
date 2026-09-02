@@ -160,6 +160,107 @@ class Job(Base):
         back_populates="job"
     )
 
+    photos = relationship(
+        "JobPhoto",
+        back_populates="job",
+        cascade="all, delete-orphan"
+    )
+
+    costs = relationship(
+        "JobCost",
+        back_populates="job",
+        cascade="all, delete-orphan"
+    )
+
+
+# =========================================
+# FOTODOKUMENTÁCIA ZÁKAZKY (pred/po)
+# =========================================
+
+class JobPhoto(Base):
+
+    __tablename__ = "job_photos"
+
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True
+    )
+
+    job_id = Column(
+        Integer,
+        ForeignKey("jobs.id"),
+        nullable=False
+    )
+
+    filename = Column(
+        String,
+        nullable=False
+    )
+
+    # "pred" alebo "po" - len na zoradenie/popis, appka to nijako
+    # nevynucuje (remeselník môže nahrať fotky v ľubovoľnom poradí)
+    photo_type = Column(
+        String,
+        nullable=False,
+        default="pred"
+    )
+
+    uploaded_at = Column(
+        Date,
+        nullable=False
+    )
+
+
+    job = relationship(
+        "Job",
+        back_populates="photos"
+    )
+
+
+# =========================================
+# NÁKLADY NA ZÁKAZKU (materiál, subdodávky...)
+# =========================================
+
+class JobCost(Base):
+
+    __tablename__ = "job_costs"
+
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True
+    )
+
+    job_id = Column(
+        Integer,
+        ForeignKey("jobs.id"),
+        nullable=False
+    )
+
+    description = Column(
+        String,
+        nullable=False
+    )
+
+    amount = Column(
+        Numeric(10, 2),
+        nullable=False
+    )
+
+    cost_date = Column(
+        Date,
+        nullable=False
+    )
+
+
+    job = relationship(
+        "Job",
+        back_populates="costs"
+    )
+
 
 class Company(Base):
     """

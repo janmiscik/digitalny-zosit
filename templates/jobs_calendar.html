@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="sk">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        Kalendár zákaziek - Digitálny zošit
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', path='style.css') }}"
+    >
+
+    <style>
+
+        .calendar-nav {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .calendar-nav h2 {
+            margin: 0;
+        }
+
+        .calendar-grid {
+            display: flex;
+            flex-wrap: wrap;
+        }
+
+        .calendar-weekday {
+            width: 14.28%;
+            box-sizing: border-box;
+            text-align: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            padding: 6px 0;
+        }
+
+        .calendar-day {
+            width: 14.28%;
+            box-sizing: border-box;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            min-height: 100px;
+            padding: 6px;
+            margin: -1px 0 0 -1px;
+        }
+
+        .calendar-day.empty {
+            background: transparent;
+            border-color: transparent;
+        }
+
+        .calendar-day.today {
+            border-color: var(--accent);
+            border-width: 2px;
+        }
+
+        .calendar-day-number {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .calendar-job-chip {
+            display: block;
+            font-size: 11px;
+            padding: 3px 6px;
+            border-radius: 5px;
+            background: var(--surface-secondary);
+            color: var(--text);
+            text-decoration: none;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 3px;
+        }
+
+        .calendar-job-chip:hover {
+            background: var(--accent);
+            color: white;
+        }
+
+        .calendar-job-chip.overdue {
+            background: var(--danger);
+            color: white;
+        }
+
+        @media (max-width: 700px) {
+
+            .calendar-day {
+                min-height: 60px;
+                padding: 3px;
+            }
+
+            .calendar-job-chip {
+                font-size: 9px;
+            }
+
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+
+<header class="topbar">
+
+    <div class="logo">
+        📒 Digitálny zošit
+    </div>
+
+    <div class="topbar-actions">
+
+        <button
+            type="button"
+            class="theme-button"
+            id="themeButton"
+            onclick="toggleTheme()"
+        >
+            🌙
+        </button>
+
+        <a href="/zakazky" class="back-button">
+            ← Zákazky
+        </a>
+
+    </div>
+
+</header>
+
+
+<main class="container">
+
+
+    <section class="customers-section">
+
+
+        <div class="calendar-nav">
+
+            <a
+                href="/kalendar?year={{ prev_year }}&month={{ prev_month }}"
+                class="cancel-button"
+            >
+                ← Predošlý
+            </a>
+
+            <h2>
+                {{ month_name }} {{ year }}
+            </h2>
+
+            <a
+                href="/kalendar?year={{ next_year }}&month={{ next_month }}"
+                class="cancel-button"
+            >
+                Nasledujúci →
+            </a>
+
+        </div>
+
+
+        <div class="calendar-grid">
+
+            <div class="calendar-weekday">Po</div>
+            <div class="calendar-weekday">Ut</div>
+            <div class="calendar-weekday">St</div>
+            <div class="calendar-weekday">Št</div>
+            <div class="calendar-weekday">Pi</div>
+            <div class="calendar-weekday">So</div>
+            <div class="calendar-weekday">Ne</div>
+
+
+            {% for week in weeks %}
+
+                {% for day_number in week %}
+
+                    {% if day_number == 0 %}
+
+                        <div class="calendar-day empty"></div>
+
+                    {% else %}
+
+                        {% set is_today = (
+                            today.year == year
+                            and today.month == month
+                            and today.day == day_number
+                        ) %}
+
+                        <div class="calendar-day {% if is_today %}today{% endif %}">
+
+                            <div class="calendar-day-number">
+                                {{ day_number }}
+                            </div>
+
+                            {% for job in jobs_by_day.get(day_number, []) %}
+
+                                {% set is_overdue = (
+                                    job.due_date < today
+                                    and job.status != "Hotová"
+                                ) %}
+
+                                <a
+                                    href="/jobs/{{ job.id }}/edit"
+                                    class="calendar-job-chip {% if is_overdue %}overdue{% endif %}"
+                                    title="{{ job.title }} - {{ job.customer.name }}"
+                                >
+                                    {{ job.title }}
+                                </a>
+
+                            {% endfor %}
+
+                        </div>
+
+                    {% endif %}
+
+                {% endfor %}
+
+            {% endfor %}
+
+        </div>
+
+
+    </section>
+
+
+</main>
+
+
+<script>
+
+function applyTheme(theme) {
+
+    document.documentElement.setAttribute("data-theme", theme);
+
+    const button = document.getElementById("themeButton");
+
+    button.textContent = theme === "dark" ? "☀️" : "🌙";
+
+}
+
+
+function toggleTheme() {
+
+    const currentTheme = document.documentElement.getAttribute("data-theme");
+    const newTheme = currentTheme === "dark" ? "light" : "dark";
+
+    localStorage.setItem("digitalnyZositTheme", newTheme);
+    applyTheme(newTheme);
+
+}
+
+
+const savedTheme = localStorage.getItem("digitalnyZositTheme");
+
+applyTheme(savedTheme === "dark" ? "dark" : "light");
+
+</script>
+
+
+</body>
+
+</html>
