@@ -160,13 +160,60 @@
 
 
         <!-- =====================================
+             VYHĽADÁVANIE A FILTER PODĽA OBDOBIA
+             ===================================== -->
+
+        <form
+            method="get"
+            action="/faktury"
+            style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 16px;"
+        >
+
+            {% if selected_status %}
+                <input type="hidden" name="status" value="{{ selected_status }}">
+            {% endif %}
+
+            <div style="flex: 2; min-width: 200px;">
+                <label style="font-size: 12px; color: var(--text-muted);">Hľadať</label>
+                <input
+                    type="text"
+                    name="q"
+                    value="{{ search_query or '' }}"
+                    placeholder="Číslo faktúry, zákazník, poznámka..."
+                >
+            </div>
+
+            <div style="min-width: 140px;">
+                <label style="font-size: 12px; color: var(--text-muted);">Od</label>
+                <input type="date" name="date_from" value="{{ date_from }}">
+            </div>
+
+            <div style="min-width: 140px;">
+                <label style="font-size: 12px; color: var(--text-muted);">Do</label>
+                <input type="date" name="date_to" value="{{ date_to }}">
+            </div>
+
+            <button type="submit" class="save-button" style="height: 42px;">
+                Filtrovať
+            </button>
+
+            {% if search_query or date_from or date_to %}
+                <a href="/faktury{% if selected_status %}?status={{ selected_status }}{% endif %}" class="cancel-button" style="height: 42px; display: inline-flex; align-items: center;">
+                    Zrušiť filter
+                </a>
+            {% endif %}
+
+        </form>
+
+
+        <!-- =====================================
              FILTER PODĽA STAVU
              ===================================== -->
 
         <div class="invoice-filter-row">
 
             <a
-                href="/faktury"
+                href="/faktury?{% if search_query %}q={{ search_query }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}"
                 class="invoice-filter-chip {% if not selected_status %}active{% endif %}"
             >
                 Všetky
@@ -175,7 +222,7 @@
             {% for status_option in statuses %}
 
                 <a
-                    href="/faktury?status={{ status_option.value }}"
+                    href="/faktury?status={{ status_option.value }}{% if search_query %}&q={{ search_query }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}"
                     class="invoice-filter-chip {% if selected_status == status_option.value %}active{% endif %}"
                 >
                     {{ status_option.value }}
@@ -253,7 +300,11 @@
 
                 <h2>
 
-                    {% if selected_status %}
+                    {% if search_query %}
+
+                        Nič sa nenašlo pre "{{ search_query }}"
+
+                    {% elif selected_status %}
 
                         Žiadne faktúry v stave "{{ selected_status }}"
 

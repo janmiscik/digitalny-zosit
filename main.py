@@ -301,14 +301,20 @@ def home(
 
     month_start = today.replace(day=1)
 
+    # Tržby sa počítajú podľa DÁTUMU ÚHRADY, nie podľa dátumu vystavenia -
+    # presnejšie odráža, kedy peniaze reálne prišli. Ako poistku pre
+    # prípad, že by paid_date z nejakého dôvodu chýbal (nemalo by nastať,
+    # ale radšej nespadnúť), sa použije dátum vystavenia ako náhrada.
+    paid_date_expr = func.coalesce(Invoice.paid_date, Invoice.issue_date)
+
     paid_this_month = (
         db
         .query(Invoice)
         .options(joinedload(Invoice.items))
         .filter(
             Invoice.status == "Uhradená",
-            Invoice.issue_date >= month_start,
-            Invoice.issue_date <= today,
+            paid_date_expr >= month_start,
+            paid_date_expr <= today,
             Invoice.is_proforma.is_(False)
         )
         .all()
@@ -331,8 +337,8 @@ def home(
         .options(joinedload(Invoice.items))
         .filter(
             Invoice.status == "Uhradená",
-            Invoice.issue_date >= year_start,
-            Invoice.issue_date <= today,
+            paid_date_expr >= year_start,
+            paid_date_expr <= today,
             Invoice.is_proforma.is_(False)
         )
         .all()

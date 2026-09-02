@@ -430,6 +430,17 @@ class Invoice(Base):
         nullable=True
     )
 
+    # Dátum SKUTOČNEJ úhrady - odlišný od dátumu vystavenia! Vypĺňa sa
+    # automaticky pri prechode na "Uhradená" (dnešným dátumom), ale dá sa
+    # aj ručne opraviť (napr. platba prišla neskôr, než keď to niekto
+    # zaklikol v appke). Dashboard počíta tržby podľa tohto dátumu, nie
+    # podľa dátumu vystavenia - presnejšie odráža, kedy peniaze reálne
+    # prišli.
+    paid_date = Column(
+        Date,
+        nullable=True
+    )
+
     variable_symbol = Column(
         String,
         nullable=True

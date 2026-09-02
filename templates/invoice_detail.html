@@ -177,6 +177,20 @@
                 </a>
 
 
+                <form
+                    action="/invoices/{{ invoice.id }}/duplicate"
+                    method="post"
+                    style="display: inline;"
+                >
+                    <button
+                        type="submit"
+                        class="edit-job-button"
+                    >
+                        📑 Kopírovať
+                    </button>
+                </form>
+
+
                 <a
                     href="/invoices/{{ invoice.id }}/peppol-xml"
                     class="edit-job-button"
@@ -275,6 +289,29 @@
                     <span>Dátum splatnosti</span>
                     {{ invoice.due_date.strftime("%d.%m.%Y") }}
                 </div>
+
+                {% if invoice.status == "Uhradená" %}
+
+                    <div>
+                        <span>Dátum úhrady</span>
+
+                        <form
+                            action="/invoices/{{ invoice.id }}/paid-date"
+                            method="post"
+                            style="display: inline-flex; gap: 6px; align-items: center;"
+                        >
+                            <input
+                                type="date"
+                                name="paid_date"
+                                value="{{ invoice.paid_date.isoformat() if invoice.paid_date else '' }}"
+                                max="{{ today.isoformat() }}"
+                                onchange="this.form.submit()"
+                                style="padding: 2px 6px; font-size: 0.95em;"
+                            >
+                        </form>
+                    </div>
+
+                {% endif %}
 
                 <div>
                     <span>Variabilný symbol</span>

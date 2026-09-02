@@ -2607,3 +2607,416 @@ def test_pdf_shows_reverse_charge_notice_text():
 
     assert REVERSE_CHARGE_NOTICE in text
     assert "DPH spolu" not in text
+
+# =========================================
+# DÁTUM SKUTOČNEJ ÚHRADY
+# =========================================
+
+def test_paid_date_set_automatically_on_status_change():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.status = "Odoslaná"
+    invoice_id = invoice.id
+    db.commit()
+    db.close()
+
+    response = post_form(
+        f"/invoices/{invoice_id}/status",
+        [("status", "Uhradená")],
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+
+    db = TestingSessionLocal()
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    paid_date = invoice.paid_date
+    db.close()
+
+    assert paid_date == date.today()
+
+
+def test_paid_date_not_overwritten_if_already_set():
+    """Ak sa faktúra prepne na Uhradená, potom (napr. omylom) na iný
+    stav a späť na Uhradená, pôvodný dátum úhrady sa nesmie stratiť."""
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.status = "Odoslaná"
+    invoice_id = invoice.id
+    db.commit()
+    db.close()
+
+    post_form(f"/invoices/{invoice_id}/status", [("status", "Uhradená")])
+
+    db = TestingSessionLocal()
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    invoice.paid_date = date(2026, 1, 15)
+    db.commit()
+    db.close()
+
+    post_form(f"/invoices/{invoice_id}/status", [("status", "Stornovaná")])
+
+    db = TestingSessionLocal()
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    paid_date = invoice.paid_date
+    db.close()
+
+    assert paid_date == date(2026, 1, 15)
+
+
+def test_manual_paid_date_update():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.status = "Uhradená"
+    invoice.paid_date = date.today()
+    invoice_id = invoice.id
+    db.commit()
+    db.close()
+
+    response = post_form(
+        f"/invoices/{invoice_id}/paid-date",
+        [("paid_date", "2026-01-10")],
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+
+    db = TestingSessionLocal()
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    paid_date = invoice.paid_date
+    db.close()
+
+    assert paid_date == date(2026, 1, 10)
+
+
+def test_manual_paid_date_can_be_cleared():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.status = "Uhradená"
+    invoice.paid_date = date.today()
+    invoice_id = invoice.id
+    db.commit()
+    db.close()
+
+    response = post_form(
+        f"/invoices/{invoice_id}/paid-date",
+        [("paid_date", "")],
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+
+    db = TestingSessionLocal()
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    paid_date = invoice.paid_date
+    db.close()
+
+    assert paid_date is None
+
+
+def test_manual_paid_date_rejects_future_date():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice_id = invoice.id
+    db.close()
+
+    future_date = (date.today() + timedelta(days=5)).isoformat()
+
+    response = post_form(
+        f"/invoices/{invoice_id}/paid-date",
+        [("paid_date", future_date)]
+    )
+
+    assert response.status_code == 422
+
+
+def test_paid_date_update_invoice_not_found():
+
+    response = post_form(
+        "/invoices/999999/paid-date",
+        [("paid_date", "2026-01-10")]
+    )
+
+    assert response.status_code == 404
+
+
+# =========================================
+# KOPÍROVANIE FAKTÚRY
+# =========================================
+
+def test_duplicate_invoice_creates_draft_copy():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.status = "Uhradená"
+    invoice_id = invoice.id
+    db.commit()
+    db.close()
+
+    response = client.post(
+        f"/invoices/{invoice_id}/duplicate",
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+
+    new_id = int(response.headers["location"].split("/")[-1])
+    assert new_id != invoice_id
+
+    db = TestingSessionLocal()
+    new_invoice = db.query(Invoice).filter(Invoice.id == new_id).first()
+
+    assert new_invoice.status == "Návrh"
+    assert new_invoice.invoice_number != "2026099"
+    assert new_invoice.paid_date is None
+    assert len(new_invoice.items) == 1
+    assert new_invoice.items[0].description == "Testovacia položka"
+    assert new_invoice.issue_date == date.today()
+
+    db.close()
+
+
+def test_duplicate_invoice_preserves_proforma_flag():
+
+    db = TestingSessionLocal()
+
+    customer = db.query(Customer).first()
+
+    original = Invoice(
+        invoice_number="ZF2026005",
+        customer_id=customer.id,
+        status="Odoslaná",
+        issue_date=date.today(),
+        due_date=date.today() + timedelta(days=14),
+        is_proforma=True
+    )
+    original.items.append(
+        InvoiceItem(
+            description="Práca",
+            quantity=Decimal("1"),
+            unit="ks",
+            unit_price=Decimal("100.00"),
+            vat_rate=0
+        )
+    )
+    db.add(original)
+    db.commit()
+    original_id = original.id
+    db.close()
+
+    response = client.post(
+        f"/invoices/{original_id}/duplicate",
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+
+    new_id = int(response.headers["location"].split("/")[-1])
+
+    db = TestingSessionLocal()
+    new_invoice = db.query(Invoice).filter(Invoice.id == new_id).first()
+
+    assert new_invoice.is_proforma is True
+    assert new_invoice.invoice_number.startswith("ZF")
+
+    db.close()
+
+
+def test_duplicate_invoice_not_found():
+
+    response = client.post("/invoices/999999/duplicate")
+
+    assert response.status_code == 404
+
+
+def test_duplicate_invoice_rejects_vat_regime_conflict():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)  # vat_rate=19, firma je platca
+
+    company = db.query(Company).first()
+    company.is_vat_payer = False
+    db.commit()
+
+    invoice_id = invoice.id
+    db.close()
+
+    response = client.post(f"/invoices/{invoice_id}/duplicate")
+
+    assert response.status_code == 422
+
+
+# =========================================
+# VYHĽADÁVANIE FAKTÚR
+# =========================================
+
+def test_search_invoices_by_invoice_number():
+
+    db = TestingSessionLocal()
+    create_sample_invoice(db)
+    db.close()
+
+    response = client.get("/faktury?q=2026099")
+
+    assert response.status_code == 200
+    assert "2026099" in response.text
+
+
+def test_search_invoices_by_customer_name():
+
+    db = TestingSessionLocal()
+    create_sample_invoice(db)
+    db.close()
+
+    response = client.get("/faktury?q=Firma")
+
+    assert response.status_code == 200
+    assert "2026099" in response.text
+
+
+def test_search_invoices_no_match():
+
+    db = TestingSessionLocal()
+    create_sample_invoice(db)
+    db.close()
+
+    response = client.get("/faktury?q=neexistujucizakaznik999")
+
+    assert response.status_code == 200
+    assert "2026099" not in response.text
+
+
+def test_search_invoices_by_note():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.note = "špeciálna zákazka pre veľtrh"
+    db.commit()
+    db.close()
+
+    response = client.get("/faktury?q=veľtrh")
+
+    assert response.status_code == 200
+    assert "2026099" in response.text
+
+
+# =========================================
+# FILTROVANIE PODĽA OBDOBIA
+# =========================================
+
+def test_filter_invoices_by_date_from():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.issue_date = date(2026, 1, 15)
+    db.commit()
+    db.close()
+
+    response = client.get("/faktury?date_from=2026-06-01")
+
+    assert response.status_code == 200
+    assert "2026099" not in response.text
+
+
+def test_filter_invoices_by_date_to():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.issue_date = date(2026, 1, 15)
+    db.commit()
+    db.close()
+
+    response = client.get("/faktury?date_to=2026-02-01")
+
+    assert response.status_code == 200
+    assert "2026099" in response.text
+
+
+def test_filter_invoices_by_date_range_includes_match():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.issue_date = date(2026, 3, 15)
+    db.commit()
+    db.close()
+
+    response = client.get("/faktury?date_from=2026-03-01&date_to=2026-03-31")
+
+    assert response.status_code == 200
+    assert "2026099" in response.text
+
+
+def test_filter_invoices_by_date_range_excludes_out_of_range():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.issue_date = date(2026, 3, 15)
+    db.commit()
+    db.close()
+
+    response = client.get("/faktury?date_from=2026-04-01&date_to=2026-04-30")
+
+    assert response.status_code == 200
+    assert "2026099" not in response.text
+
+
+def test_combined_search_and_date_filter():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.issue_date = date(2026, 3, 15)
+    db.commit()
+    db.close()
+
+    response = client.get(
+        "/faktury?q=2026099&date_from=2026-03-01&date_to=2026-03-31"
+    )
+
+    assert response.status_code == 200
+    assert "2026099" in response.text
+
+
+# =========================================
+# DASHBOARD TRŽBY PODĽA DÁTUMU ÚHRADY
+# =========================================
+
+def test_dashboard_revenue_uses_paid_date_not_issue_date():
+    """Faktúra vystavená v januári, ale uhradená až teraz (tento mesiac),
+    sa má počítať do tržby TOHTO mesiaca - nie podľa dátumu vystavenia."""
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.issue_date = date(2026, 1, 5)
+    invoice.status = "Uhradená"
+    invoice.paid_date = date.today()
+    db.commit()
+    db.close()
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "55.34" in response.text
+    assert "Uhradené tento mesiac" in response.text
+
+
+def test_dashboard_revenue_falls_back_to_issue_date_when_paid_date_missing():
+    """Legacy faktúry (uhradené pred zavedením paid_date) nemajú tento
+    stĺpec vyplnený - dashboard sa má bezpečne vrátiť k issue_date."""
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.issue_date = date.today()
+    invoice.status = "Uhradená"
+    invoice.paid_date = None
+    db.commit()
+    db.close()
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "55.34" in response.text

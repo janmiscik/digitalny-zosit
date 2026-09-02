@@ -1,7 +1,8 @@
-from datetime import date
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse, Response
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from auth import require_login_api, require_login_page
@@ -15,6 +16,7 @@ from invoice_utils import (
     is_invoice_overdue,
     is_valid_invoice_status_transition,
     next_invoice_number,
+    next_proforma_number,
     validate_invoice_vat,
 )
 from models import Company, Customer, Invoice, InvoiceItem, Job
@@ -74,6 +76,12 @@ def invoices_list_page(
 
     status: str | None = None,
 
+    q: str | None = None,
+
+    date_from: str | None = None,
+
+    date_to: str | None = None,
+
     db: Session = Depends(get_db),
 
     user: str = Depends(require_login_page)
@@ -96,6 +104,34 @@ def invoices_list_page(
         query = query.filter(
             Invoice.status == status
         )
+
+
+    # Vyhľadávanie - číslo faktúry, meno zákazníka alebo poznámka.
+    # Jednoduché LIKE vyhľadávanie (nie fulltext) - appke stačí pre
+    # bežný objem faktúr jedného remeselníka/živnostníka.
+    search_term = (q or "").strip()
+
+    if search_term:
+
+        query = query.join(Invoice.customer).filter(
+            or_(
+                Invoice.invoice_number.ilike(f"%{search_term}%"),
+                Customer.name.ilike(f"%{search_term}%"),
+                Invoice.note.ilike(f"%{search_term}%")
+            )
+        )
+
+
+    parsed_date_from = parse_optional_date(date_from or "")
+    parsed_date_to = parse_optional_date(date_to or "")
+
+    if parsed_date_from is not None:
+
+        query = query.filter(Invoice.issue_date >= parsed_date_from)
+
+    if parsed_date_to is not None:
+
+        query = query.filter(Invoice.issue_date <= parsed_date_to)
 
 
     invoices = query.order_by(
@@ -153,6 +189,12 @@ def invoices_list_page(
             "statuses": list(InvoiceStatus),
 
             "selected_status": status,
+
+            "search_query": search_term,
+
+            "date_from": date_from or "",
+
+            "date_to": date_to or "",
 
             "today": today
 
@@ -485,7 +527,9 @@ def invoice_detail(
 
             "can_change_status": can_change_status,
 
-            "is_overdue": is_invoice_overdue(invoice)
+            "is_overdue": is_invoice_overdue(invoice),
+
+            "today": date.today()
 
         }
 
@@ -748,6 +792,121 @@ def delete_invoice(
 
 
 # =========================================
+# KOPÍROVANIE FAKTÚRY
+#
+# Vytvorí novú faktúru (Návrh) s rovnakými položkami a zákazníkom, ale
+# s novým číslom a dnešnými dátumami - šetrí čas pri opakovaných/
+# podobných zákazkách. DPH sadzby, poznámka a spôsob úhrady sa preberajú,
+# platobné symboly a stav sa NEPreberajú (nová faktúra začína ako Návrh
+# bez väzby na starý variabilný/špecifický symbol).
+# =========================================
+
+@router.post("/invoices/{invoice_id}/duplicate")
+def duplicate_invoice(
+
+    invoice_id: int,
+
+    db: Session = Depends(get_db),
+
+    user: str = Depends(require_login_page)
+
+):
+
+    original = (
+
+        db
+        .query(Invoice)
+        .options(joinedload(Invoice.items), joinedload(Invoice.customer))
+        .filter(Invoice.id == invoice_id)
+        .first()
+
+    )
+
+    if original is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Faktúra neexistuje"
+        )
+
+
+    issue_date = date.today()
+    due_date = issue_date + timedelta(days=14)
+
+    company = get_or_create_company(db)
+
+    try:
+
+        validate_invoice_vat(
+            company_is_vat_payer=company.is_vat_payer,
+            customer_ic_dph=original.customer.ic_dph,
+            reverse_charge=original.reverse_charge,
+            item_vat_rates=[item.vat_rate for item in original.items]
+        )
+
+    except ValueError as exc:
+
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"{exc} Pôvodná faktúra má sadzby DPH nezlučiteľné so "
+                "súčasným DPH režimom firmy - skopírovanie by vytvorilo "
+                "neplatnú faktúru."
+            )
+        )
+
+    # Kópia zachováva, či išlo o zálohovú (proforma) faktúru - a teda aj
+    # jej vlastný číselný rad (viď next_proforma_number), nech kopírovanie
+    # zálohovej faktúry opäť nespotrebuje číslo z ostrej fakturačnej rady.
+    if original.is_proforma:
+
+        new_invoice_number = next_proforma_number(db, issue_date.year)
+
+    else:
+
+        new_invoice_number = next_invoice_number(db, issue_date.year)
+
+    new_invoice = Invoice(
+        invoice_number=new_invoice_number,
+        customer_id=original.customer_id,
+        job_id=original.job_id,
+        status=InvoiceStatus.DRAFT.value,
+        issue_date=issue_date,
+        due_date=due_date,
+        payment_method=original.payment_method,
+        constant_symbol=original.constant_symbol,
+        reverse_charge=original.reverse_charge,
+        is_proforma=original.is_proforma,
+        note=original.note
+    )
+
+    for item in original.items:
+
+        new_invoice.items.append(
+            InvoiceItem(
+                description=item.description,
+                quantity=item.quantity,
+                unit=item.unit,
+                unit_price=item.unit_price,
+                vat_rate=item.vat_rate
+            )
+        )
+
+    db.add(new_invoice)
+    db.commit()
+    db.refresh(new_invoice)
+
+
+    return RedirectResponse(
+
+        url=f"/invoices/{new_invoice.id}",
+
+        status_code=303
+
+    )
+
+
+# =========================================
 # PDF EXPORT
 # =========================================
 
@@ -999,6 +1158,65 @@ def update_invoice_status(
 
 
     invoice.status = new_status
+
+    # Pri prechode na "Uhradená" nastavíme dátum úhrady na dnešok, ak
+    # ešte nie je zaznamenaný - dá sa neskôr ručne opraviť cez
+    # update_invoice_paid_date. Pri odchode zo stavu "Uhradená" (napr.
+    # náprava chyby -> Stornovaná) dátum úhrady zámerne NEmažeme, aby sa
+    # nestratila historická informácia o tom, kedy peniaze prišli.
+    if new_status == InvoiceStatus.PAID.value and invoice.paid_date is None:
+
+        invoice.paid_date = date.today()
+
+    db.commit()
+
+
+    return RedirectResponse(
+
+        url=f"/invoices/{invoice_id}",
+
+        status_code=303
+
+    )
+
+
+@router.post("/invoices/{invoice_id}/paid-date")
+def update_invoice_paid_date(
+
+    invoice_id: int,
+
+    paid_date: str = Form(""),
+
+    db: Session = Depends(get_db),
+
+    user: str = Depends(require_login_page)
+
+):
+    """
+    Ručná oprava dátumu skutočnej úhrady - nezávislé od zmeny stavu,
+    lebo platba mohla prísť inokedy, než keď to niekto zaklikol v appke.
+    Dá sa aj vymazať (prázdna hodnota), ak sa niekto pomýlil.
+    """
+
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+
+    if invoice is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Faktúra neexistuje"
+        )
+
+    parsed_date = parse_optional_date(paid_date)
+
+    if parsed_date is not None and parsed_date > date.today():
+
+        raise HTTPException(
+            status_code=422,
+            detail="Dátum úhrady nemôže byť v budúcnosti"
+        )
+
+    invoice.paid_date = parsed_date
 
     db.commit()
 
