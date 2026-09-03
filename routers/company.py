@@ -1,9 +1,12 @@
-from fastapi import APIRouter, Depends, Form, Request, UploadFile
-from fastapi.responses import RedirectResponse
+from datetime import date
+
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile
+from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.orm import Session
 
 from auth import require_login_page
 from database import get_db
+from backup_utils import create_backup_bytes, restore_from_upload
 from invoice_utils import NON_VAT_PAYER_NOTICE
 from models import Company
 from templates_config import templates
@@ -165,6 +168,68 @@ async def settings_save(
     return RedirectResponse(
 
         url="/settings",
+
+        status_code=303
+
+    )
+
+
+# =========================================
+# ZÁLOHA / OBNOVA DATABÁZY
+# =========================================
+
+@router.get("/settings/backup")
+def download_backup(
+
+    user: str = Depends(require_login_page)
+
+):
+
+    backup_bytes = create_backup_bytes()
+
+    filename = f"digitalny-zosit-zaloha-{date.today().isoformat()}.db"
+
+    return Response(
+
+        content=backup_bytes,
+
+        media_type="application/x-sqlite3",
+
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
+
+    )
+
+
+@router.post("/settings/restore")
+async def upload_restore(
+
+    request: Request,
+
+    user: str = Depends(require_login_page)
+
+):
+
+    form = await request.form()
+
+    upload = form.get("backup_file")
+
+    if upload is None or not getattr(upload, "filename", None):
+
+        raise HTTPException(
+            status_code=422,
+            detail="Nebol vybraný žiadny súbor na obnovu."
+        )
+
+    file_bytes = await upload.read()
+
+    restore_from_upload(file_bytes)
+
+
+    return RedirectResponse(
+
+        url="/settings?restored=1",
 
         status_code=303
 

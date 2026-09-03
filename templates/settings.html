@@ -343,6 +343,78 @@
         </div>
 
 
+        <!-- =====================================
+             ZÁLOHA / OBNOVA DATABÁZY
+             ===================================== -->
+
+        <div class="edit-customer-card">
+
+            <h2 style="margin-top: 0;">
+                Záloha a obnova databázy
+            </h2>
+
+            {% if request.query_params.get('restored') %}
+
+                <div style="background: #e8f5e9; border: 1px solid #66bb6a; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; color: #2e7d32;">
+                    ✅ Databáza bola úspešne obnovená zo zálohy.
+                </div>
+
+            {% endif %}
+
+            <p style="color: var(--text-muted); font-size: 0.9em;">
+                Appka ukladá všetky dáta do jedného súboru. Stiahni si
+                pravidelne zálohu a ulož ju mimo tohto počítača (napr. na
+                cloudové úložisko alebo USB kľúč).
+            </p>
+
+            <a
+                href="/settings/backup"
+                class="save-button"
+                style="display: inline-block; text-decoration: none; margin-bottom: 24px;"
+            >
+                💾 Stiahnuť zálohu
+            </a>
+
+
+            <h3 style="font-size: 15px; color: var(--danger); margin-bottom: 8px;">
+                Obnoviť z zálohy
+            </h3>
+
+            <p style="color: var(--text-muted); font-size: 0.85em;">
+                ⚠️ Obnovením sa <strong>prepíšu všetky aktuálne dáta</strong>
+                obsahom nahratej zálohy. Appka pred obnovou automaticky
+                uloží bezpečnostnú kópiu súčasného stavu, ale túto akciu
+                nie je možné jednoducho vrátiť späť z appky - postupuj
+                opatrne.
+            </p>
+
+            <form
+                action="/settings/restore"
+                method="post"
+                enctype="multipart/form-data"
+                onsubmit="return confirm('Naozaj chceš prepísať všetky aktuálne dáta obsahom tejto zálohy? Táto akcia sa nedá jednoducho vrátiť späť.');"
+            >
+
+                <input
+                    type="file"
+                    name="backup_file"
+                    accept=".db"
+                    required
+                >
+
+                <button
+                    type="submit"
+                    class="cancel-button"
+                    style="color: var(--danger); border-color: var(--danger); margin-top: 10px;"
+                >
+                    ⚠️ Obnoviť databázu z tohto súboru
+                </button>
+
+            </form>
+
+        </div>
+
+
     </section>
 
 
