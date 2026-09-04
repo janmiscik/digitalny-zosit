@@ -3020,3 +3020,401 @@ def test_dashboard_revenue_falls_back_to_issue_date_when_paid_date_missing():
 
     assert response.status_code == 200
     assert "55.34" in response.text
+
+# =========================================
+# DOBROPIS (opravný daňový doklad)
+# =========================================
+
+def test_credit_note_form_requires_sent_or_paid_invoice():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)  # default status "Návrh"
+    invoice_id = invoice.id
+    db.close()
+
+    response = client.get(f"/invoices/{invoice_id}/credit-note/new")
+
+    assert response.status_code == 409
+
+
+def test_credit_note_form_available_for_sent_invoice():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.status = "Odoslaná"
+    invoice_id = invoice.id
+    db.commit()
+    db.close()
+
+    response = client.get(f"/invoices/{invoice_id}/credit-note/new")
+
+    assert response.status_code == 200
+    assert "2026099" in response.text
+
+
+def test_credit_note_form_invoice_not_found():
+
+    response = client.get("/invoices/999999/credit-note/new")
+
+    assert response.status_code == 404
+
+
+def test_create_credit_note_success():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.status = "Odoslaná"
+    invoice_id = invoice.id
+    db.commit()
+    db.close()
+
+    response = post_form(
+        f"/invoices/{invoice_id}/credit-note",
+        [
+            ("reason", "Reklamácia časti práce"),
+            ("description", "Vrátená položka"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "50.00"),
+            ("vat_rate", "19"),
+        ],
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+
+    new_id = int(response.headers["location"].split("/")[-1])
+
+    db = TestingSessionLocal()
+    credit_note = db.query(Invoice).filter(Invoice.id == new_id).first()
+
+    assert credit_note.is_credit_note is True
+    assert credit_note.original_invoice_id == invoice_id
+    assert credit_note.invoice_number.startswith("DP")
+    assert credit_note.status == "Návrh"
+    assert "Reklamácia časti práce" in credit_note.note
+    # položka sa uloží s KLADNOU hodnotou (znamienko len pri zobrazení)
+    assert credit_note.items[0].unit_price == Decimal("50.00")
+
+    db.close()
+
+
+def test_create_credit_note_requires_reason():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.status = "Odoslaná"
+    invoice_id = invoice.id
+    db.commit()
+    db.close()
+
+    response = post_form(
+        f"/invoices/{invoice_id}/credit-note",
+        [
+            ("description", "Práca"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "50.00"),
+            ("vat_rate", "19"),
+        ]
+    )
+
+    assert response.status_code == 422
+
+
+def test_create_credit_note_requires_sent_or_paid():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)  # "Návrh"
+    invoice_id = invoice.id
+    db.close()
+
+    response = post_form(
+        f"/invoices/{invoice_id}/credit-note",
+        [
+            ("reason", "Test"),
+            ("description", "Práca"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "50.00"),
+            ("vat_rate", "19"),
+        ]
+    )
+
+    assert response.status_code == 409
+
+
+def test_cannot_create_credit_note_of_a_credit_note():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.status = "Odoslaná"
+    invoice_id = invoice.id
+    db.commit()
+    db.close()
+
+    response = post_form(
+        f"/invoices/{invoice_id}/credit-note",
+        [
+            ("reason", "Prvý dobropis"),
+            ("description", "Vrátené"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "50.00"),
+            ("vat_rate", "19"),
+        ],
+        follow_redirects=False
+    )
+
+    credit_note_id = int(response.headers["location"].split("/")[-1])
+
+    db = TestingSessionLocal()
+    credit_note = db.query(Invoice).filter(Invoice.id == credit_note_id).first()
+    credit_note.status = "Odoslaná"
+    db.commit()
+    db.close()
+
+    response2 = client.get(f"/invoices/{credit_note_id}/credit-note/new")
+
+    assert response2.status_code == 409
+
+
+def test_create_credit_note_not_found():
+
+    response = post_form(
+        "/invoices/999999/credit-note",
+        [
+            ("reason", "Test"),
+            ("description", "Práca"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "50.00"),
+            ("vat_rate", "19"),
+        ]
+    )
+
+    assert response.status_code == 404
+
+
+def test_credit_note_rejects_vat_regime_conflict():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.status = "Odoslaná"
+
+    company = db.query(Company).first()
+    company.is_vat_payer = False
+    db.commit()
+
+    invoice_id = invoice.id
+    db.close()
+
+    response = post_form(
+        f"/invoices/{invoice_id}/credit-note",
+        [
+            ("reason", "Test"),
+            ("description", "Práca"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "50.00"),
+            ("vat_rate", "19"),
+        ]
+    )
+
+    assert response.status_code == 422
+
+
+def test_credit_note_pdf_shows_dobropis_title():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.status = "Odoslaná"
+    invoice_id = invoice.id
+    db.commit()
+    db.close()
+
+    post_form(
+        f"/invoices/{invoice_id}/credit-note",
+        [
+            ("reason", "Test"),
+            ("description", "Vrátená položka"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "50.00"),
+            ("vat_rate", "19"),
+        ]
+    )
+
+    db = TestingSessionLocal()
+    credit_note = db.query(Invoice).filter(Invoice.is_credit_note.is_(True)).first()
+    credit_note_id = credit_note.id
+    db.close()
+
+    response = client.get(f"/invoices/{credit_note_id}/pdf")
+
+    assert response.status_code == 200
+
+    text = extract_pdf_text(response.content)
+
+    assert "DOBROPIS" in text
+    assert "-50.00" in text or "-59.50" in text  # záporná suma niekde v PDF
+
+
+def test_credit_note_pdf_omits_payment_section():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.status = "Odoslaná"
+    invoice_id = invoice.id
+    db.commit()
+    db.close()
+
+    post_form(
+        f"/invoices/{invoice_id}/credit-note",
+        [
+            ("reason", "Test"),
+            ("description", "Vrátená položka"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "50.00"),
+            ("vat_rate", "19"),
+        ]
+    )
+
+    db = TestingSessionLocal()
+    credit_note = db.query(Invoice).filter(Invoice.is_credit_note.is_(True)).first()
+    credit_note_id = credit_note.id
+    db.close()
+
+    response = client.get(f"/invoices/{credit_note_id}/pdf")
+    text = extract_pdf_text(response.content)
+
+    assert "Platobné údaje" not in text
+
+
+def test_dashboard_credit_note_reduces_on_collection_total():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.status = "Odoslaná"
+    invoice_id = invoice.id
+    db.commit()
+    db.close()
+
+    # 3 * 15.50 * 1.19 = 55.335 -> 55.34 (viď create_sample_invoice)
+    response_before = client.get("/")
+    assert "55.34" in response_before.text
+
+    post_form(
+        f"/invoices/{invoice_id}/credit-note",
+        [
+            ("reason", "Úplné storno"),
+            ("description", "Storno celej faktúry"),
+            ("quantity", "3"),
+            ("unit", "ks"),
+            ("unit_price", "15.50"),
+            ("vat_rate", "19"),
+        ]
+    )
+
+    db = TestingSessionLocal()
+    credit_note = db.query(Invoice).filter(Invoice.is_credit_note.is_(True)).first()
+    credit_note.status = "Odoslaná"
+    db.commit()
+    db.close()
+
+    response_after = client.get("/")
+
+    # Odoslaná faktúra (+55.34) + Odoslaný dobropis (-55.34) = 0.00 na inkaso
+    # (počet faktúr v "Na inkaso" ostáva 2 - dobropis SA POČÍTA ako
+    # samostatný doklad, len jeho suma je záporná)
+    assert "Na inkaso · 2 faktúr" in response_after.text
+    assert "0.00 €" in response_after.text
+
+
+def test_customer_total_invoiced_reduced_by_credit_note():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.status = "Odoslaná"
+    invoice_id = invoice.id
+    customer_id = invoice.customer_id
+    db.commit()
+    db.close()
+
+    post_form(
+        f"/invoices/{invoice_id}/credit-note",
+        [
+            ("reason", "Čiastočné storno"),
+            ("description", "Vrátená položka"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "10.00"),
+            ("vat_rate", "0"),
+        ]
+    )
+
+    response = client.get(f"/customers/{customer_id}")
+
+    assert response.status_code == 200
+    # 55.34 - 10.00 = 45.34
+    assert "45.34" in response.text
+
+
+def test_credit_note_shown_in_invoices_list():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.status = "Odoslaná"
+    invoice_id = invoice.id
+    db.commit()
+    db.close()
+
+    post_form(
+        f"/invoices/{invoice_id}/credit-note",
+        [
+            ("reason", "Test"),
+            ("description", "Vrátené"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "20.00"),
+            ("vat_rate", "0"),
+        ]
+    )
+
+    response = client.get("/faktury")
+
+    assert response.status_code == 200
+    assert "Dobropis č." in response.text
+    assert "-20.00" in response.text
+
+
+def test_credit_note_detail_links_to_original_invoice():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.status = "Odoslaná"
+    invoice_id = invoice.id
+    db.commit()
+    db.close()
+
+    response = post_form(
+        f"/invoices/{invoice_id}/credit-note",
+        [
+            ("reason", "Test"),
+            ("description", "Vrátené"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "20.00"),
+            ("vat_rate", "0"),
+        ],
+        follow_redirects=False
+    )
+
+    new_id = int(response.headers["location"].split("/")[-1])
+
+    detail_response = client.get(f"/invoices/{new_id}")
+
+    assert detail_response.status_code == 200
+    assert "Dobropis č." in detail_response.text
+    assert f"/invoices/{invoice_id}" in detail_response.text

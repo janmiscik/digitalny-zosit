@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from auth import require_login_api, require_login_page
 from database import get_db
-from invoice_utils import CLOSED_INVOICE_STATUSES, calculate_invoice_totals
+from invoice_utils import CLOSED_INVOICE_STATUSES, calculate_invoice_totals, signed_invoice_total
 from models import Customer, Job, JobCost, JobPhoto
 from schemas import InvoiceStatus, JobCreate, JobRead, JobStatus, JobUpdate
 from templates_config import templates
@@ -255,7 +255,7 @@ def edit_job_form(
 
     invoiced_total = sum(
         (
-            calculate_invoice_totals(invoice.items)["total_gross"]
+            signed_invoice_total(invoice)
             for invoice in job.invoices
             if invoice.status in invoiced_statuses and not invoice.is_proforma
         ),

@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from auth import require_login_page
 from database import Base, engine, get_db
-from invoice_utils import CLOSED_INVOICE_STATUSES, calculate_invoice_totals, is_invoice_overdue
+from invoice_utils import CLOSED_INVOICE_STATUSES, calculate_invoice_totals, is_invoice_overdue, signed_invoice_total
 
 from models import Customer, Invoice, Job, Quote
 from schemas import InvoiceStatus
@@ -278,16 +278,18 @@ def home(
 
     collection_total = sum(
         (
-            calculate_invoice_totals(invoice.items)["total_gross"]
+            signed_invoice_total(invoice)
             for invoice in collection_invoices
         ),
         Decimal("0")
     )
 
+    # Dobropis sa nikdy nepovažuje za "po splatnosti" - nikto nevymáha
+    # platbu dobropisu, takže koncept "omeškania" preň nedáva zmysel.
     overdue_collection_invoices = [
         invoice
         for invoice in collection_invoices
-        if is_invoice_overdue(invoice, today)
+        if not invoice.is_credit_note and is_invoice_overdue(invoice, today)
     ]
 
     overdue_total = sum(
@@ -322,7 +324,7 @@ def home(
 
     revenue_this_month = sum(
         (
-            calculate_invoice_totals(invoice.items)["total_gross"]
+            signed_invoice_total(invoice)
             for invoice in paid_this_month
         ),
         Decimal("0")
@@ -346,7 +348,7 @@ def home(
 
     revenue_this_year = sum(
         (
-            calculate_invoice_totals(invoice.items)["total_gross"]
+            signed_invoice_total(invoice)
             for invoice in paid_this_year
         ),
         Decimal("0")

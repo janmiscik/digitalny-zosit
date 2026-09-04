@@ -81,6 +81,33 @@ def next_quote_number(db: Session, year: int) -> str:
     return _next_sequential_number(db, Quote.quote_number, f"CP{year}")
 
 
+def next_credit_note_number(db: Session, year: int) -> str:
+    """
+    Vygeneruje ďalšie číslo dobropisu vo formáte DPRRRRPPP
+    (napr. DP2026001). Vlastný číselný rad, oddelený od ostrých faktúr
+    aj zálohových faktúr.
+    """
+
+    return _next_sequential_number(db, Invoice.invoice_number, f"DP{year}")
+
+
+def signed_invoice_total(invoice) -> Decimal:
+    """
+    Vráti CELKOVÚ sumu faktúry (s DPH) so správnym znamienkom - dobropis
+    má vždy zápornú sumu (znižuje pohľadávku/tržbu), bežná aj zálohová
+    faktúra kladnú.
+
+    Toto je JEDINÉ miesto, ktoré rozhoduje o znamienku - všade v appke,
+    kde sa sčítavajú sumy faktúr naprieč viacerými dokladmi (dashboard,
+    súčty na stránke zákazníka, zisk zo zákazky), sa má použiť táto
+    funkcia namiesto priameho čítania calculate_invoice_totals().
+    """
+
+    gross = calculate_invoice_totals(invoice.items)["total_gross"]
+
+    return -gross if invoice.is_credit_note else gross
+
+
 def calculate_item_totals(quantity: Decimal, unit_price: Decimal, vat_rate: int) -> dict:
     """
     Vráti základ dane, DPH a sumu s DPH pre jednu položku faktúry.
@@ -278,6 +305,8 @@ def is_valid_invoice_status_transition(current_status: str, new_status: str) -> 
 NON_VAT_PAYER_NOTICE = "Nie som platiteľom DPH podľa zákona o DPH."
 
 REVERSE_CHARGE_NOTICE = "Prenesenie daňovej povinnosti"
+
+CREDIT_NOTE_LABEL = "DOBROPIS"
 
 
 def validate_vat_regime(is_vat_payer: bool, item_vat_rates: list[int]) -> None:

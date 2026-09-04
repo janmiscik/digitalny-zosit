@@ -125,11 +125,15 @@
         <div class="page-header">
 
             <h1>
-                Faktúra č. {{ invoice.invoice_number }}
+                {% if invoice.is_credit_note %}Dobropis{% else %}Faktúra{% endif %} č. {{ invoice.invoice_number }}
             </h1>
 
             <p>
                 {{ invoice.customer.name }}
+
+                {% if invoice.is_credit_note and invoice.original_invoice %}
+                    · k faktúre <a href="/invoices/{{ invoice.original_invoice.id }}">č. {{ invoice.original_invoice.invoice_number }}</a>
+                {% endif %}
             </p>
 
         </div>
@@ -189,6 +193,20 @@
                         📑 Kopírovať
                     </button>
                 </form>
+
+
+                {% if not invoice.is_credit_note and invoice.status in ["Odoslaná", "Uhradená"] %}
+
+                    <a
+                        href="/invoices/{{ invoice.id }}/credit-note/new"
+                        class="edit-job-button"
+                        style="color: var(--danger); border-color: var(--danger);"
+                        title="Vytvorí opravný doklad (dobropis) k tejto faktúre"
+                    >
+                        ↩️ Vytvoriť dobropis
+                    </a>
+
+                {% endif %}
 
 
                 <a

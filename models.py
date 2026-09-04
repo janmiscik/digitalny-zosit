@@ -496,6 +496,33 @@ class Invoice(Base):
         nullable=True
     )
 
+    # =====================================
+    # DOBROPIS (opravný daňový doklad)
+    # Dobropis je Invoice s is_credit_note=True, odkazujúca na pôvodnú
+    # faktúru. Položky sa ukladajú s KLADNÝMI hodnotami (rovnaká validácia
+    # ako bežná faktúra) - záporné znamienko sa aplikuje až pri zobrazení/
+    # výpočtoch (viď invoice_utils.signed_invoice_total), nech sa
+    # nemusí duplikovať celá VAT/položková logika pre záporné čísla.
+    # =====================================
+
+    is_credit_note = Column(
+        Boolean,
+        nullable=False,
+        default=False
+    )
+
+    original_invoice_id = Column(
+        Integer,
+        ForeignKey("invoices.id"),
+        nullable=True
+    )
+
+    original_invoice = relationship(
+        "Invoice",
+        remote_side="Invoice.id",
+        foreign_keys=[original_invoice_id]
+    )
+
     note = Column(
         Text,
         nullable=True

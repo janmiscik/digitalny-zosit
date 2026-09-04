@@ -15,8 +15,10 @@ from invoice_utils import (
     calculate_invoice_totals,
     is_invoice_overdue,
     is_valid_invoice_status_transition,
+    next_credit_note_number,
     next_invoice_number,
     next_proforma_number,
+    signed_invoice_total,
     validate_invoice_vat,
 )
 from models import Company, Customer, Invoice, InvoiceItem, Job
@@ -156,7 +158,7 @@ def invoices_list_page(
 
     invoice_totals = {
 
-        invoice.id: calculate_invoice_totals(invoice.items)["total_gross"]
+        invoice.id: signed_invoice_total(invoice)
 
         for invoice in invoices
 
@@ -900,6 +902,202 @@ def duplicate_invoice(
     return RedirectResponse(
 
         url=f"/invoices/{new_invoice.id}",
+
+        status_code=303
+
+    )
+
+
+# =========================================
+# DOBROPIS (opravný daňový doklad)
+# =========================================
+
+@router.get("/invoices/{invoice_id}/credit-note/new")
+def new_credit_note_form(
+
+    invoice_id: int,
+
+    request: Request,
+
+    db: Session = Depends(get_db),
+
+    user: str = Depends(require_login_page)
+
+):
+
+    original = (
+
+        db
+        .query(Invoice)
+        .options(joinedload(Invoice.items), joinedload(Invoice.customer))
+        .filter(Invoice.id == invoice_id)
+        .first()
+
+    )
+
+    if original is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Faktúra neexistuje"
+        )
+
+    if original.is_credit_note:
+
+        raise HTTPException(
+            status_code=409,
+            detail="K dobropisu sa nedá vytvoriť ďalší dobropis."
+        )
+
+    if original.status not in (InvoiceStatus.SENT.value, InvoiceStatus.PAID.value):
+
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Dobropis sa dá vytvoriť len k odoslanej alebo uhradenej "
+                "faktúre (návrh jednoducho uprav/zmaž, k stornovanej "
+                "faktúre dobropis nie je potrebný)."
+            )
+        )
+
+
+    return templates.TemplateResponse(
+
+        request=request,
+
+        name="credit_note_form.html",
+
+        context={
+
+            "original": original,
+
+            "today": date.today()
+
+        }
+
+    )
+
+
+@router.post("/invoices/{invoice_id}/credit-note")
+async def create_credit_note(
+
+    invoice_id: int,
+
+    request: Request,
+
+    db: Session = Depends(get_db),
+
+    user: str = Depends(require_login_page)
+
+):
+
+    original = (
+
+        db
+        .query(Invoice)
+        .options(joinedload(Invoice.items), joinedload(Invoice.customer))
+        .filter(Invoice.id == invoice_id)
+        .first()
+
+    )
+
+    if original is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Faktúra neexistuje"
+        )
+
+    if original.is_credit_note:
+
+        raise HTTPException(
+            status_code=409,
+            detail="K dobropisu sa nedá vytvoriť ďalší dobropis."
+        )
+
+    if original.status not in (InvoiceStatus.SENT.value, InvoiceStatus.PAID.value):
+
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Dobropis sa dá vytvoriť len k odoslanej alebo uhradenej "
+                "faktúre."
+            )
+        )
+
+
+    form = await request.form()
+
+    items_data = parse_items_from_form(
+        form,
+        InvoiceItemCreate,
+        "Dobropis musí obsahovať aspoň jednu položku"
+    )
+
+    reason = form.get("reason", "").strip()
+
+    if not reason:
+
+        raise HTTPException(
+            status_code=422,
+            detail="Dôvod dobropisu je povinný."
+        )
+
+
+    issue_date = date.today()
+
+    company = get_or_create_company(db)
+
+    try:
+
+        validate_invoice_vat(
+            company_is_vat_payer=company.is_vat_payer,
+            customer_ic_dph=original.customer.ic_dph,
+            reverse_charge=original.reverse_charge,
+            item_vat_rates=[item.vat_rate for item in items_data]
+        )
+
+    except ValueError as exc:
+
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc)
+        )
+
+
+    credit_note = Invoice(
+        invoice_number=next_credit_note_number(db, issue_date.year),
+        customer_id=original.customer_id,
+        job_id=original.job_id,
+        status=InvoiceStatus.DRAFT.value,
+        issue_date=issue_date,
+        due_date=issue_date,
+        reverse_charge=original.reverse_charge,
+        is_credit_note=True,
+        original_invoice_id=original.id,
+        note=f"Dobropis k faktúre č. {original.invoice_number}. Dôvod: {reason}"
+    )
+
+    for item in items_data:
+
+        credit_note.items.append(
+            InvoiceItem(
+                description=item.description,
+                quantity=item.quantity,
+                unit=item.unit,
+                unit_price=item.unit_price,
+                vat_rate=item.vat_rate
+            )
+        )
+
+    db.add(credit_note)
+    db.commit()
+    db.refresh(credit_note)
+
+
+    return RedirectResponse(
+
+        url=f"/invoices/{credit_note.id}",
 
         status_code=303
 

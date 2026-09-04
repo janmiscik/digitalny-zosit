@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, joinedload
 from auth import require_login_api, require_login_page
 from database import get_db
 from ico_lookup import lookup_company_by_ico
-from invoice_utils import calculate_invoice_totals
+from invoice_utils import calculate_invoice_totals, signed_invoice_total
 from models import Customer
 from schemas import CustomerCreate, CustomerRead, CustomerUpdate, InvoiceStatus
 from templates_config import templates
@@ -163,7 +163,7 @@ def customer_detail(
 
     total_invoiced = sum(
         (
-            calculate_invoice_totals(invoice.items)["total_gross"]
+            signed_invoice_total(invoice)
             for invoice in active_invoices
         ),
         Decimal("0")
@@ -171,7 +171,7 @@ def customer_detail(
 
     total_unpaid = sum(
         (
-            calculate_invoice_totals(invoice.items)["total_gross"]
+            signed_invoice_total(invoice)
             for invoice in unpaid_invoices
         ),
         Decimal("0")

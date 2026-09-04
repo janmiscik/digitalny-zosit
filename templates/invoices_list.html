@@ -251,7 +251,7 @@
                     <div class="invoice-row-main">
 
                         <h3>
-                            Faktúra č. {{ invoice.invoice_number }}
+                            {% if invoice.is_credit_note %}Dobropis{% else %}Faktúra{% endif %} č. {{ invoice.invoice_number }}
                         </h3>
 
                         <p>

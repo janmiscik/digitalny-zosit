@@ -206,11 +206,13 @@ def generate_invoice_pdf(invoice, company) -> bytes:
 
 
     # =====================================
-    # HLAVIČKA - veľký nadpis FAKTÚRA + číslo
+    # HLAVIČKA - veľký nadpis FAKTÚRA/DOBROPIS + číslo
     # =====================================
 
-    title_block = [
-        Paragraph("FAKTÚRA", styles["doctype"]),
+    document_title = "DOBROPIS" if invoice.is_credit_note else "FAKTÚRA"
+
+    title_lines = [
+        Paragraph(document_title, styles["doctype"]),
         Paragraph(
             f"č. {invoice.invoice_number}",
             styles["title"]
@@ -220,6 +222,17 @@ def generate_invoice_pdf(invoice, company) -> bytes:
             styles["small"]
         )
     ]
+
+    if invoice.is_credit_note and invoice.original_invoice_id:
+
+        title_lines.append(
+            Paragraph(
+                f"Opravný doklad k faktúre č. {invoice.original_invoice.invoice_number}",
+                styles["small"]
+            )
+        )
+
+    title_block = title_lines
 
     logo_file = image_path(company.logo_filename) if company else None
 
@@ -432,17 +445,24 @@ def generate_invoice_pdf(invoice, company) -> bytes:
 
         line_total = (quantity * unit_price)
 
+        # Pri dobropise sa zobrazuje záporne (znižuje pôvodnú sumu) -
+        # uložené hodnoty v DB zostávajú kladné (jednoduchšia validácia,
+        # viď invoice_utils.signed_invoice_total), znamienko sa aplikuje
+        # len tu, na úrovni zobrazenia.
+        display_unit_price = -unit_price if invoice.is_credit_note else unit_price
+        display_line_total = -line_total if invoice.is_credit_note else line_total
+
         row = [
             Paragraph(item.description, styles["normal"]),
             Paragraph(f"{quantity:g}", styles["normal"]),
             Paragraph(item.unit, styles["normal"]),
-            Paragraph(format_money(unit_price), styles["normal"]),
+            Paragraph(format_money(display_unit_price), styles["normal"]),
         ]
 
         if show_vat:
             row.append(Paragraph(f"{item.vat_rate} %", styles["normal"]))
 
-        row.append(Paragraph(format_money(line_total), styles["normal"]))
+        row.append(Paragraph(format_money(display_line_total), styles["normal"]))
 
         items_rows.append(row)
 
@@ -482,20 +502,30 @@ def generate_invoice_pdf(invoice, company) -> bytes:
 
     totals = calculate_invoice_totals(invoice.items)
 
+    # Rovnaké pravidlo ako pri jednotlivých položkách - dobropis sa
+    # zobrazuje so záporným znamienkom, uložené hodnoty ostávajú kladné.
+    sign = -1 if invoice.is_credit_note else 1
+
+    display_base = sign * totals["total_base"]
+    display_vat = sign * totals["total_vat"]
+    display_gross = sign * totals["total_gross"]
+
+    summary_total_label = "CELKOM DOBROPISOVANÉ" if invoice.is_credit_note else "CELKOM K ÚHRADE"
+
     if show_vat:
 
         summary_rows = [
             [
                 Paragraph("Základ dane", styles["summary_label"]),
-                Paragraph(format_money(totals["total_base"]), styles["summary_value"])
+                Paragraph(format_money(display_base), styles["summary_value"])
             ],
             [
                 Paragraph("DPH spolu", styles["summary_label"]),
-                Paragraph(format_money(totals["total_vat"]), styles["summary_value"])
+                Paragraph(format_money(display_vat), styles["summary_value"])
             ],
             [
-                Paragraph("CELKOM K ÚHRADE", styles["summary_total_label"]),
-                Paragraph(format_money(totals["total_gross"]), styles["summary_total_value"])
+                Paragraph(summary_total_label, styles["summary_total_label"]),
+                Paragraph(format_money(display_gross), styles["summary_total_value"])
             ],
         ]
 
@@ -505,8 +535,8 @@ def generate_invoice_pdf(invoice, company) -> bytes:
 
         summary_rows = [
             [
-                Paragraph("CELKOM K ÚHRADE", styles["summary_total_label"]),
-                Paragraph(format_money(totals["total_gross"]), styles["summary_total_value"])
+                Paragraph(summary_total_label, styles["summary_total_label"]),
+                Paragraph(format_money(display_gross), styles["summary_total_value"])
             ],
         ]
 
@@ -601,97 +631,102 @@ def generate_invoice_pdf(invoice, company) -> bytes:
 
     # =====================================
     # PLATOBNÉ ÚDAJE + QR KÓD
+    #
+    # Dobropis sa neplatí (znižuje predchádzajúcu pohľadávku/tržbu),
+    # takže platobné údaje a QR kód pre neho nedávajú zmysel.
     # =====================================
 
-    payment_lines = [
-        Paragraph("Platobné údaje", styles["heading"]),
-        Paragraph(
-            f"Spôsob úhrady: {invoice.payment_method or 'Prevodom'}",
-            styles["normal"]
-        ),
-    ]
+    if not invoice.is_credit_note:
 
-    if company is not None and company.iban:
+        payment_lines = [
+            Paragraph("Platobné údaje", styles["heading"]),
+            Paragraph(
+                f"Spôsob úhrady: {invoice.payment_method or 'Prevodom'}",
+                styles["normal"]
+            ),
+        ]
 
-        payment_lines.append(
-            Paragraph(f"IBAN: {company.iban}", styles["normal"])
-        )
+        if company is not None and company.iban:
 
-    if company is not None and company.swift_bic:
+            payment_lines.append(
+                Paragraph(f"IBAN: {company.iban}", styles["normal"])
+            )
 
-        payment_lines.append(
-            Paragraph(f"SWIFT/BIC: {company.swift_bic}", styles["normal"])
-        )
+        if company is not None and company.swift_bic:
 
-    payment_lines.append(
-        Paragraph(
-            f"Variabilný symbol: {invoice.variable_symbol or invoice.invoice_number}",
-            styles["normal"]
-        )
-    )
-
-    if invoice.constant_symbol:
+            payment_lines.append(
+                Paragraph(f"SWIFT/BIC: {company.swift_bic}", styles["normal"])
+            )
 
         payment_lines.append(
             Paragraph(
-                f"Konštantný symbol: {invoice.constant_symbol}",
+                f"Variabilný symbol: {invoice.variable_symbol or invoice.invoice_number}",
                 styles["normal"]
             )
         )
 
-    if invoice.specific_symbol:
+        if invoice.constant_symbol:
 
-        payment_lines.append(
-            Paragraph(
-                f"Špecifický symbol: {invoice.specific_symbol}",
-                styles["normal"]
+            payment_lines.append(
+                Paragraph(
+                    f"Konštantný symbol: {invoice.constant_symbol}",
+                    styles["normal"]
+                )
             )
-        )
+
+        if invoice.specific_symbol:
+
+            payment_lines.append(
+                Paragraph(
+                    f"Špecifický symbol: {invoice.specific_symbol}",
+                    styles["normal"]
+                )
+            )
 
 
-    qr_buffer = None
+        qr_buffer = None
 
-    if company is not None and company.iban:
+        if company is not None and company.iban:
 
-        qr_buffer = generate_payment_qr_image(
-            iban=company.iban,
-            amount=totals["total_gross"],
-            variable_symbol=invoice.variable_symbol or invoice.invoice_number,
-            beneficiary_name=company.name,
-            swift=company.swift_bic,
-            note=f"Faktura {invoice.invoice_number}",
-            constant_symbol=invoice.constant_symbol,
-            specific_symbol=invoice.specific_symbol
-        )
+            qr_buffer = generate_payment_qr_image(
+                iban=company.iban,
+                amount=totals["total_gross"],
+                variable_symbol=invoice.variable_symbol or invoice.invoice_number,
+                beneficiary_name=company.name,
+                swift=company.swift_bic,
+                note=f"Faktura {invoice.invoice_number}",
+                constant_symbol=invoice.constant_symbol,
+                specific_symbol=invoice.specific_symbol
+            )
 
 
-    if qr_buffer is not None:
+        if qr_buffer is not None:
 
-        qr_image = Image(
-            qr_buffer,
-            width=30 * mm,
-            height=30 * mm
-        )
+            qr_image = Image(
+                qr_buffer,
+                width=30 * mm,
+                height=30 * mm
+            )
 
-        payment_table = Table(
-            [[payment_lines, qr_image]],
-            colWidths=[135 * mm, 35 * mm]
-        )
+            payment_table = Table(
+                [[payment_lines, qr_image]],
+                colWidths=[135 * mm, 35 * mm]
+            )
 
-        payment_table.setStyle(
-            TableStyle([
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("ALIGN", (1, 0), (1, 0), "RIGHT"),
-            ])
-        )
+            payment_table.setStyle(
+                TableStyle([
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+                ])
+            )
 
-        story.append(payment_table)
+            story.append(payment_table)
 
-    else:
+        else:
 
-        story.extend(payment_lines)
+            story.extend(payment_lines)
 
-    story.append(Spacer(1, 18))
+        story.append(Spacer(1, 18))
 
 
     # =====================================
