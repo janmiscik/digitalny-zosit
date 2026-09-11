@@ -222,6 +222,10 @@ def create_customer(
 
     address: str = Form(""),
 
+    city: str = Form(""),
+
+    zip_code: str = Form(""),
+
     note: str = Form(""),
 
     ico: str = Form(""),
@@ -243,6 +247,8 @@ def create_customer(
             phone=phone or None,
             email=email or None,
             address=address or None,
+            city=city or None,
+            zip_code=zip_code or None,
             note=note or None,
             ico=ico or None,
             dic=dic or None,
@@ -345,6 +351,10 @@ def update_customer(
 
     address: str = Form(""),
 
+    city: str = Form(""),
+
+    zip_code: str = Form(""),
+
     note: str = Form(""),
 
     ico: str = Form(""),
@@ -386,6 +396,8 @@ def update_customer(
             phone=phone or None,
             email=email or None,
             address=address or None,
+            city=city or None,
+            zip_code=zip_code or None,
             note=note or None,
             ico=ico or None,
             dic=dic or None,

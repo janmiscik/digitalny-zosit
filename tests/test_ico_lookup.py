@@ -141,7 +141,8 @@ def test_lookup_success_with_vat_payer():
     assert result["dic"] == "2122034970"
     assert result["ic_dph"] == "SK2122034970"
     assert "Jenisejská 45A" in result["address"]
-    assert "04012" in result["address"]
+    assert result["city"] == "Košice - mestská časť Nad jazerom"
+    assert result["zip_code"] == "04012"
 
 
 def test_lookup_success_without_vat_registration():

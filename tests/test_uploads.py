@@ -445,3 +445,141 @@ def test_uploads_rejects_unknown_filename():
     response = client.get("/uploads/random-file.png")
 
     assert response.status_code == 404
+
+# =========================================
+# ATOMICITA UPLOADU (stage -> DB commit -> finalize/discard)
+# =========================================
+
+def test_failed_settings_commit_does_not_delete_old_logo(monkeypatch):
+    """Ak DB commit zlyhá PO nahraní nového loga, staré logo sa NESMIE
+    stratiť - appka má byť v konzistentnom stave (starý súbor + stará
+    DB hodnota), nie s DB hodnotou ukazujúcou na zmazaný súbor."""
+
+    old_png = make_png_bytes()
+
+    client.post(
+        "/settings",
+        data={"name": "Firma"},
+        files={"logo": ("logo.png", old_png, "image/png")}
+    )
+
+    db = TestingSessionLocal()
+    company = db.query(Company).first()
+    assert company.logo_filename == "logo.png"
+    old_logo_path = image_path(company.logo_filename)
+    assert old_logo_path is not None
+    db.close()
+
+    import routers.company as company_router
+
+    def failing_commit(self):
+        raise RuntimeError("simulovane zlyhanie DB commitu")
+
+    monkeypatch.setattr(
+        "sqlalchemy.orm.Session.commit",
+        failing_commit
+    )
+
+    new_png = make_png_bytes()
+
+    with pytest.raises(RuntimeError):
+
+        client.post(
+            "/settings",
+            data={"name": "Firma"},
+            files={"logo": ("logo2.png", new_png, "image/png")}
+        )
+
+    # Starý súbor musí byť STÁLE na disku - commit zlyhal, takže sa
+    # nesmel finalizovať/zmazať.
+    assert old_logo_path.exists()
+
+
+def test_failed_job_photo_commit_removes_orphan_file(monkeypatch):
+    """Ak DB commit zlyhá PO zapísaní fotky na disk, appka musí súbor
+    zase zmazať - inak by zostal ako osirotený súbor bez DB záznamu."""
+
+    db = TestingSessionLocal()
+    from models import Job, Customer
+
+    customer = db.query(Customer).first()
+
+    if customer is None:
+        customer = Customer(name="Test")
+        db.add(customer)
+        db.commit()
+
+    job = Job(title="Test zákazka", status="Nová", customer_id=customer.id)
+    db.add(job)
+    db.commit()
+    job_id = job.id
+    db.close()
+
+    def failing_commit(self):
+        raise RuntimeError("simulovane zlyhanie DB commitu")
+
+    monkeypatch.setattr(
+        "sqlalchemy.orm.Session.commit",
+        failing_commit
+    )
+
+    with pytest.raises(RuntimeError):
+
+        client.post(
+            f"/jobs/{job_id}/photos",
+            data={"photo_type": "pred"},
+            files={"photo": ("photo.png", make_png_bytes(), "image/png")}
+        )
+
+    from uploads_utils import JOB_PHOTOS_DIR
+
+    remaining_files = list(JOB_PHOTOS_DIR.glob(f"job{job_id}-*")) if JOB_PHOTOS_DIR.exists() else []
+
+    assert remaining_files == []
+
+
+# =========================================
+# AUTOMATICKÉ MAZANIE SÚBORU PRI ZMAZANÍ ZÁZNAMU (event listener)
+# =========================================
+
+def test_deleting_job_photo_row_directly_removes_file():
+    """Aj keby JobPhoto záznam zanikol iným spôsobom než cez explicitný
+    /delete endpoint (napr. budúce cascade zmazanie zákazky), fyzický
+    súbor sa má zmazať automaticky (SQLAlchemy event listener)."""
+
+    db = TestingSessionLocal()
+    from models import Job, Customer, JobPhoto
+
+    customer = db.query(Customer).first()
+
+    if customer is None:
+        customer = Customer(name="Test")
+        db.add(customer)
+        db.commit()
+
+    job = Job(title="Test", status="Nová", customer_id=customer.id)
+    db.add(job)
+    db.commit()
+    job_id = job.id
+    db.close()
+
+    client.post(
+        f"/jobs/{job_id}/photos",
+        data={"photo_type": "pred"},
+        files={"photo": ("photo.png", make_png_bytes(), "image/png")}
+    )
+
+    db = TestingSessionLocal()
+    photo = db.query(JobPhoto).filter(JobPhoto.job_id == job_id).first()
+    filename = photo.filename
+
+    from uploads_utils import job_photo_path
+    assert job_photo_path(filename) is not None
+
+    # zmažeme priamo cez ORM (nie cez router endpoint) - simuluje
+    # buduce cascade zmazanie napr. pri mazani zakazky
+    db.delete(photo)
+    db.commit()
+    db.close()
+
+    assert job_photo_path(filename) is None

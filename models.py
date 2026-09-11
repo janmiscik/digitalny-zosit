@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Integer, String, Text, ForeignKey, Date, Numeric
+from sqlalchemy import Boolean, Column, Integer, String, Text, ForeignKey, Date, Numeric, event
 from sqlalchemy.orm import relationship
 
 from database import Base
@@ -35,6 +35,20 @@ class Customer(Base):
 
 
     address = Column(
+        String,
+        nullable=True
+    )
+
+    # Mesto a PSČ oddelene od ulice - Peppol/UBL vyžaduje štruktúrovanú
+    # adresu (samostatné prvky), nie jeden textový reťazec. `address`
+    # vyššie zostáva ako "ulica a číslo" pre spätnú kompatibilitu a
+    # jednoduché zobrazenie v appke.
+    city = Column(
+        String,
+        nullable=True
+    )
+
+    zip_code = Column(
         String,
         nullable=True
     )
@@ -726,3 +740,22 @@ class QuoteItem(Base):
         "Quote",
         back_populates="items"
     )
+
+
+# =========================================
+# AUTOMATICKÉ MAZANIE SÚBOROV PRI ZMAZANÍ ZÁZNAMU
+#
+# Explicitný endpoint na zmazanie fotky (routers/jobs.py) už fyzický
+# súbor maže sám. Toto je poistka NAVYŠE pre prípad, že by JobPhoto
+# záznam niekedy zanikol iným spôsobom (napr. budúce zmazanie celej
+# zákazky/zákazníka cez cascade="all, delete-orphan") - bez tohto by
+# takéto zmazanie odstránilo len databázový riadok, a fyzický súbor by
+# navždy zostal ako odpad v uploads/job_photos/.
+# =========================================
+
+@event.listens_for(JobPhoto, "after_delete")
+def _delete_job_photo_file_on_row_delete(mapper, connection, target):
+
+    from uploads_utils import delete_job_photo
+
+    delete_job_photo(target.filename)

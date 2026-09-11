@@ -28,12 +28,13 @@ def _is_plausible_ico(ico: str) -> bool:
 
 def lookup_company_by_ico(ico: str) -> dict | None:
     """
-    Vráti dict s kľúčmi name, address, ico, dic, ic_dph, alebo None,
-    ak sa firma nenašla alebo vyhľadávanie z akéhokoľvek dôvodu zlyhalo.
+    Vráti dict s kľúčmi name, address, city, zip_code, ico, dic, ic_dph,
+    alebo None, ak sa firma nenašla alebo vyhľadávanie z akéhokoľvek
+    dôvodu zlyhalo.
 
     `ic_dph` je None, ak subjekt nie je (aktuálne) platiteľom DPH.
-    `address` je zložená z ulice, mesta a PSČ do jedného textového
-    poľa (tak, ako to appka pre zákazníkov ukladá).
+    `address` obsahuje len ulicu a číslo - mesto a PSČ appka ukladá
+    samostatne (potrebné pre štruktúrovanú adresu v Peppol XML).
     """
 
     ico = (ico or "").strip()
@@ -81,22 +82,16 @@ def lookup_company_by_ico(ico: str) -> dict | None:
         return None
 
 
-    address_parts = [
-        part.strip()
-        for part in (
-            data.get("street"),
-            data.get("city"),
-        )
-        if part and part.strip()
-    ]
+    street = data.get("street")
+    street = street.strip() if street else None
+
+    city = data.get("city")
+    city = city.strip() if city else None
 
     zip_code = data.get("psc") or data.get("postalCode")
 
     if zip_code:
-
-        address_parts.append(str(zip_code).replace(" ", ""))
-
-    address = ", ".join(address_parts) if address_parts else None
+        zip_code = str(zip_code).replace(" ", "")
 
 
     vat_registration = data.get("vatRegistration")
@@ -113,7 +108,9 @@ def lookup_company_by_ico(ico: str) -> dict | None:
 
     return {
         "name": name,
-        "address": address,
+        "address": street,
+        "city": city,
+        "zip_code": zip_code,
         "ico": data.get("ico") or data.get("nationalId") or ico,
         "dic": data.get("dic") or data.get("taxId"),
         "ic_dph": ic_dph,

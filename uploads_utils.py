@@ -144,12 +144,14 @@ async def _read_and_validate_image(upload: UploadFile) -> tuple[bytes, str]:
 
 async def save_image_upload(upload: UploadFile, base_name: str) -> str:
     """
-    Uloží nahraný obrázok (logo/podpis) do uploads/ priečinka.
+    Jednoduché uloženie obrázka (logo/podpis) - validuje, zmaže staré
+    súbory s rovnakým base_name a zapíše nový.
 
-    Pred uložením zmaže existujúce súbory s rovnakým `base_name`
-    (bez ohľadu na príponu), aby po zmene formátu nezostali staré súbory.
-
-    Vráti názov uloženého súboru (napr. "logo.png").
+    POZOR: toto NIE JE bezpečné voči zlyhaniu DB commitu po zápise -
+    ak appka potrebuje istotu, že sa súbor zmení len keď sa naozaj
+    uloží aj DB záznam (napr. /settings), použi namiesto tejto funkcie
+    dvojicu stage_image_upload() + finalize_staged_image()/
+    discard_staged_image() nižšie.
     """
 
     ensure_uploads_dir()
@@ -168,6 +170,59 @@ async def save_image_upload(upload: UploadFile, base_name: str) -> str:
 
 
     return filename
+
+
+async def stage_image_upload(upload: UploadFile, base_name: str) -> tuple[Path, str]:
+    """
+    Overí a zapíše nahraný obrázok pod DOČASNÝM názvom - existujúci
+    súbor s rovnakým base_name sa ešte NEDOTKNE. Použi spolu s
+    finalize_staged_image() (po úspešnom DB commite) alebo
+    discard_staged_image() (ak DB commit zlyhá).
+
+    Toto rieši scenár: appka zapíše nové logo na disk, zmaže staré,
+    a AŽ POTOM zlyhá DB commit - výsledkom by bol stav, kde DB stále
+    odkazuje na (už zmazané) staré logo. So stage/finalize sa staré
+    súbory zmažú až vtedy, keď je nový DB záznam bezpečne uložený.
+    """
+
+    ensure_uploads_dir()
+
+    contents, extension = await _read_and_validate_image(upload)
+
+    final_filename = f"{base_name}{extension}"
+
+    temp_filename = f".tmp-{uuid.uuid4().hex[:12]}-{final_filename}"
+
+    temp_path = UPLOADS_DIR / temp_filename
+
+    with open(temp_path, "wb") as f:
+        f.write(contents)
+
+    return temp_path, final_filename
+
+
+def finalize_staged_image(temp_path: Path, final_filename: str, base_name: str) -> None:
+    """
+    Zavolať PO úspešnom DB commite - zmaže staré súbory s rovnakým
+    base_name (napr. inej prípony) a premenuje dočasný súbor na finálny
+    názov. `os.replace` je na väčšine systémov atomická operácia.
+    """
+
+    delete_image(base_name)
+
+    final_path = UPLOADS_DIR / final_filename
+
+    os.replace(temp_path, final_path)
+
+
+def discard_staged_image(temp_path: Path) -> None:
+    """
+    Zavolať, ak DB commit ZLYHAL - zmaže len dočasný súbor, pôvodný
+    (starý) súbor ostáva netknutý.
+    """
+
+    if temp_path.exists():
+        os.remove(temp_path)
 
 
 # =========================================

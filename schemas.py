@@ -62,6 +62,8 @@ class CustomerBase(BaseModel):
     phone: str | None = None
     email: str | None = None
     address: str | None = None
+    city: str | None = None
+    zip_code: str | None = None
     note: str | None = None
 
     ico: str | None = None

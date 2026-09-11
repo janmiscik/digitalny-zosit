@@ -3418,3 +3418,138 @@ def test_credit_note_detail_links_to_original_invoice():
     assert detail_response.status_code == 200
     assert "Dobropis č." in detail_response.text
     assert f"/invoices/{invoice_id}" in detail_response.text
+
+# =========================================
+# PEPPOL: OPRAVA ADRESY ZÁKAZNÍKA A REVERSE CHARGE
+# =========================================
+
+def test_peppol_xml_includes_customer_city_and_zip():
+
+    import xml.etree.ElementTree as ET
+
+    db = TestingSessionLocal()
+
+    customer = db.query(Customer).first()
+    customer.city = "Bratislava"
+    customer.zip_code = "81101"
+    db.commit()
+
+    invoice = create_sample_invoice(db)
+    company = Company(name="Firma", ico="12345678", is_vat_payer=True)
+    db.add(company)
+    db.commit()
+    db.refresh(invoice)
+
+    from peppol_xml import generate_peppol_xml
+    xml_bytes = generate_peppol_xml(invoice, company)
+    db.close()
+
+    root = ET.fromstring(xml_bytes)
+    ns = {
+        "cac": "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2",
+        "cbc": "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2",
+    }
+
+    city_el = root.find(
+        "cac:AccountingCustomerParty/cac:Party/cac:PostalAddress/cbc:CityName",
+        ns
+    )
+    zip_el = root.find(
+        "cac:AccountingCustomerParty/cac:Party/cac:PostalAddress/cbc:PostalZone",
+        ns
+    )
+
+    assert city_el is not None and city_el.text == "Bratislava"
+    assert zip_el is not None and zip_el.text == "81101"
+
+
+def test_peppol_xml_reverse_charge_uses_ae_category():
+
+    import xml.etree.ElementTree as ET
+    from peppol_xml import vat_category_code
+
+    assert vat_category_code(0, reverse_charge=True) == "AE"
+    assert vat_category_code(0, reverse_charge=False) == "Z"
+    assert vat_category_code(23, reverse_charge=False) == "S"
+
+    db = TestingSessionLocal()
+
+    customer = db.query(Customer).first()
+    customer.ic_dph = "SK1234567890"
+    db.commit()
+
+    invoice = create_sample_invoice(db)
+    invoice.reverse_charge = True
+    invoice.items[0].vat_rate = 0
+
+    company = Company(name="Firma", ico="12345678", is_vat_payer=True)
+    db.add(company)
+    db.commit()
+    db.refresh(invoice)
+
+    from peppol_xml import generate_peppol_xml
+    xml_bytes = generate_peppol_xml(invoice, company)
+    db.close()
+
+    root = ET.fromstring(xml_bytes)
+    ns = {
+        "cac": "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2",
+        "cbc": "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2",
+    }
+
+    category_ids = root.findall(".//cac:TaxCategory/cbc:ID", ns)
+    assert any(el.text == "AE" for el in category_ids)
+
+
+# =========================================
+# ZÁKAZNÍK: MESTO A PSČ
+# =========================================
+
+def test_create_customer_with_city_and_zip():
+
+    response = post_form(
+        "/customers",
+        [
+            ("name", "Nový zákazník"),
+            ("address", "Hlavná 1"),
+            ("city", "Košice"),
+            ("zip_code", "04001"),
+        ],
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+
+    db = TestingSessionLocal()
+    customer = db.query(Customer).filter(Customer.name == "Nový zákazník").first()
+    db.close()
+
+    assert customer.city == "Košice"
+    assert customer.zip_code == "04001"
+
+
+def test_update_customer_city_and_zip():
+
+    db = TestingSessionLocal()
+    customer = db.query(Customer).first()
+    customer_id = customer.id
+    db.close()
+
+    response = post_form(
+        f"/customers/{customer_id}/edit",
+        [
+            ("name", "Firma s.r.o."),
+            ("city", "Prešov"),
+            ("zip_code", "08001"),
+        ],
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+
+    db = TestingSessionLocal()
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    db.close()
+
+    assert customer.city == "Prešov"
+    assert customer.zip_code == "08001"

@@ -74,12 +74,18 @@ def map_unit_code(unit: str) -> str:
     return UNIT_CODE_MAP.get(normalized, "C62")
 
 
-def vat_category_code(vat_rate: int) -> str:
+def vat_category_code(vat_rate: int, reverse_charge: bool = False) -> str:
     """
     Peppol/UBL kód kategórie DPH podľa UNCL5305.
     S = štandardná/znížená sadzba (percento je v samostatnom elemente),
-    Z = nulová sadzba.
+    Z = nulová sadzba,
+    AE = prenesenie daňovej povinnosti (VAT Reverse Charge) - MUSÍ sa
+    použiť namiesto Z, ak ide o §69 ods. 12, inak by XML nesprávne
+    tvrdilo, že ide o obyčajnú nulovú sadzbu bez daňového dôvodu.
     """
+
+    if reverse_charge:
+        return "AE"
 
     if vat_rate == 0:
         return "Z"
@@ -286,6 +292,8 @@ def generate_peppol_xml(invoice, company) -> bytes:
         ico=customer.ico,
         ic_dph=customer.ic_dph,
         address=customer.address,
+        city=customer.city,
+        zip_code=customer.zip_code,
         email=customer.email,
         phone=customer.phone,
         peppol_scheme_id=customer_peppol_scheme
@@ -360,7 +368,7 @@ def generate_peppol_xml(invoice, company) -> bytes:
             tax_category,
             NS_CBC,
             "ID",
-            vat_category_code(row["rate"])
+            vat_category_code(row["rate"], invoice.reverse_charge)
         )
 
         add_text(
@@ -369,6 +377,22 @@ def generate_peppol_xml(invoice, company) -> bytes:
             "Percent",
             str(row["rate"])
         )
+
+        if invoice.reverse_charge:
+
+            add_text(
+                tax_category,
+                NS_CBC,
+                "TaxExemptionReasonCode",
+                "VATEX-EU-AE"
+            )
+
+            add_text(
+                tax_category,
+                NS_CBC,
+                "TaxExemptionReason",
+                "Prenesenie daňovej povinnosti podľa §69 ods. 12 zákona o DPH"
+            )
 
         tax_scheme = SubElement(tax_category, qn(NS_CAC, "TaxScheme"))
         add_text(tax_scheme, NS_CBC, "ID", "VAT")
@@ -455,7 +479,7 @@ def generate_peppol_xml(invoice, company) -> bytes:
             classified_tax_category,
             NS_CBC,
             "ID",
-            vat_category_code(item.vat_rate)
+            vat_category_code(item.vat_rate, invoice.reverse_charge)
         )
 
         add_text(

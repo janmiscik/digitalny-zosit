@@ -10,7 +10,12 @@ from backup_utils import create_backup_bytes, restore_from_upload
 from invoice_utils import NON_VAT_PAYER_NOTICE
 from models import Company
 from templates_config import templates
-from uploads_utils import delete_image, save_image_upload
+from uploads_utils import (
+    delete_image,
+    discard_staged_image,
+    finalize_staged_image,
+    stage_image_upload,
+)
 
 
 router = APIRouter()
@@ -142,27 +147,67 @@ async def settings_save(
     company.peppol_scheme_id = peppol_scheme_id or None
 
 
+    # Nahrávanie súborov je zámerne "stage -> DB commit -> finalize/
+    # discard": nový súbor sa zapíše pod dočasným menom, staré súbory sa
+    # zmažú AŽ PO úspešnom uložení DB záznamu. Ak by DB commit zlyhal, DB
+    # by inak mohla odkazovať na medzičasom zmazaný starý súbor.
+
+    staged_logo = None
+    staged_signature = None
+
     if logo is not None and logo.filename:
 
-        company.logo_filename = await save_image_upload(logo, "logo")
+        staged_logo = await stage_image_upload(logo, "logo")
+        company.logo_filename = staged_logo[1]
 
     elif remove_logo == "1":
 
-        delete_image("logo")
         company.logo_filename = None
 
 
     if signature is not None and signature.filename:
 
-        company.signature_filename = await save_image_upload(signature, "signature")
+        staged_signature = await stage_image_upload(signature, "signature")
+        company.signature_filename = staged_signature[1]
+
+    elif remove_signature == "1":
+
+        company.signature_filename = None
+
+
+    try:
+
+        db.commit()
+
+    except Exception:
+
+        db.rollback()
+
+        if staged_logo is not None:
+            discard_staged_image(staged_logo[0])
+
+        if staged_signature is not None:
+            discard_staged_image(staged_signature[0])
+
+        raise
+
+
+    if staged_logo is not None:
+
+        finalize_staged_image(staged_logo[0], staged_logo[1], "logo")
+
+    elif remove_logo == "1":
+
+        delete_image("logo")
+
+
+    if staged_signature is not None:
+
+        finalize_staged_image(staged_signature[0], staged_signature[1], "signature")
 
     elif remove_signature == "1":
 
         delete_image("signature")
-        company.signature_filename = None
-
-
-    db.commit()
 
 
     return RedirectResponse(
@@ -187,13 +232,13 @@ def download_backup(
 
     backup_bytes = create_backup_bytes()
 
-    filename = f"digitalny-zosit-zaloha-{date.today().isoformat()}.db"
+    filename = f"digitalny-zosit-zaloha-{date.today().isoformat()}.zip"
 
     return Response(
 
         content=backup_bytes,
 
-        media_type="application/x-sqlite3",
+        media_type="application/zip",
 
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"'

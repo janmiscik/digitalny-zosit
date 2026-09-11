@@ -124,7 +124,7 @@
 
 
                 <label>
-                    Adresa
+                    Adresa (ulica a číslo)
                 </label>
 
 
@@ -134,6 +134,41 @@
                     name="address"
                     value="{{ customer.address or '' }}"
                 >
+
+
+                <div style="display: flex; gap: 8px;">
+
+                    <div style="flex: 1;">
+
+                        <label>
+                            Mesto
+                        </label>
+
+                        <input
+                            type="text"
+                            id="edit-customer-city"
+                            name="city"
+                            value="{{ customer.city or '' }}"
+                        >
+
+                    </div>
+
+                    <div style="flex: 1;">
+
+                        <label>
+                            PSČ
+                        </label>
+
+                        <input
+                            type="text"
+                            id="edit-customer-zip_code"
+                            name="zip_code"
+                            value="{{ customer.zip_code or '' }}"
+                        >
+
+                    </div>
+
+                </div>
 
 
                 <label>
@@ -276,11 +311,15 @@ async function lookupCustomerIco(prefix) {
 
         const nameField = document.getElementById(prefix + "-customer-name");
         const addressField = document.getElementById(prefix + "-customer-address");
+        const cityField = document.getElementById(prefix + "-customer-city");
+        const zipField = document.getElementById(prefix + "-customer-zip_code");
         const dicField = document.getElementById(prefix + "-customer-dic");
         const icDphField = document.getElementById(prefix + "-customer-ic_dph");
 
         if (nameField && data.name) nameField.value = data.name;
         if (addressField && data.address) addressField.value = data.address;
+        if (cityField && data.city) cityField.value = data.city;
+        if (zipField && data.zip_code) zipField.value = data.zip_code;
         if (dicField && data.dic) dicField.value = data.dic;
         if (icDphField) icDphField.value = data.ic_dph || "";
 

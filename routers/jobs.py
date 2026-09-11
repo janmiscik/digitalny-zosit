@@ -598,7 +598,18 @@ async def upload_job_photo(
     )
 
     db.add(photo)
-    db.commit()
+
+    try:
+
+        db.commit()
+
+    except Exception:
+
+        # Súbor je už zapísaný na disku, ale DB záznam sa neuložil -
+        # nenechávame ho ako osirotený súbor bez zodpovedajúceho záznamu.
+        db.rollback()
+        delete_job_photo(filename)
+        raise
 
 
     return RedirectResponse(

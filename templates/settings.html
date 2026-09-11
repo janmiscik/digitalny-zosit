@@ -350,21 +350,22 @@
         <div class="edit-customer-card">
 
             <h2 style="margin-top: 0;">
-                Záloha a obnova databázy
+                Záloha a obnova
             </h2>
 
             {% if request.query_params.get('restored') %}
 
                 <div style="background: #e8f5e9; border: 1px solid #66bb6a; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; color: #2e7d32;">
-                    ✅ Databáza bola úspešne obnovená zo zálohy.
+                    ✅ Appka bola úspešne obnovená zo zálohy.
                 </div>
 
             {% endif %}
 
             <p style="color: var(--text-muted); font-size: 0.9em;">
-                Appka ukladá všetky dáta do jedného súboru. Stiahni si
-                pravidelne zálohu a ulož ju mimo tohto počítača (napr. na
-                cloudové úložisko alebo USB kľúč).
+                Záloha obsahuje databázu aj všetky nahraté súbory (logo,
+                podpis, fotky zákaziek) v jednom ZIP súbore. Stiahni si ju
+                pravidelne a ulož mimo tohto počítača (napr. na cloudové
+                úložisko alebo USB kľúč).
             </p>
 
             <a
@@ -372,33 +373,33 @@
                 class="save-button"
                 style="display: inline-block; text-decoration: none; margin-bottom: 24px;"
             >
-                💾 Stiahnuť zálohu
+                💾 Stiahnuť zálohu (.zip)
             </a>
 
 
             <h3 style="font-size: 15px; color: var(--danger); margin-bottom: 8px;">
-                Obnoviť z zálohy
+                Obnoviť zo zálohy
             </h3>
 
             <p style="color: var(--text-muted); font-size: 0.85em;">
-                ⚠️ Obnovením sa <strong>prepíšu všetky aktuálne dáta</strong>
-                obsahom nahratej zálohy. Appka pred obnovou automaticky
-                uloží bezpečnostnú kópiu súčasného stavu, ale túto akciu
-                nie je možné jednoducho vrátiť späť z appky - postupuj
-                opatrne.
+                ⚠️ Obnovením sa <strong>prepíšu všetky aktuálne dáta aj
+                nahraté súbory</strong> obsahom tejto zálohy. Appka pred
+                obnovou automaticky uloží bezpečnostnú kópiu súčasného
+                stavu, ale túto akciu nie je možné jednoducho vrátiť späť
+                z appky - postupuj opatrne.
             </p>
 
             <form
                 action="/settings/restore"
                 method="post"
                 enctype="multipart/form-data"
-                onsubmit="return confirm('Naozaj chceš prepísať všetky aktuálne dáta obsahom tejto zálohy? Táto akcia sa nedá jednoducho vrátiť späť.');"
+                onsubmit="return confirm('Naozaj chceš prepísať všetky aktuálne dáta a súbory obsahom tejto zálohy? Táto akcia sa nedá jednoducho vrátiť späť.');"
             >
 
                 <input
                     type="file"
                     name="backup_file"
-                    accept=".db"
+                    accept=".zip"
                     required
                 >
 
@@ -407,7 +408,7 @@
                     class="cancel-button"
                     style="color: var(--danger); border-color: var(--danger); margin-top: 10px;"
                 >
-                    ⚠️ Obnoviť databázu z tohto súboru
+                    ⚠️ Obnoviť z tohto súboru
                 </button>
 
             </form>
