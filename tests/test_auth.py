@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
-os.environ.setdefault("ADMIN_USERNAME", "testadmin")
+os.environ["ADMIN_USERNAME"] = "testadmin"
 
 
 sys.path.insert(
@@ -35,9 +35,13 @@ os.environ["ADMIN_PASSWORD_HASH"] = hash_password(TEST_PASSWORD)
 # Modul auth.py si ADMIN_PASSWORD_HASH načíta pri importe, takže ho
 # po nastavení env premennej ešte musíme prepísať priamo v module.
 import auth
+
+auth.ADMIN_USERNAME = "testadmin"
 auth.ADMIN_PASSWORD_HASH = os.environ["ADMIN_PASSWORD_HASH"]
 
 import routers.auth as auth_router_module
+
+auth_router_module.ADMIN_USERNAME = "testadmin"
 auth_router_module.ADMIN_PASSWORD_HASH = os.environ["ADMIN_PASSWORD_HASH"]
 
 

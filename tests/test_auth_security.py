@@ -21,7 +21,7 @@ from pathlib import Path
 
 
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
-os.environ.setdefault("ADMIN_USERNAME", "testadmin")
+os.environ["ADMIN_USERNAME"] = "testadmin"
 
 sys.path.insert(
     0,
@@ -48,9 +48,12 @@ TEST_PASSWORD = "tajne-heslo-123"
 
 os.environ["ADMIN_PASSWORD_HASH"] = hash_password(TEST_PASSWORD)
 
+auth.ADMIN_USERNAME = "testadmin"
 auth.ADMIN_PASSWORD_HASH = os.environ["ADMIN_PASSWORD_HASH"]
 
 import routers.auth as auth_router_module
+
+auth_router_module.ADMIN_USERNAME = "testadmin"
 auth_router_module.ADMIN_PASSWORD_HASH = os.environ["ADMIN_PASSWORD_HASH"]
 
 
