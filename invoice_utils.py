@@ -2,6 +2,7 @@ from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from models import Invoice, Quote
@@ -456,3 +457,35 @@ def is_valid_quote_status_transition(current_status: str, new_status: str) -> bo
         return True
 
     return new_status in allowed_next_quote_statuses(current_status)
+
+
+MAX_NUMBER_RETRY_ATTEMPTS = 5
+
+
+def commit_with_number_retry(db: Session, regenerate_number) -> None:
+    """
+    Skúsi db.commit(). Ak zlyhá na UNIQUE constraint čísla dokladu (dve
+    súbežné požiadavky si mohli vygenerovať to isté "ďalšie" číslo -
+    next_invoice_number atď. nie je atomické), zavolá regenerate_number()
+    a skúsi znova, max MAX_NUMBER_RETRY_ATTEMPTS krát.
+
+    Pri appke s jedným používateľom je toto riziko nízke, ale appka je
+    už dosť serózna na to, aby bola voči tomu odolná.
+    """
+
+    for attempt in range(MAX_NUMBER_RETRY_ATTEMPTS):
+
+        try:
+
+            db.commit()
+
+            return
+
+        except IntegrityError:
+
+            db.rollback()
+
+            if attempt == MAX_NUMBER_RETRY_ATTEMPTS - 1:
+                raise
+
+            regenerate_number()

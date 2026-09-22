@@ -13,6 +13,7 @@ from invoice_pdf import generate_invoice_pdf
 from invoice_utils import (
     allowed_next_invoice_statuses,
     calculate_invoice_totals,
+    commit_with_number_retry,
     is_invoice_overdue,
     is_valid_invoice_status_transition,
     next_credit_note_number,
@@ -404,11 +405,8 @@ async def create_invoice(
         )
 
 
-    invoice_number = next_invoice_number(db, issue_date.year)
-
-
     new_invoice = Invoice(
-        invoice_number=invoice_number,
+        invoice_number=next_invoice_number(db, issue_date.year),
         customer_id=customer_id,
         job_id=job_id,
         status=InvoiceStatus.DRAFT.value,
@@ -439,7 +437,10 @@ async def create_invoice(
 
     db.add(new_invoice)
 
-    db.commit()
+    def _regenerate():
+        new_invoice.invoice_number = next_invoice_number(db, issue_date.year)
+
+    commit_with_number_retry(db, _regenerate)
 
     db.refresh(new_invoice)
 
@@ -860,16 +861,13 @@ def duplicate_invoice(
     # Kópia zachováva, či išlo o zálohovú (proforma) faktúru - a teda aj
     # jej vlastný číselný rad (viď next_proforma_number), nech kopírovanie
     # zálohovej faktúry opäť nespotrebuje číslo z ostrej fakturačnej rady.
-    if original.is_proforma:
-
-        new_invoice_number = next_proforma_number(db, issue_date.year)
-
-    else:
-
-        new_invoice_number = next_invoice_number(db, issue_date.year)
+    def _generate_dup_number():
+        if original.is_proforma:
+            return next_proforma_number(db, issue_date.year)
+        return next_invoice_number(db, issue_date.year)
 
     new_invoice = Invoice(
-        invoice_number=new_invoice_number,
+        invoice_number=_generate_dup_number(),
         customer_id=original.customer_id,
         job_id=original.job_id,
         status=InvoiceStatus.DRAFT.value,
@@ -895,7 +893,11 @@ def duplicate_invoice(
         )
 
     db.add(new_invoice)
-    db.commit()
+
+    def _regenerate_dup():
+        new_invoice.invoice_number = _generate_dup_number()
+
+    commit_with_number_retry(db, _regenerate_dup)
     db.refresh(new_invoice)
 
 
@@ -1065,8 +1067,11 @@ async def create_credit_note(
         )
 
 
+    def _generate_cn_number():
+        return next_credit_note_number(db, issue_date.year)
+
     credit_note = Invoice(
-        invoice_number=next_credit_note_number(db, issue_date.year),
+        invoice_number=_generate_cn_number(),
         customer_id=original.customer_id,
         job_id=original.job_id,
         status=InvoiceStatus.DRAFT.value,
@@ -1091,7 +1096,11 @@ async def create_credit_note(
         )
 
     db.add(credit_note)
-    db.commit()
+
+    def _regenerate_cn():
+        credit_note.invoice_number = _generate_cn_number()
+
+    commit_with_number_retry(db, _regenerate_cn)
     db.refresh(credit_note)
 
 

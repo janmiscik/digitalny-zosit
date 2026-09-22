@@ -9,6 +9,7 @@ from database import get_db
 from delivery_note_pdf import generate_delivery_note_pdf
 from form_utils import parse_items_from_form, parse_optional_date, parse_required_date
 from invoice_utils import (
+    commit_with_number_retry,
     allowed_next_quote_statuses,
     calculate_invoice_totals,
     is_quote_expired,
@@ -274,11 +275,11 @@ async def create_quote(
     note = form.get("note", "").strip() or None
 
 
-    quote_number = next_quote_number(db, issue_date.year)
-
+    def _generate_quote_number():
+        return next_quote_number(db, issue_date.year)
 
     new_quote = Quote(
-        quote_number=quote_number,
+        quote_number=_generate_quote_number(),
         customer_id=customer_id,
         job_id=job_id,
         status=QuoteStatus.DRAFT.value,
@@ -300,7 +301,11 @@ async def create_quote(
         )
 
     db.add(new_quote)
-    db.commit()
+
+    def _regenerate_quote():
+        new_quote.quote_number = _generate_quote_number()
+
+    commit_with_number_retry(db, _regenerate_quote)
     db.refresh(new_quote)
 
 
@@ -778,13 +783,10 @@ def convert_quote_to_invoice(
     issue_date = date.today()
     due_date = issue_date + timedelta(days=14)
 
-    if make_proforma:
-
-        invoice_number = next_proforma_number(db, issue_date.year)
-
-    else:
-
-        invoice_number = next_invoice_number(db, issue_date.year)
+    def _generate_conv_number():
+        if make_proforma:
+            return next_proforma_number(db, issue_date.year)
+        return next_invoice_number(db, issue_date.year)
 
     status_value = InvoiceStatus.DRAFT.value
 
@@ -812,7 +814,7 @@ def convert_quote_to_invoice(
 
 
     new_invoice = Invoice(
-        invoice_number=invoice_number,
+        invoice_number=_generate_conv_number(),
         customer_id=quote.customer_id,
         job_id=quote.job_id,
         status=status_value,
@@ -838,7 +840,11 @@ def convert_quote_to_invoice(
     quote.status = QuoteStatus.CONVERTED.value
 
     db.add(new_invoice)
-    db.commit()
+
+    def _regenerate_conv():
+        new_invoice.invoice_number = _generate_conv_number()
+
+    commit_with_number_retry(db, _regenerate_conv)
     db.refresh(new_invoice)
 
 

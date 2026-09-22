@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="sk">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        Faktúra č. {{ invoice.invoice_number }} - Digitálny zošit
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', path='style.css') }}"
+    >
+
+    <style>
+
+        .invoice-view-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 12px 0 20px 0;
+        }
+
+        .invoice-view-table th {
+            text-align: left;
+            font-size: 12px;
+            color: var(--text-muted);
+            padding: 8px 6px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .invoice-view-table td {
+            padding: 8px 6px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .invoice-view-table th:not(:first-child),
+        .invoice-view-table td:not(:first-child) {
+            text-align: right;
+        }
+
+        .invoice-total-line {
+            display: flex;
+            justify-content: flex-end;
+            gap: 24px;
+            font-family: var(--font-mono);
+            font-size: 22px;
+            font-weight: 600;
+            margin-top: 8px;
+        }
+
+        .invoice-meta-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .invoice-meta-grid div span {
+            display: block;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .invoice-actions-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+
+<header class="topbar">
+
+    <div class="logo">
+        <img src="/static/logo-icon.png" alt="" class="logo-icon"> Digitálny zošit
+    </div>
+
+
+    <div class="topbar-actions">
+
+        <button
+            type="button"
+            class="theme-button"
+            id="themeButton"
+            onclick="toggleTheme()"
+            title="Prepnúť tému"
+        >
+            🌙
+        </button>
+
+
+        <a
+            href="/customers/{{ invoice.customer_id }}"
+            class="back-button"
+        >
+            ← Späť k zákazníkovi
+        </a>
+
+    </div>
+
+</header>
+
+
+<main class="container">
+
+
+    <section class="edit-customer-page">
+
+
+        <div class="page-header">
+
+            <h1>
+                {% if invoice.is_credit_note %}Dobropis{% else %}Faktúra{% endif %} č. {{ invoice.invoice_number }}
+            </h1>
+
+            <p>
+                {{ invoice.customer.name }}
+
+                {% if invoice.is_credit_note and invoice.original_invoice %}
+                    · k faktúre <a href="/invoices/{{ invoice.original_invoice.id }}">č. {{ invoice.original_invoice.invoice_number }}</a>
+                {% endif %}
+            </p>
+
+        </div>
+
+
+        <div class="edit-customer-card">
+
+
+            <div class="invoice-actions-row">
+
+                {% if invoice.status == "Návrh" %}
+
+                    <a
+                        href="/invoices/{{ invoice.id }}/edit"
+                        class="edit-job-button"
+                    >
+                        ✏️ Upraviť
+                    </a>
+
+
+                    <form
+                        action="/invoices/{{ invoice.id }}/delete"
+                        method="post"
+                        onsubmit="return confirm('Naozaj chceš zmazať túto faktúru? Táto akcia sa nedá vrátiť späť.');"
+                        style="display: inline;"
+                    >
+                        <button
+                            type="submit"
+                            class="edit-job-button"
+                            style="color: var(--danger); border-color: var(--danger);"
+                        >
+                            🗑️ Zmazať
+                        </button>
+                    </form>
+
+                {% endif %}
+
+
+                <a
+                    href="/invoices/{{ invoice.id }}/pdf"
+                    class="save-button"
+                    target="_blank"
+                >
+                    📄 Stiahnuť PDF
+                </a>
+
+
+                <form
+                    action="/invoices/{{ invoice.id }}/duplicate"
+                    method="post"
+                    style="display: inline;"
+                >
+                    <button
+                        type="submit"
+                        class="edit-job-button"
+                    >
+                        📑 Kopírovať
+                    </button>
+                </form>
+
+
+                {% if not invoice.is_credit_note and invoice.status in ["Odoslaná", "Uhradená"] %}
+
+                    <a
+                        href="/invoices/{{ invoice.id }}/credit-note/new"
+                        class="edit-job-button"
+                        style="color: var(--danger); border-color: var(--danger);"
+                        title="Vytvorí opravný doklad (dobropis) k tejto faktúre"
+                    >
+                        ↩️ Vytvoriť dobropis
+                    </a>
+
+                {% endif %}
+
+
+                <a
+                    href="/invoices/{{ invoice.id }}/peppol-xml"
+                    class="edit-job-button"
+                    title="Príprava dát pre Peppol e-fakturáciu - pred ostrým použitím over u svojho poskytovateľa"
+                >
+                    🌐 Peppol XML (návrh)
+                </a>
+
+
+                <form
+                    action="/invoices/{{ invoice.id }}/status"
+                    method="post"
+                    style="display: inline-flex; align-items: center; gap: 8px;"
+                >
+
+                    {% if can_change_status %}
+
+                        <select
+                            name="status"
+                            onchange="this.form.submit()"
+                            class="job-status status-{{ invoice.status | lower | replace(' ', '-') }}"
+                        >
+
+                            {% for status_option in statuses %}
+
+                                <option
+                                    value="{{ status_option }}"
+                                    {% if invoice.status == status_option %}
+                                        selected
+                                    {% endif %}
+                                >
+                                    {{ status_option }}
+                                </option>
+
+                            {% endfor %}
+
+                        </select>
+
+                    {% else %}
+
+                        <span
+                            class="job-status status-{{ invoice.status | lower | replace(' ', '-') }}"
+                            title="Táto faktúra je v konečnom stave a jej stav sa už nedá zmeniť."
+                        >
+                            {{ invoice.status }}
+                        </span>
+
+                    {% endif %}
+
+                    {% if is_overdue %}
+
+                        <span class="invoice-row-overdue" style="color: var(--danger);">
+                            · po splatnosti
+                        </span>
+
+                    {% endif %}
+
+                    {% if invoice.reverse_charge %}
+
+                        <span style="color: var(--text-muted); font-weight: 600;" title="Prenesenie daňovej povinnosti - faktúra bez DPH, odberateľ si DPH sám prizná.">
+                            · prenesenie daňovej povinnosti
+                        </span>
+
+                    {% endif %}
+
+                </form>
+
+
+                {% if invoice.job %}
+
+                    <a
+                        href="/jobs/{{ invoice.job.id }}/edit"
+                        class="edit-job-button"
+                    >
+                        Súvisiaca zákazka: {{ invoice.job.title }}
+                    </a>
+
+                {% endif %}
+
+            </div>
+
+
+            <div class="invoice-meta-grid">
+
+                <div>
+                    <span>Dátum vystavenia</span>
+                    {{ invoice.issue_date.strftime("%d.%m.%Y") }}
+                </div>
+
+                <div>
+                    <span>Dátum dodania</span>
+                    {{ (invoice.delivery_date or invoice.issue_date).strftime("%d.%m.%Y") }}
+                </div>
+
+                <div>
+                    <span>Dátum splatnosti</span>
+                    {{ invoice.due_date.strftime("%d.%m.%Y") }}
+                </div>
+
+                {% if invoice.status == "Uhradená" %}
+
+                    <div>
+                        <span>Dátum úhrady</span>
+
+                        <form
+                            action="/invoices/{{ invoice.id }}/paid-date"
+                            method="post"
+                            style="display: inline-flex; gap: 6px; align-items: center;"
+                        >
+                            <input
+                                type="date"
+                                name="paid_date"
+                                value="{{ invoice.paid_date.isoformat() if invoice.paid_date else '' }}"
+                                max="{{ today.isoformat() }}"
+                                onchange="this.form.submit()"
+                                style="padding: 2px 6px; font-size: 0.95em;"
+                            >
+                        </form>
+                    </div>
+
+                {% endif %}
+
+                <div>
+                    <span>Variabilný symbol</span>
+                    {{ invoice.variable_symbol or invoice.invoice_number }}
+                </div>
+
+                <div>
+                    <span>Spôsob úhrady</span>
+                    {{ invoice.payment_method or "Prevodom" }}
+                </div>
+
+            </div>
+
+
+            <table class="invoice-view-table">
+
+                <thead>
+
+                    <tr>
+
+                        <th>Popis</th>
+                        <th>Množ.</th>
+                        <th>MJ</th>
+                        <th>Cena/MJ</th>
+                        <th>DPH</th>
+                        <th>Spolu</th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
+                    {% for item in invoice.items %}
+
+                        <tr>
+
+                            <td>{{ item.description }}</td>
+                            <td>{{ item.quantity }}</td>
+                            <td>{{ item.unit }}</td>
+                            <td>{{ "%.2f"|format(item.unit_price) }} €</td>
+                            <td>{{ item.vat_rate }} %</td>
+                            <td>{{ "%.2f"|format(item.quantity * item.unit_price) }} €</td>
+
+                        </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+
+            <div style="max-width: 400px; margin-left: auto;">
+
+                {% for row in totals.vat_breakdown %}
+
+                    <div style="display: flex; justify-content: space-between; font-size: 14px; color: var(--text-secondary); margin-bottom: 4px;">
+
+                        <span>DPH {{ row.rate }} % (základ {{ "%.2f"|format(row.base) }} €)</span>
+                        <span>{{ "%.2f"|format(row.vat) }} €</span>
+
+                    </div>
+
+                {% endfor %}
+
+            </div>
+
+
+            <div class="invoice-total-line">
+                Celkom: {{ "%.2f"|format(totals.total_gross) }} €
+            </div>
+
+
+            {% if invoice.note %}
+
+                <div style="margin-top: 24px;">
+
+                    <label>Poznámka</label>
+                    <p>{{ invoice.note }}</p>
+
+                </div>
+
+            {% endif %}
+
+
+        </div>
+
+
+    </section>
+
+
+</main>
+
+
+<script>
+
+function applyTheme(theme) {
+
+    document.documentElement.setAttribute(
+        "data-theme",
+        theme
+    );
+
+    const button =
+        document.getElementById("themeButton");
+
+    if (theme === "dark") {
+
+        button.textContent = "☀️";
+
+    } else {
+
+        button.textContent = "🌙";
+
+    }
+
+}
+
+
+function toggleTheme() {
+
+    const currentTheme =
+        document.documentElement.getAttribute(
+            "data-theme"
+        );
+
+    const newTheme =
+        currentTheme === "dark"
+            ? "light"
+            : "dark";
+
+    localStorage.setItem(
+        "digitalnyZositTheme",
+        newTheme
+    );
+
+    applyTheme(newTheme);
+
+}
+
+
+const savedTheme =
+    localStorage.getItem(
+        "digitalnyZositTheme"
+    );
+
+
+if (savedTheme === "dark") {
+
+    applyTheme("dark");
+
+} else {
+
+    applyTheme("light");
+
+}
+
+</script>
+
+
+</body>
+
+</html>
