@@ -87,6 +87,7 @@
                 action="/jobs/{{ job.id }}/edit"
                 method="post"
             >
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
 
 
                 <label>
@@ -275,6 +276,7 @@
                                 <td style="padding: 8px 6px; text-align: right;">{{ "%.2f"|format(cost.amount) }} €</td>
                                 <td style="padding: 8px 6px;">
                                     <form action="/jobs/{{ job.id }}/costs/{{ cost.id }}/delete" method="post" onsubmit="return confirm('Zmazať tento náklad?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                                         <button type="submit" class="invoice-item-remove" title="Zmazať">×</button>
                                     </form>
                                 </td>
@@ -290,6 +292,7 @@
 
 
             <form action="/jobs/{{ job.id }}/costs" method="post" style="display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
 
                 <div style="flex: 2; min-width: 160px;">
                     <label>Popis nákladu</label>
@@ -338,6 +341,7 @@
                             <div style="position: relative;">
                                 <img src="/jobs/photos/{{ photo.filename }}" style="width: 120px; height: 120px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border);">
                                 <form action="/jobs/{{ job.id }}/photos/{{ photo.id }}/delete" method="post" onsubmit="return confirm('Zmazať túto fotku?');" style="position: absolute; top: 4px; right: 4px;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                                     <button type="submit" style="background: rgba(0,0,0,0.6); color: white; border: none; border-radius: 50%; width: 22px; height: 22px; cursor: pointer;">×</button>
                                 </form>
                             </div>
@@ -347,6 +351,7 @@
                     </div>
 
                     <form action="/jobs/{{ job.id }}/photos" method="post" enctype="multipart/form-data" style="margin-top: 10px;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                         <input type="hidden" name="photo_type" value="pred">
                         <input type="file" name="photo" accept="image/png,image/jpeg" required>
                         <button type="submit" class="cancel-button" style="margin-top: 6px;">+ Nahrať fotku (pred)</button>
@@ -366,6 +371,7 @@
                             <div style="position: relative;">
                                 <img src="/jobs/photos/{{ photo.filename }}" style="width: 120px; height: 120px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border);">
                                 <form action="/jobs/{{ job.id }}/photos/{{ photo.id }}/delete" method="post" onsubmit="return confirm('Zmazať túto fotku?');" style="position: absolute; top: 4px; right: 4px;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                                     <button type="submit" style="background: rgba(0,0,0,0.6); color: white; border: none; border-radius: 50%; width: 22px; height: 22px; cursor: pointer;">×</button>
                                 </form>
                             </div>
@@ -375,6 +381,7 @@
                     </div>
 
                     <form action="/jobs/{{ job.id }}/photos" method="post" enctype="multipart/form-data" style="margin-top: 10px;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                         <input type="hidden" name="photo_type" value="po">
                         <input type="file" name="photo" accept="image/png,image/jpeg" required>
                         <button type="submit" class="cancel-button" style="margin-top: 6px;">+ Nahrať fotku (po)</button>

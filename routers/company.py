@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile
 from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.orm import Session
 
+from csrf import verify_csrf
 from auth import require_login_page
 from database import get_db
 from backup_utils import create_backup_bytes, restore_from_upload
@@ -18,7 +19,7 @@ from uploads_utils import (
 )
 
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_csrf)])
 
 
 def get_or_create_company(db: Session) -> Company:

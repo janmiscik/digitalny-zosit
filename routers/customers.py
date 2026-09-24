@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
+from csrf import verify_csrf
 from auth import require_login_api, require_login_page
 from database import get_db
 from ico_lookup import lookup_company_by_ico
@@ -16,7 +17,7 @@ from schemas import CustomerCreate, CustomerRead, CustomerUpdate, InvoiceStatus
 from templates_config import templates
 
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_csrf)])
 
 
 # =========================================

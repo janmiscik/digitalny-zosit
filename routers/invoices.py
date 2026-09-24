@@ -5,6 +5,7 @@ from fastapi.responses import RedirectResponse, Response
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
+from csrf import verify_csrf
 from auth import require_login_api, require_login_page
 from database import get_db
 from delivery_note_pdf import generate_delivery_note_pdf
@@ -29,7 +30,7 @@ from schemas import InvoiceItemCreate, InvoiceRead, InvoiceStatus
 from templates_config import templates
 
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_csrf)])
 
 
 def validate_invoice_dates(issue_date: date, due_date: date) -> None:

@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import ValidationError
 from sqlalchemy.orm import Session, joinedload
 
+from csrf import verify_csrf
 from auth import require_login_api, require_login_page
 from database import get_db
 from invoice_utils import CLOSED_INVOICE_STATUSES, calculate_invoice_totals, signed_invoice_total
@@ -16,7 +17,7 @@ from templates_config import templates
 from uploads_utils import delete_job_photo, job_photo_path, save_job_photo_upload
 
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_csrf)])
 
 
 def parse_due_date(raw_value: str) -> date | None:

@@ -160,6 +160,7 @@
                         onsubmit="return confirm('Naozaj chceš zmazať túto faktúru? Táto akcia sa nedá vrátiť späť.');"
                         style="display: inline;"
                     >
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                         <button
                             type="submit"
                             class="edit-job-button"
@@ -186,6 +187,7 @@
                     method="post"
                     style="display: inline;"
                 >
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                     <button
                         type="submit"
                         class="edit-job-button"
@@ -223,6 +225,7 @@
                     method="post"
                     style="display: inline-flex; align-items: center; gap: 8px;"
                 >
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
 
                     {% if can_change_status %}
 
@@ -318,6 +321,7 @@
                             method="post"
                             style="display: inline-flex; gap: 6px; align-items: center;"
                         >
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                             <input
                                 type="date"
                                 name="paid_date"

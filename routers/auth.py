@@ -1,6 +1,6 @@
 import hmac
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 
 from auth import (
@@ -13,10 +13,11 @@ from auth import (
     register_successful_login,
     verify_password,
 )
+from csrf import verify_csrf
 from templates_config import templates
 
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_csrf)])
 
 
 # =========================================

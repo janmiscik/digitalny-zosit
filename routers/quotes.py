@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.orm import Session, joinedload
 
+from csrf import verify_csrf
 from auth import require_login_page
 from database import get_db
 from delivery_note_pdf import generate_delivery_note_pdf
@@ -26,7 +27,7 @@ from schemas import InvoiceStatus, QuoteItemCreate, QuoteStatus
 from templates_config import templates
 
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_csrf)])
 
 
 def require_draft_quote(quote) -> None:

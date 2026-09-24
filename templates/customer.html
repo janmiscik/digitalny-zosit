@@ -313,6 +313,7 @@
                                 method="post"
                                 class="status-form"
                             >
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
 
 
                                 <select
@@ -713,6 +714,7 @@
             action="/jobs"
             method="post"
         >
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
 
 
             <input

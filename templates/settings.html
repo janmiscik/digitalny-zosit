@@ -84,6 +84,7 @@
                 method="post"
                 enctype="multipart/form-data"
             >
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
 
 
                 <label>
@@ -395,6 +396,7 @@
                 enctype="multipart/form-data"
                 onsubmit="return confirm('Naozaj chceš prepísať všetky aktuálne dáta a súbory obsahom tejto zálohy? Táto akcia sa nedá jednoducho vrátiť späť.');"
             >
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
 
                 <input
                     type="file"

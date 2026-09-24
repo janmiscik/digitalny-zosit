@@ -288,6 +288,7 @@
             action="/customers"
             method="post"
         >
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
 
             <label>
                 IČO <span style="font-weight: 400; color: var(--text-muted);">(pre firmy/živnostníkov, nepovinné)</span>

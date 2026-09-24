@@ -19,6 +19,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from auth import hash_password, verify_password
+from csrf import verify_csrf
 from database import Base, get_db
 from main import app
 
@@ -78,6 +79,10 @@ def override_get_db():
 Base.metadata.create_all(bind=test_engine)
 
 app.dependency_overrides[get_db] = override_get_db
+
+# Tento súbor testuje prihlásenie/odhlásenie/rate limiting, nie CSRF
+# (na to je tests/test_csrf.py) - tu ho obídeme.
+app.dependency_overrides[verify_csrf] = lambda: None
 
 
 client = TestClient(app)

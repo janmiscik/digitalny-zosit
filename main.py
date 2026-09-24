@@ -75,10 +75,19 @@ if not SECRET_KEY:
     )
 
 
+# Session cookie sa štandardne posiela iba cez HTTPS (https_only=True).
+# Lokálne pri vývoji cez obyčajné http://localhost by to zablokovalo
+# prihlásenie, preto sa dá dočasne vypnúť cez SESSION_HTTPS_ONLY=false
+# v .env - v produkcii (Railway) musí ostať zapnuté.
+SESSION_HTTPS_ONLY = os.getenv("SESSION_HTTPS_ONLY", "true").strip().lower() not in (
+    "false", "0", "no",
+)
+
 app.add_middleware(
     SessionMiddleware,
     secret_key=SECRET_KEY,
     same_site="lax",
+    https_only=SESSION_HTTPS_ONLY,
 )
 
 

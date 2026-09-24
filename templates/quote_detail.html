@@ -181,6 +181,7 @@
                         onsubmit="return confirm('Naozaj chceš zmazať túto ponuku? Táto akcia sa nedá vrátiť späť.');"
                         style="display: inline;"
                     >
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                         <button
                             type="submit"
                             class="edit-job-button"
@@ -207,6 +208,7 @@
                     method="post"
                     style="display: inline-flex; align-items: center; gap: 8px;"
                 >
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
 
                     {% if can_change_status %}
 
@@ -283,12 +285,14 @@
                     <div class="convert-buttons">
 
                         <form action="/quotes/{{ quote.id }}/convert-to-invoice" method="post">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                             <button type="submit" class="save-button">
                                 🧾 Vygenerovať ostrú faktúru
                             </button>
                         </form>
 
                         <form action="/quotes/{{ quote.id }}/convert-to-invoice" method="post">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                             <input type="hidden" name="is_proforma" value="on">
                             <button type="submit" class="edit-job-button">
                                 📄 Vygenerovať zálohovú faktúru

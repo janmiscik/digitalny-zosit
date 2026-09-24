@@ -36,6 +36,7 @@ from sqlalchemy.pool import StaticPool
 
 import auth
 from auth import hash_password
+from csrf import verify_csrf
 from database import Base, get_db
 from main import app
 
@@ -86,6 +87,13 @@ def override_get_db():
 Base.metadata.create_all(bind=test_engine)
 
 app.dependency_overrides[get_db] = override_get_db
+
+# Tento súbor testuje session/prihlasovaciu bezpečnosť, nie CSRF (na to
+# je tests/test_csrf.py) - tu ho obídeme, aby napr.
+# test_page_route_post_without_any_cookie_redirects_to_login naďalej
+# overoval čisto require_login_page (303 na /login), bez toho, aby ho
+# prekryla CSRF kontrola (ktorá by na chýbajúci token vrátila 403).
+app.dependency_overrides[verify_csrf] = lambda: None
 
 
 def fresh_client() -> TestClient:

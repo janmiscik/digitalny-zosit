@@ -146,6 +146,7 @@
                 action="/invoices/{{ original.id }}/credit-note"
                 method="post"
             >
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
 
                 <label>
                     Dôvod dobropisu *

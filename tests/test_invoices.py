@@ -24,6 +24,7 @@ from sqlalchemy.pool import StaticPool
 from urllib.parse import urlencode
 
 from auth import require_login_api, require_login_page
+from csrf import verify_csrf
 from database import Base, get_db
 from invoice_pdf import generate_invoice_pdf
 from invoice_utils import (
@@ -124,6 +125,10 @@ def setup_test_database():
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[require_login_page] = override_login
     app.dependency_overrides[require_login_api] = override_login
+
+    # Tieto testy neoverujú CSRF ochranu (na to je tests/test_csrf.py) -
+    # tu ju obídeme, nech sa sústredia len na vlastnú business logiku.
+    app.dependency_overrides[verify_csrf] = lambda: None
 
     yield
 

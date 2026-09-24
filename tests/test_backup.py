@@ -32,6 +32,7 @@ from fastapi.testclient import TestClient
 
 import backup_utils
 from auth import require_login_page
+from csrf import verify_csrf
 from database import Base
 from main import app
 
@@ -82,6 +83,10 @@ def override_login():
 def override_auth():
 
     app.dependency_overrides[require_login_page] = override_login
+
+    # Tieto testy neoverujú CSRF ochranu (na to je tests/test_csrf.py) -
+    # tu ju obídeme, nech sa sústredia len na vlastnú business logiku.
+    app.dependency_overrides[verify_csrf] = lambda: None
 
     yield
 
