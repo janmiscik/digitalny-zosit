@@ -208,7 +208,11 @@ def test_login_locked_after_too_many_wrong_attempts():
     )
 
     assert response.status_code == 429
-    assert "session" not in response.cookies
+
+    # Zablokovaný pokus neprihlási - appka nás považuje naďalej za
+    # neprihlásených (aj keby response niesla cookie s CSRF tokenom
+    # pre formulár, čo je od zavedenia CSRF ochrany očakávané).
+    assert client.get("/", follow_redirects=False).status_code == 303
 
     auth._failed_login_attempts.clear()
     auth._lockout_until = None

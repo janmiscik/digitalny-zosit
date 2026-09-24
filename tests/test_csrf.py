@@ -187,19 +187,19 @@ def test_logout_requires_valid_csrf_token():
             "username": "testadmin",
             "password": TEST_PASSWORD,
             "csrf_token": token
-        }
+        },
+        follow_redirects=False
     )
 
     # Odhlásenie BEZ tokenu -> zamietnuté, session ostáva platná.
     response = client.post("/logout")
     assert response.status_code == 403
 
-    # Nová stránka po prihlásení nesie AKTUÁLNY (možno iný) token -
-    # session pri prihlásení nebola vyčistená, takže ide o ten istý
-    # token ako predtým, ale radšej ho znova vytiahneme z reálne
-    # vykreslenej stránky, nech test nezávisí na tomto detaile.
-    token = get_csrf_token(client, "/")
-
+    # Prihlásenie session nevyčistilo (login_user len nastaví "user"),
+    # takže pôvodný token z /login je stále platný aj po prihlásení -
+    # zámerne nepoužívame inú stránku (napr. "/"), lebo tá už závisí od
+    # DB, ktorú tento test (zámerne, nech testuje čisto CSRF) nemá
+    # nastavenú.
     response = client.post(
         "/logout",
         data={"csrf_token": token},

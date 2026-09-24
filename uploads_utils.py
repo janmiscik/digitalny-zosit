@@ -5,7 +5,7 @@ import uuid
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 
 UPLOADS_DIR = Path(__file__).parent / "uploads"
@@ -236,6 +236,12 @@ def discard_staged_image(temp_path: Path) -> None:
 
 JOB_PHOTOS_DIR = UPLOADS_DIR / "job_photos"
 
+# Fotky zákaziek bývajú z mobilu často zbytočne veľké (aj v rámci
+# 2 MB limitu) - pre zobrazenie v appke aj v PDF plne stačí dlhšia
+# strana do 1600 px. Kratšia strana sa zmenší proporcionálne.
+MAX_PHOTO_DIMENSION = 1600
+JPEG_QUALITY = 85
+
 
 def ensure_job_photos_dir() -> None:
 
@@ -245,15 +251,88 @@ def ensure_job_photos_dir() -> None:
     )
 
 
+def _resize_and_reencode_photo(contents: bytes, pillow_format: str) -> bytes:
+    """
+    Zmenší fotku zákazky tak, aby jej dlhšia strana nepresiahla
+    MAX_PHOTO_DIMENSION px (nikdy nezväčšuje) a opraví orientáciu
+    podľa EXIF - fotky z mobilu bývajú na výšku/na šírku často iba
+    vďaka EXIF príznaku, nie skutočným pixelom, takže bez tejto
+    opravy by po zmene veľkosti (alebo v prehliadači, ktorý EXIF
+    ignoruje) mohli vyjsť pootočené. Pri JPEG sa zároveň dorovná
+    kompresia (bez toho by resize samotný veľkosť súboru zas tak
+    nezmenšil).
+
+    Volá sa AŽ PO _verify_real_image_type, takže vieme, že obsah je
+    naozaj platný a čitateľný obrázok zodpovedajúceho formátu. Ak by
+    napriek tomu spracovanie zlyhalo, radšej ticho vrátime pôvodný
+    (už validovaný) obsah, než aby kvôli tomu nahranie fotky úplne
+    zlyhalo.
+    """
+
+    try:
+
+        with Image.open(io.BytesIO(contents)) as image:
+
+            image = ImageOps.exif_transpose(image)
+
+            width, height = image.size
+            longest_side = max(width, height)
+
+            if longest_side > MAX_PHOTO_DIMENSION:
+
+                scale = MAX_PHOTO_DIMENSION / longest_side
+
+                new_size = (
+                    max(1, round(width * scale)),
+                    max(1, round(height * scale))
+                )
+
+                image = image.resize(new_size, Image.LANCZOS)
+
+            output = io.BytesIO()
+
+            if pillow_format == "JPEG":
+
+                # JPEG nepozná priehľadnosť/paletu - ak by po
+                # exif_transpose ostal obrázok v inom móde (napr.
+                # CMYK, P), pred uložením ho prevedieme na RGB.
+                if image.mode != "RGB":
+                    image = image.convert("RGB")
+
+                image.save(
+                    output,
+                    format="JPEG",
+                    quality=JPEG_QUALITY,
+                    optimize=True
+                )
+
+            else:  # PNG
+
+                image.save(output, format="PNG", optimize=True)
+
+            return output.getvalue()
+
+    except Exception:
+
+        return contents
+
+
 async def save_job_photo_upload(upload: UploadFile, job_id: int) -> str:
     """
     Uloží fotku zákazky do uploads/job_photos/ priečinka pod jedinečným
-    názvom. Vráti názov uloženého súboru (napr. "job5-3f9a1c2b.jpg").
+    názvom (po zmenšení na rozumnú veľkosť, viď
+    _resize_and_reencode_photo). Vráti názov uloženého súboru
+    (napr. "job5-3f9a1c2b.jpg").
     """
 
     ensure_job_photos_dir()
 
     contents, extension = await _read_and_validate_image(upload)
+
+    contents = _resize_and_reencode_photo(
+        contents,
+        ALLOWED_IMAGE_FORMATS[extension]
+    )
 
     unique_id = uuid.uuid4().hex[:12]
 

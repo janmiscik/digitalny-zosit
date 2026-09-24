@@ -52,10 +52,18 @@ def make_png_bytes(color=(255, 0, 0), size=(40, 20)) -> bytes:
 
 
 @pytest.fixture(autouse=True)
-def setup_test_database():
+def setup_test_database(tmp_path, monkeypatch):
 
     Base.metadata.drop_all(bind=test_engine)
     Base.metadata.create_all(bind=test_engine)
+
+    # Fotky zákaziek sa počas testov ukladajú do dočasného priečinka,
+    # nie do skutočného uploads/job_photos (rovnaký princíp ako v
+    # tests/test_jobs_extras.py) - nech testy nezanechávajú súbory na
+    # disku a nekolidujú medzi sebou cez opakujúce sa job_id.
+    import uploads_utils
+
+    monkeypatch.setattr(uploads_utils, "JOB_PHOTOS_DIR", tmp_path / "job_photos")
 
     def override_get_db():
 
@@ -588,3 +596,193 @@ def test_deleting_job_photo_row_directly_removes_file():
     db.close()
 
     assert job_photo_path(filename) is None
+
+
+# =========================================
+# AUTO-RESIZE FOTIEK ZÁKAZIEK
+# =========================================
+
+def make_jpeg_bytes(size, color=(200, 100, 50)) -> bytes:
+
+    buffer = io.BytesIO()
+
+    img = PILImage.new("RGB", size, color)
+    img.save(buffer, format="JPEG")
+
+    return buffer.getvalue()
+
+
+def test_large_job_photo_is_resized_to_max_dimension():
+    """Veľká fotka (dlhšia strana nad limit) sa má pri uploade
+    zmenšiť tak, aby dlhšia strana nepresiahla MAX_PHOTO_DIMENSION."""
+
+    db = TestingSessionLocal()
+    from models import Job, Customer, JobPhoto
+
+    customer = db.query(Customer).first()
+    if customer is None:
+        customer = Customer(name="Test")
+        db.add(customer)
+        db.commit()
+
+    job = Job(title="Test", status="Nová", customer_id=customer.id)
+    db.add(job)
+    db.commit()
+    job_id = job.id
+    db.close()
+
+    # 3000x2000 - typický pomer strán fotky z mobilu, väčší než limit.
+    response = client.post(
+        f"/jobs/{job_id}/photos",
+        data={"photo_type": "pred"},
+        files={
+            "photo": ("photo.jpg", make_jpeg_bytes((3000, 2000)), "image/jpeg")
+        }
+    )
+    assert response.status_code in (200, 303, 307, 308)
+
+    db = TestingSessionLocal()
+    photo = db.query(JobPhoto).filter(JobPhoto.job_id == job_id).first()
+    filename = photo.filename
+    db.close()
+
+    from uploads_utils import MAX_PHOTO_DIMENSION, job_photo_path
+
+    saved_path = job_photo_path(filename)
+    assert saved_path is not None
+
+    with PILImage.open(saved_path) as saved_image:
+        width, height = saved_image.size
+
+    assert max(width, height) == MAX_PHOTO_DIMENSION
+    # pomer strán ostáva zachovaný (3:2)
+    assert width / height == pytest.approx(3000 / 2000, rel=0.01)
+
+
+def test_small_job_photo_is_not_upscaled():
+    """Fotka menšia než limit sa nesmie zväčšovať - resize je
+    jednosmerný (len zmenšovanie)."""
+
+    db = TestingSessionLocal()
+    from models import Job, Customer, JobPhoto
+
+    customer = db.query(Customer).first()
+    if customer is None:
+        customer = Customer(name="Test")
+        db.add(customer)
+        db.commit()
+
+    job = Job(title="Test", status="Nová", customer_id=customer.id)
+    db.add(job)
+    db.commit()
+    job_id = job.id
+    db.close()
+
+    client.post(
+        f"/jobs/{job_id}/photos",
+        data={"photo_type": "po"},
+        files={
+            "photo": ("photo.jpg", make_jpeg_bytes((200, 100)), "image/jpeg")
+        }
+    )
+
+    db = TestingSessionLocal()
+    photo = db.query(JobPhoto).filter(JobPhoto.job_id == job_id).first()
+    filename = photo.filename
+    db.close()
+
+    from uploads_utils import job_photo_path
+
+    with PILImage.open(job_photo_path(filename)) as saved_image:
+        assert saved_image.size == (200, 100)
+
+
+def test_job_photo_resize_fixes_exif_rotation():
+    """Fotka z mobilu otočená len cez EXIF (pixely na šírku, EXIF
+    hovorí "otoč o 90°") sa má po uložení fyzicky otočiť - inak by
+    v prehliadačoch/PDF, ktoré EXIF ignorujú, bola nahor nohami."""
+
+    buffer = io.BytesIO()
+    # pixely 200x100 (na šírku), ale EXIF Orientation=6 = "otoč o 90°
+    # v smere hodinových ručičiek" -> zobrazená by mala byť 100x200.
+    img = PILImage.new("RGB", (200, 100), (10, 20, 30))
+    exif = img.getexif()
+    exif[0x0112] = 6  # Orientation tag
+    img.save(buffer, format="JPEG", exif=exif)
+
+    db = TestingSessionLocal()
+    from models import Job, Customer, JobPhoto
+
+    customer = db.query(Customer).first()
+    if customer is None:
+        customer = Customer(name="Test")
+        db.add(customer)
+        db.commit()
+
+    job = Job(title="Test", status="Nová", customer_id=customer.id)
+    db.add(job)
+    db.commit()
+    job_id = job.id
+    db.close()
+
+    client.post(
+        f"/jobs/{job_id}/photos",
+        data={"photo_type": "pred"},
+        files={"photo": ("photo.jpg", buffer.getvalue(), "image/jpeg")}
+    )
+
+    db = TestingSessionLocal()
+    photo = db.query(JobPhoto).filter(JobPhoto.job_id == job_id).first()
+    filename = photo.filename
+    db.close()
+
+    from uploads_utils import job_photo_path
+
+    with PILImage.open(job_photo_path(filename)) as saved_image:
+        # po fyzickom otočení má byť už "na výšku" a bez EXIF
+        # orientácie (exif_transpose ju odstráni, keď ju už aplikoval)
+        assert saved_image.size == (100, 200)
+        saved_exif = saved_image.getexif()
+        assert saved_exif.get(0x0112) in (None, 1)
+
+
+def test_job_photo_png_stays_png_after_resize():
+    """PNG fotka (napr. screenshot priložený k zákazke) má po
+    zmenšení ostať PNG, nie sa nenápadne premeniť na JPEG."""
+
+    db = TestingSessionLocal()
+    from models import Job, Customer, JobPhoto
+
+    customer = db.query(Customer).first()
+    if customer is None:
+        customer = Customer(name="Test")
+        db.add(customer)
+        db.commit()
+
+    job = Job(title="Test", status="Nová", customer_id=customer.id)
+    db.add(job)
+    db.commit()
+    job_id = job.id
+    db.close()
+
+    client.post(
+        f"/jobs/{job_id}/photos",
+        data={"photo_type": "pred"},
+        files={
+            "photo": ("photo.png", make_png_bytes(size=(2000, 1000)), "image/png")
+        }
+    )
+
+    db = TestingSessionLocal()
+    photo = db.query(JobPhoto).filter(JobPhoto.job_id == job_id).first()
+    filename = photo.filename
+    db.close()
+
+    from uploads_utils import MAX_PHOTO_DIMENSION, job_photo_path
+
+    saved_path = job_photo_path(filename)
+    assert saved_path.suffix == ".png"
+
+    with PILImage.open(saved_path) as saved_image:
+        assert saved_image.format == "PNG"
+        assert max(saved_image.size) == MAX_PHOTO_DIMENSION
