@@ -2,6 +2,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile
 from fastapi.responses import RedirectResponse, Response
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from csrf import verify_csrf
@@ -24,21 +25,45 @@ router = APIRouter(dependencies=[Depends(verify_csrf)])
 
 def get_or_create_company(db: Session) -> Company:
     """
-    Appka počíta s jedným riadkom fakturačných údajov firmy.
-    Ak ešte neexistuje, vytvorí prázdny.
+    Appka počíta s jedným riadkom fakturačných údajov firmy (id je v DB
+    pevne vynútené na hodnotu 1 - viď model Company).
+
+    Ak dva požiadavky pri úplne prvom spustení appky pretekárske
+    pristanú tu obaja naraz (napr. dva otvorené taby), DB constraint
+    (PRIMARY KEY / CHECK id=1) druhý INSERT odmietne - to je presne to,
+    čo má singleton zaručiť. V tom prípade jednoducho zahodíme vlastný
+    pokus a načítame riadok, ktorý medzitým vytvoril ten druhý
+    požiadavok.
     """
 
     company = db.query(Company).first()
 
-    if company is None:
+    if company is not None:
+        return company
 
-        company = Company(
-            name=""
-        )
+    company = Company(
+        name=""
+    )
 
-        db.add(company)
+    db.add(company)
+
+    try:
 
         db.commit()
+
+    except IntegrityError:
+
+        db.rollback()
+
+        company = db.query(Company).first()
+
+        if company is None:
+            # Prakticky by sa toto nemalo stať (IntegrityError na
+            # vloženie jediného riadku znamená, že už jeden existuje) -
+            # ale radšej explicitná chyba než ticho vrátiť None.
+            raise
+
+    else:
 
         db.refresh(company)
 

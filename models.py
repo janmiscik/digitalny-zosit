@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Integer, String, Text, ForeignKey, Date, Numeric, event
+from sqlalchemy import Boolean, CheckConstraint, Column, Integer, String, Text, ForeignKey, Date, Numeric, event
 from sqlalchemy.orm import relationship
 
 from database import Base
@@ -279,16 +279,26 @@ class JobCost(Base):
 class Company(Base):
     """
     Údaje o firme/živnosti používateľa appky (predávajúci na faktúrach).
-    Očakáva sa jeden riadok (nastavenia appky).
+
+    Appka počíta VŽDY len s jedným riadkom (jedna appka = jedna firma).
+    Namiesto bežného autoincrementu má id pevne vynútené na hodnotu 1
+    cez CHECK constraint - druhý riadok (napr. pri súbežnom prvom
+    spustení appky z dvoch tabov naraz) preto DB sama odmietne vložiť
+    (PRIMARY KEY aj CHECK konflikt), nie je to len konvencia dodržiavaná
+    iba na úrovni appky (get_or_create_company v routers/company.py).
     """
 
     __tablename__ = "company"
+
+    __table_args__ = (
+        CheckConstraint("id = 1", name="company_singleton_id"),
+    )
 
 
     id = Column(
         Integer,
         primary_key=True,
-        index=True
+        default=1
     )
 
 

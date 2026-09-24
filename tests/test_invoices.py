@@ -698,6 +698,27 @@ def test_create_invoice_numbers_increment():
 # DETAIL A PDF
 # =========================================
 
+def set_test_company(db, **field_values):
+    """
+    Company je v DB vynútená ako singleton (pozri model Company) -
+    fixture setup_test_database vyššie preto pre KAŽDÝ test už jeden
+    riadok vytvorí. Testy, ktoré potrebujú inak nastavenú firmu (iné
+    IČO, logo, VAT režim...), preto nesmú vytvárať nový Company(...)
+    riadok (druhý INSERT by narazil na CHECK/PRIMARY KEY constraint) -
+    namiesto toho tento existujúci riadok jednoducho prepíšu.
+    """
+
+    company = db.query(Company).first()
+
+    for field, value in field_values.items():
+        setattr(company, field, value)
+
+    db.commit()
+    db.refresh(company)
+
+    return company
+
+
 def create_sample_invoice(db):
 
     customer = db.query(Customer).first()
@@ -1137,7 +1158,8 @@ def test_peppol_xml_well_formed_and_valid_structure():
         )
     )
 
-    company = Company(
+    company = set_test_company(
+        db,
         name="Firma XY",
         ico="11223344",
         ic_dph="SK1122334455",
@@ -1148,7 +1170,6 @@ def test_peppol_xml_well_formed_and_valid_structure():
         peppol_scheme_id="9946"
     )
 
-    db.add(company)
     db.add(invoice)
     db.commit()
     db.refresh(invoice)
@@ -1238,13 +1259,13 @@ def test_peppol_xml_does_not_reuse_supplier_scheme_for_customer():
         )
     )
 
-    company = Company(
+    company = set_test_company(
+        db,
         name="Firma XY",
         ico="11223344",
         peppol_scheme_id="9946"
     )
 
-    db.add(company)
     db.add(invoice)
     db.commit()
     db.refresh(invoice)
@@ -1309,13 +1330,13 @@ def test_peppol_xml_uses_customers_own_scheme_when_set():
         )
     )
 
-    company = Company(
+    company = set_test_company(
+        db,
         name="Firma XY",
         ico="11223344",
         peppol_scheme_id="9946"
     )
 
-    db.add(company)
     db.add(invoice)
     db.commit()
     db.refresh(invoice)
@@ -1416,14 +1437,12 @@ def test_pdf_with_logo_and_signature():
 
     invoice = create_sample_invoice(db)
 
-    company = Company(
+    company = set_test_company(
+        db,
         name="Firma s logom",
         logo_filename="logo.png",
         signature_filename="signature.png"
     )
-
-    db.add(company)
-    db.commit()
 
     from invoice_pdf import generate_invoice_pdf
 
@@ -1447,10 +1466,7 @@ def test_pdf_without_logo_or_signature_still_works():
 
     invoice = create_sample_invoice(db)
 
-    company = Company(name="Firma bez loga")
-
-    db.add(company)
-    db.commit()
+    company = set_test_company(db, name="Firma bez loga")
 
     from invoice_pdf import generate_invoice_pdf
 
@@ -1563,24 +1579,24 @@ def test_pdf_includes_qr_code_when_iban_present():
 
     invoice = create_sample_invoice(db)
 
-    company = Company(
+    company = set_test_company(
+        db,
         name="Firma s IBAN",
         iban="SK6807200002891987426353"
     )
-
-    db.add(company)
-    db.commit()
 
     from invoice_pdf import generate_invoice_pdf
 
     pdf_with_iban = generate_invoice_pdf(invoice, company)
 
-    company_no_iban = Company(name="Firma bez IBAN")
+    # Company je v DB vynútená ako singleton (id pevne 1) - druhú
+    # spoločnosť preto nevytvárame ako nový riadok, len na tomto istom
+    # riadku prepíšeme IBAN a znova commitneme.
+    company.iban = None
 
-    db.add(company_no_iban)
     db.commit()
 
-    pdf_without_iban = generate_invoice_pdf(invoice, company_no_iban)
+    pdf_without_iban = generate_invoice_pdf(invoice, company)
 
     db.close()
 
@@ -1807,13 +1823,13 @@ def test_pdf_shows_constant_and_specific_symbol():
     invoice.constant_symbol = "0308"
     invoice.specific_symbol = "555666"
 
-    company = Company(
+    company = set_test_company(
+        db,
         name="Firma s.r.o.",
         iban="SK6807200002891987426353",
         is_vat_payer=True
     )
 
-    db.add(company)
     db.commit()
     db.refresh(invoice)
 
@@ -1836,9 +1852,8 @@ def test_pdf_omits_symbols_when_not_set():
     invoice.constant_symbol = None
     invoice.specific_symbol = None
 
-    company = Company(name="Firma s.r.o.", is_vat_payer=True)
+    company = set_test_company(db, name="Firma s.r.o.", is_vat_payer=True)
 
-    db.add(company)
     db.commit()
     db.refresh(invoice)
 
@@ -2513,9 +2528,8 @@ def test_pdf_hides_vat_column_for_non_vat_payer():
     invoice = create_sample_invoice(db)
     invoice.items[0].vat_rate = 0
 
-    company = Company(name="Neplatca s.r.o.", is_vat_payer=False)
+    company = set_test_company(db, name="Neplatca s.r.o.", is_vat_payer=False)
 
-    db.add(company)
     db.commit()
     db.refresh(invoice)
 
@@ -2541,13 +2555,13 @@ def test_pdf_generation_works_with_reverse_charge():
     invoice.items[0].vat_rate = 0
     invoice.reverse_charge = True
 
-    company = Company(
+    company = set_test_company(
+        db,
         name="Platca s.r.o.",
         ico="12345678",
         is_vat_payer=True
     )
 
-    db.add(company)
     db.commit()
     db.refresh(invoice)
 
@@ -2567,13 +2581,13 @@ def test_pdf_hides_company_ic_dph_when_not_vat_payer():
     invoice = create_sample_invoice(db)
     invoice.items[0].vat_rate = 0
 
-    company = Company(
+    company = set_test_company(
+        db,
         name="Firma s IC DPH ale neplatca",
         ic_dph="SK9999999999",
         is_vat_payer=False
     )
 
-    db.add(company)
     db.commit()
     db.refresh(invoice)
 
@@ -2596,9 +2610,8 @@ def test_pdf_shows_reverse_charge_notice_text():
     invoice.items[0].vat_rate = 0
     invoice.reverse_charge = True
 
-    company = Company(name="Platca s.r.o.", is_vat_payer=True)
+    company = set_test_company(db, name="Platca s.r.o.", is_vat_payer=True)
 
-    db.add(company)
     db.commit()
     db.refresh(invoice)
 
@@ -3440,8 +3453,7 @@ def test_peppol_xml_includes_customer_city_and_zip():
     db.commit()
 
     invoice = create_sample_invoice(db)
-    company = Company(name="Firma", ico="12345678", is_vat_payer=True)
-    db.add(company)
+    company = set_test_company(db, name="Firma", ico="12345678", is_vat_payer=True)
     db.commit()
     db.refresh(invoice)
 
@@ -3487,8 +3499,7 @@ def test_peppol_xml_reverse_charge_uses_ae_category():
     invoice.reverse_charge = True
     invoice.items[0].vat_rate = 0
 
-    company = Company(name="Firma", ico="12345678", is_vat_payer=True)
-    db.add(company)
+    company = set_test_company(db, name="Firma", ico="12345678", is_vat_payer=True)
     db.commit()
     db.refresh(invoice)
 

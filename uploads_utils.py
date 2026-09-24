@@ -25,6 +25,20 @@ ALLOWED_IMAGE_FORMATS = {
 
 MAX_UPLOAD_SIZE_BYTES = 2 * 1024 * 1024  # 2 MB
 
+# Ochrana proti "decompression bomb" - malému súboru (v rámci limitu
+# vyššie), ktorý sa ale rozbalí do obrovského rozlíšenia a pri
+# dekódovaní/resize zožerie enormné množstvo pamäte a CPU. Kontroluje sa
+# HNEĎ po otvorení súboru - v tej chvíli Pillow pozná rozmery len z
+# hlavičky (napr. IHDR pri PNG), ešte NEDEKÓDUJE pixelové dáta, takže
+# nevalidný súbor padne skôr, než by appka čokoľvek reálne alokovala.
+# Pillow sám má vlastný vstavaný limit (Image.MAX_IMAGE_PIXELS, cca 89
+# megapixelov), ale ten len VAROVANIE (warnings.warn), nie chybu, kým sa
+# neprekročí dvojnásobok - to sa dá ľahko prehliadnuť a appka by aj tak
+# skončila alokáciou stoviek MB. 40 megapixelov je veľkorysé aj pre
+# bežnú fotku z mobilu (appka ju aj tak hneď zmenší na max. 1600px
+# dlhšej strany, viď MAX_PHOTO_DIMENSION nižšie).
+MAX_IMAGE_PIXELS = 40_000_000
+
 
 def ensure_uploads_dir() -> None:
 
@@ -56,9 +70,36 @@ def _verify_real_image_type(contents: bytes, extension: str) -> None:
 
         with Image.open(io.BytesIO(contents)) as image:
 
+            # Rozmery sa dajú zistiť z hlavičky bez dekódovania
+            # pixelových dát - kontrolujeme PRED image.verify(), nech
+            # sa Pillow vôbec nezačne zaoberať podozrivo obrovským
+            # obrázkom.
+            width, height = image.size
+
+            if width * height > MAX_IMAGE_PIXELS:
+
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        f"Obrázok má príliš vysoké rozlíšenie "
+                        f"({width}×{height} px). Zmenši ho prosím pred "
+                        "nahraním."
+                    )
+                )
+
             image.verify()
 
-    except (UnidentifiedImageError, OSError, SyntaxError, ValueError):
+    except HTTPException:
+
+        raise
+
+    except (
+        UnidentifiedImageError,
+        OSError,
+        SyntaxError,
+        ValueError,
+        Image.DecompressionBombError,
+    ):
 
         raise HTTPException(
             status_code=422,
@@ -77,7 +118,13 @@ def _verify_real_image_type(contents: bytes, extension: str) -> None:
 
             actual_format = image.format
 
-    except (UnidentifiedImageError, OSError, SyntaxError, ValueError):
+    except (
+        UnidentifiedImageError,
+        OSError,
+        SyntaxError,
+        ValueError,
+        Image.DecompressionBombError,
+    ):
 
         raise HTTPException(
             status_code=422,

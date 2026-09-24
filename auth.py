@@ -18,13 +18,9 @@ from fastapi import HTTPException, Request, status
 ENV_FILE = Path(__file__).resolve().parent / ".env"
 
 # Pre túto single-user aplikáciu chceme, aby konfigurácia
-# z .env bola jednoznačne použitá.
+# z .env bola jednoznačne použitá (override=True - .env vyhráva aj
+# nad premennými, ktoré už boli nastavené v prostredí).
 load_dotenv(dotenv_path=ENV_FILE, override=True)
-
-from pathlib import Path
-
-ENV_FILE = Path(__file__).resolve().parent / ".env"
-load_dotenv(dotenv_path=ENV_FILE, override=False)
 
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin").strip()
 ADMIN_PASSWORD_HASH = os.getenv("ADMIN_PASSWORD_HASH", "").strip()
