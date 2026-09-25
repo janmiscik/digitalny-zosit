@@ -250,16 +250,36 @@ async def stage_image_upload(upload: UploadFile, base_name: str) -> tuple[Path, 
 
 def finalize_staged_image(temp_path: Path, final_filename: str, base_name: str) -> None:
     """
-    Zavolať PO úspešnom DB commite - zmaže staré súbory s rovnakým
-    base_name (napr. inej prípony) a premenuje dočasný súbor na finálny
-    názov. `os.replace` je na väčšine systémov atomická operácia.
-    """
+    Zavolať PO úspešnom DB commite - premenuje dočasný súbor na finálny
+    názov a AŽ POTOM zmaže prípadné staré súbory s rovnakým base_name
+    (napr. predošlé logo s inou príponou).
 
-    delete_image(base_name)
+    Poradie je zámerné a je to presne ten "nie úplne atomický" krok,
+    ktorý táto funkcia rieši: os.replace() je na väčšine systémov
+    atomická operácia, takže hneď po nej na final_path existuje platný
+    súbor. Keby sme (ako predtým) najprv zmazali starý súbor a AŽ POTOM
+    premenovávali nový, pád appky presne medzi týmito dvoma krokmi
+    (výpadok napájania, OOM kill) by mohol nechať DB odkazovať na
+    súbor, ktorý v tej chvíli vôbec neexistuje - ani starý (už
+    zmazaný), ani nový (ešte nepremenovaný). V opačnom poradí takýto
+    stav nikdy nenastane: buď je na final_path stále starý súbor
+    (replace ešte neprebehol), alebo už nový (replace prebehol).
+    """
 
     final_path = UPLOADS_DIR / final_filename
 
     os.replace(temp_path, final_path)
+
+    # Prípadné staré súbory s INOU príponou (napr. logo bolo .jpg,
+    # nahradené za .png) - final_path už obsahuje nový súbor, ten preto
+    # vynecháme, aj keby náhodou mal rovnaké meno ako niektorá z
+    # kontrolovaných prípon.
+    for extension in ALLOWED_EXTENSIONS:
+
+        candidate = UPLOADS_DIR / f"{base_name}{extension}"
+
+        if candidate != final_path and candidate.exists():
+            os.remove(candidate)
 
 
 def discard_staged_image(temp_path: Path) -> None:

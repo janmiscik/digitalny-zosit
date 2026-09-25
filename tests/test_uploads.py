@@ -508,6 +508,48 @@ def test_failed_settings_commit_does_not_delete_old_logo(monkeypatch):
     assert old_logo_path.exists()
 
 
+def test_finalize_staged_image_keeps_old_file_if_replace_fails(monkeypatch):
+    """
+    Priama jednotka na finalize_staged_image(): ak os.replace() zlyhá
+    (napr. plný disk), starý súbor (INEJ prípony) musí ostať netknutý -
+    predtým sa najprv mazal starý súbor a AŽ POTOM premenovával nový,
+    takže presne tento scenár by starý súbor stratil úplne (ani starý,
+    ani nový by neexistoval).
+    """
+
+    from uploads_utils import (
+        UPLOADS_DIR,
+        ensure_uploads_dir,
+        finalize_staged_image,
+    )
+
+    ensure_uploads_dir()
+
+    old_path = UPLOADS_DIR / "logo.png"
+    old_path.write_bytes(make_png_bytes())
+
+    temp_path = UPLOADS_DIR / ".tmp-test-logo.jpg"
+    temp_path.write_bytes(b"fake-jpeg-bytes-pre-test")
+
+    import uploads_utils
+
+    original_replace = os.replace
+
+    def failing_replace(src, dst):
+        raise OSError("simulovane zlyhanie os.replace (napr. plny disk)")
+
+    monkeypatch.setattr(uploads_utils.os, "replace", failing_replace)
+
+    with pytest.raises(OSError):
+        finalize_staged_image(temp_path, "logo.jpg", "logo")
+
+    # Starý súbor (iná prípona) je stále na disku - k jeho mazaniu sa
+    # kód vôbec nedostal, lebo os.replace zlyhalo skôr.
+    assert old_path.exists()
+    # Dočasný súbor ostáva tiež netknutý (nebol premenovaný).
+    assert temp_path.exists()
+
+
 def test_failed_job_photo_commit_removes_orphan_file(monkeypatch):
     """Ak DB commit zlyhá PO zapísaní fotky na disk, appka musí súbor
     zase zmazať - inak by zostal ako osirotený súbor bez DB záznamu."""

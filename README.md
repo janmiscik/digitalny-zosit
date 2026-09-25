@@ -13,7 +13,7 @@ Aplikácia je vytvorená v Pythone pomocou FastAPI, SQLAlchemy, Jinja2 a SQLite.
 - SQLite
 - Jinja2 (šablóny)
 - ReportLab (generovanie PDF)
-- Pillow (overenie skutočného typu nahrávaných obrázkov)
+- Pillow (overenie skutočného typu, auto-resize a EXIF orientácia nahrávaných obrázkov)
 - HTML, CSS, JavaScript (bez frontend frameworku)
 
 ---
@@ -54,6 +54,8 @@ Potom v `.env` nastav:
 
   Výstup (celý reťazec `salt$hash`) skopíruj do `.env`.
 
+- **`SESSION_HTTPS_ONLY`** – či sa prihlasovacia cookie posiela iba cez HTTPS (predvolené `true`). Nechaj `true` v produkcii (Railway a pod.). Iba ak appku spúšťaš lokálne cez obyčajné `http://localhost`, nastav na `false` - inak sa neprihlásiš (prehliadač cookie s príznakom `Secure` cez obyčajné http vôbec neuloží).
+
 ### 3. Spusti databázové migrácie
 
 ```powershell
@@ -77,8 +79,10 @@ Aplikácia beží na `http://127.0.0.1:8000` a pri prvom vstupe ťa presmeruje n
 - Jednoduché prihlásenie s jedným admin účtom (session-based, cookie), heslo hashované cez PBKDF2.
 - HTML stránky vyžadujú prihlásenie – neprihláseného používateľa presmerujú na `/login`. JSON API endpointy vrátia `401 Unauthorized`.
 - **Rate limiting** na `/login` – po 5 zlých pokusoch v priebehu 5 minút sa prihlásenie zamkne na 5 minút (globálne pre appku, keďže appka má vždy len jedného legitímneho používateľa).
-- Session cookie je kryptograficky podpísaná (`itsdangerous`) – akákoľvek manipulácia s cookie sa odmietne.
-- Nahrávané obrázky (logo, podpis, fotky zákaziek) sa overujú podľa **skutočného obsahu súboru** (cez Pillow), nielen podľa prípony – zabraňuje to nahratiu skrytého škodlivého súboru pod príponou `.png`.
+- Session cookie je kryptograficky podpísaná (`itsdangerous`) – akákoľvek manipulácia s cookie sa odmietne. Cookie sa navyše posiela iba cez HTTPS (`https_only`, konfigurovateľné cez `SESSION_HTTPS_ONLY` - viď sekcia `.env` vyššie).
+- **CSRF ochrana** – všetky formuláre (POST/PUT/PATCH/DELETE) nesú skrytý token naviazaný na session (double-submit pattern); požiadavka bez platného tokenu sa odmietne s `403`.
+- Nahrávané obrázky (logo, podpis, fotky zákaziek) sa overujú podľa **skutočného obsahu súboru** (cez Pillow), nielen podľa prípony – zabraňuje to nahratiu skrytého škodlivého súboru pod príponou `.png`. Zároveň sa kontroluje aj rozlíšenie (max. 40 megapixelov) ako ochrana proti "decompression bomb" útoku (malý súbor, ktorý sa pri dekódovaní rozvinie do enormnej veľkosti v pamäti).
+- SQLite má explicitne zapnuté vynucovanie `FOREIGN KEY` obmedzení (`PRAGMA foreign_keys=ON`) – bez tejto pragmy by ich SQLite defaultne ignoroval.
 
 ---
 
@@ -98,7 +102,7 @@ Aplikácia beží na `http://127.0.0.1:8000` a pri prvom vstupe ťa presmeruje n
 
 ## 🧾 Fakturácia
 
-1. **Nastavenia firmy** (`/settings`) – názov, IČO, DIČ, IČ DPH, adresa, IBAN, DPH režim (platca/neplatca).
+1. **Nastavenia firmy** (`/settings`) – názov, IČO, DIČ, IČ DPH, adresa, IBAN, DPH režim (platca/neplatca). Appka udržiava presne jeden riadok fakturačných údajov – vynútené aj na úrovni databázy (`CHECK` constraint), nielen v kóde appky.
 2. **DPH režim** – ak nie si platiteľ DPH, appka **nedovolí** účtovať DPH na faktúre (validácia na backende, nie len v UI) a na faktúre sa zobrazí zákonom vyžadovaný text namiesto rozpisu DPH.
 3. **Prenesenie daňovej povinnosti** (tuzemské samozdanenie, §69 ods. 12) – voliteľné pri vytváraní faktúry, len ak sú platcami DPH obaja (dodávateľ aj odberateľ).
 4. **Vytvorenie faktúry** – z detailu zákazníka, prípadne priamo zo zákazky alebo jedným klikom z akceptovanej cenovej ponuky (ostrá alebo zálohová/proforma).
@@ -124,7 +128,7 @@ Aplikácia beží na `http://127.0.0.1:8000` a pri prvom vstupe ťa presmeruje n
 
 ## 🔧 Zákazky
 
-- Fotodokumentácia (pred/po) – ľubovoľný počet fotiek na zákazku, overenie skutočného typu obrázka.
+- Fotodokumentácia (pred/po) – ľubovoľný počet fotiek na zákazku, overenie skutočného typu obrázka. Fotky sa pri nahraní automaticky zmenšia (max. 1600px dlhšej strany) a opraví sa ich otočenie podľa EXIF údajov z mobilu.
 - Evidencia nákladov (materiál, subdodávky) a výpočet reálneho čistého zisku (fakturovaná suma − náklady).
 - Mesačný kalendár podľa termínu realizácie.
 
@@ -151,20 +155,21 @@ Pri vytváraní zákazníka appka vie podľa zadaného IČO automaticky doplniť
 python -m pytest tests/ -q
 ```
 
-Aktuálne **342 testov**, rozdelených podľa oblasti:
+Aktuálne **381 testov**, rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|
 | `test_main.py` | CRUD zákazníkov a zákaziek, validácia |
 | `test_auth.py`, `test_auth_security.py` | Prihlásenie, rate limiting, session bezpečnosť, systematická kontrola všetkých chránených routes |
+| `test_csrf.py` | CSRF ochrana (double-submit token) – chýbajúci/nesprávny/cudzí token, správny tok |
 | `test_invoices.py` | Fakturácia, DPH režim, stavy, PDF, Peppol XML, dátum úhrady, kopírovanie, vyhľadávanie/filter |
 | `test_quotes.py` | Cenové ponuky, konverzia na faktúru, proforma |
 | `test_jobs_extras.py` | Fotodokumentácia, náklady/zisk, kalendár |
-| `test_uploads.py` | Nahrávanie loga/podpisu, overenie typu súboru |
+| `test_uploads.py` | Nahrávanie loga/podpisu/fotiek zákaziek, overenie typu súboru, auto-resize a EXIF orientácia fotiek |
 | `test_ico_lookup.py` | Auto-doplnenie podľa IČO (mockované externé API) |
 | `test_backup.py` | Záloha a obnova databázy (izolované na dočasnom súbore) |
 
-Testy bežia proti oddelenej in-memory SQLite databáze (alebo izolovanému dočasnému súboru pri zálohe/obnove) a nikdy nezasahujú do reálnych dát appky.
+Testy bežia proti oddelenej in-memory SQLite databáze (alebo izolovanému dočasnému súboru pri zálohe/obnove) a nikdy nezasahujú do reálnych dát appky. `tests/conftest.py` pre testy vynucuje `SESSION_HTTPS_ONLY=false` (testovací klient beží cez obyčajné `http://`, nie `https://`).
 
 ---
 
@@ -194,12 +199,14 @@ digitalny-zosit/
 ├── templates/            # Jinja2 šablóny (jedna na stránku)
 │
 ├── tests/                # pytest, viď sekcia Testy vyššie
+│   └── conftest.py       # SESSION_HTTPS_ONLY=false pre testy (viď sekcia Testy)
 │
 ├── uploads/              # logo, podpis, fotky zákaziek (negituje sa)
 ├── backups/              # automatické zálohy pred obnovou (negituje sa)
 │
 ├── auth.py                 # hashovanie hesla, session, rate limiting
 ├── backup_utils.py         # záloha/obnova cez SQLite backup API
+├── csrf.py                  # CSRF ochrana (double-submit token)
 ├── database.py
 ├── delivery_note_pdf.py    # PDF dodacieho listu (z faktúry aj ponuky)
 ├── form_utils.py           # zdieľané parsovanie formulárov (faktúry aj ponuky)
