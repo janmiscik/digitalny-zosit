@@ -5,6 +5,7 @@ from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.orm import Session, joinedload
 
 from csrf import verify_csrf
+from audit_log import log_action
 from auth import require_login_page
 from database import get_db
 from delivery_note_pdf import generate_delivery_note_pdf
@@ -309,6 +310,15 @@ async def create_quote(
     commit_with_number_retry(db, _regenerate_quote)
     db.refresh(new_quote)
 
+    log_action(
+        db,
+        "quote.create",
+        entity_type="quote",
+        entity_id=new_quote.id,
+        detail=f"Ponuka {new_quote.quote_number}, zákazník {customer.name}"
+    )
+    db.commit()
+
 
     return RedirectResponse(
         url=f"/quotes/{new_quote.id}",
@@ -547,6 +557,14 @@ def delete_quote(
 
     require_draft_quote(quote)
 
+    log_action(
+        db,
+        "quote.delete",
+        entity_type="quote",
+        entity_id=quote.id,
+        detail=f"Ponuka {quote.quote_number}"
+    )
+
     db.delete(quote)
     db.commit()
 
@@ -631,8 +649,18 @@ def update_quote_status(
             )
         )
 
+    old_status = quote.status
+
 
     quote.status = new_status
+
+    log_action(
+        db,
+        "quote.status_change",
+        entity_type="quote",
+        entity_id=quote.id,
+        detail=f"Ponuka {quote.quote_number}: {old_status} -> {new_status}"
+    )
 
     db.commit()
 
@@ -847,6 +875,18 @@ def convert_quote_to_invoice(
 
     commit_with_number_retry(db, _regenerate_conv)
     db.refresh(new_invoice)
+
+    log_action(
+        db,
+        "quote.convert_to_invoice",
+        entity_type="quote",
+        entity_id=quote.id,
+        detail=(
+            f"Ponuka {quote.quote_number} -> faktúra "
+            f"{new_invoice.invoice_number}"
+        )
+    )
+    db.commit()
 
 
     return RedirectResponse(

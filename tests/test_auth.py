@@ -14,6 +14,7 @@ sys.path.insert(
 
 
 from fastapi.testclient import TestClient
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -83,6 +84,24 @@ app.dependency_overrides[get_db] = override_get_db
 # Tento súbor testuje prihlásenie/odhlásenie/rate limiting, nie CSRF
 # (na to je tests/test_csrf.py) - tu ho obídeme.
 app.dependency_overrides[verify_csrf] = lambda: None
+
+
+@pytest.fixture(autouse=True)
+def _ensure_dependency_overrides():
+    """
+    Iné testovacie súbory (napr. tests/test_invoices.py a ďalšie s
+    vlastnou per-test fixtúrou) na konci KAŽDÉHO svojho testu robia
+    app.dependency_overrides.clear() - keďže `app` je v rámci jedného
+    behu pytestu jedna zdieľaná inštancia naprieč všetkými súbormi,
+    to zmaže aj override nastavený vyššie (ten sa nastavil len raz, pri
+    importe tohto súboru). Táto fixture ho preto pred KAŽDÝM testom v
+    tomto súbore znova nastaví, nech poradie/výber spúšťaných test
+    súborov nič nepokazí.
+    """
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[verify_csrf] = lambda: None
+    yield
 
 
 client = TestClient(app)

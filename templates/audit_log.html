@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="sk">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>História zmien - Digitálny zošit</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', path='style.css') }}"
+    >
+
+    <style>
+
+        .audit-row {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 12px 16px;
+            background: var(--surface);
+            border: 1.5px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+
+        .audit-row-main {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .audit-row-detail {
+            font-size: 14px;
+        }
+
+        .audit-row-action {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .audit-row-time {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        .audit-empty {
+            color: var(--text-secondary);
+            padding: 24px 0;
+            text-align: center;
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+
+<header class="topbar">
+
+    <div class="logo">
+        <img src="/static/logo-icon.png" alt="" class="logo-icon"> Digitálny zošit
+    </div>
+
+    <div class="topbar-actions">
+
+        <button
+            type="button"
+            class="theme-button"
+            id="themeButton"
+            onclick="toggleTheme()"
+            title="Prepnúť tému"
+        >
+            🌙
+        </button>
+
+        <a
+            href="/settings"
+            class="back-button"
+        >
+            ← Nastavenia
+        </a>
+
+    </div>
+
+</header>
+
+
+<main class="container">
+
+
+    <section class="customers-section">
+
+        <div class="section-heading">
+
+            <div>
+
+                <h2>
+                    História zmien
+                </h2>
+
+                <p>
+                    Posledných {{ page_size }} udalostí, najnovšie hore.
+                </p>
+
+            </div>
+
+        </div>
+
+
+        {% if entries %}
+
+            {% for entry in entries %}
+
+                <div class="audit-row">
+
+                    <div class="audit-row-main">
+
+                        <div class="audit-row-detail">
+                            {{ entry.detail or entry.action }}
+                        </div>
+
+                        <div class="audit-row-action">
+                            {{ entry.action }}
+                        </div>
+
+                    </div>
+
+                    <div class="audit-row-time">
+                        {{ entry.created_at.strftime("%d.%m.%Y %H:%M") }}
+                    </div>
+
+                </div>
+
+            {% endfor %}
+
+        {% else %}
+
+            <div class="audit-empty">
+                Zatiaľ tu nič nie je.
+            </div>
+
+        {% endif %}
+
+    </section>
+
+
+</main>
+
+
+<script>
+
+function applyTheme(theme) {
+
+    document.documentElement.setAttribute(
+        "data-theme",
+        theme
+    );
+
+    const button =
+        document.getElementById("themeButton");
+
+    if (theme === "dark") {
+
+        button.textContent = "☀️";
+
+    } else {
+
+        button.textContent = "🌙";
+
+    }
+
+}
+
+
+function toggleTheme() {
+
+    const currentTheme =
+        document.documentElement.getAttribute(
+            "data-theme"
+        );
+
+    const newTheme =
+        currentTheme === "dark"
+            ? "light"
+            : "dark";
+
+    localStorage.setItem(
+        "digitalnyZositTheme",
+        newTheme
+    );
+
+    applyTheme(newTheme);
+
+}
+
+
+const savedTheme =
+    localStorage.getItem(
+        "digitalnyZositTheme"
+    );
+
+
+if (savedTheme === "dark") {
+
+    applyTheme("dark");
+
+} else {
+
+    applyTheme("light");
+
+}
+
+</script>
+
+
+</body>
+
+</html>

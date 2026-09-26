@@ -226,6 +226,98 @@ def test_validate_backup_accepts_valid_backup(temp_env):
 
 
 # =========================================
+# Ochrana proti "zip bomb"
+# =========================================
+
+def test_validate_backup_rejects_too_many_entries(tmp_path, monkeypatch):
+
+    monkeypatch.setattr(backup_utils, "MAX_BACKUP_ENTRY_COUNT", 5)
+
+    fake_zip_path = tmp_path / "too_many_entries.zip"
+
+    with zipfile.ZipFile(fake_zip_path, "w") as zf:
+
+        for i in range(10):
+            zf.writestr(f"uploads/photo{i}.png", b"x")
+
+    with pytest.raises(Exception):
+        backup_utils._validate_backup_file(fake_zip_path.read_bytes())
+
+
+def test_validate_backup_rejects_oversized_single_entry(tmp_path, monkeypatch):
+    """
+    Kontrola sa opiera o nekomprimovanú veľkosť z metadát ZIPu (rýchlo
+    dostupná bez rozbaľovania) - nižšie nastavíme umelo nízky limit,
+    nech test nemusí reálne generovať stovky MB dát.
+    """
+
+    monkeypatch.setattr(
+        backup_utils,
+        "MAX_BACKUP_UNCOMPRESSED_ENTRY_BYTES",
+        1000
+    )
+
+    fake_zip_path = tmp_path / "oversized_entry.zip"
+
+    # Vysoko komprimovateľné dáta (samé nuly) - malý ZIP súbor,
+    # ale nad nastaveným limitom po rozbalení. Presne princíp zip bomb.
+    with zipfile.ZipFile(fake_zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("uploads/huge.png", b"\x00" * 5000)
+
+    with pytest.raises(Exception):
+        backup_utils._validate_backup_file(fake_zip_path.read_bytes())
+
+
+def test_validate_backup_rejects_oversized_total_size(tmp_path, monkeypatch):
+    """Žiadny jednotlivý súbor limit neprekročí, ale súčet áno."""
+
+    monkeypatch.setattr(
+        backup_utils,
+        "MAX_BACKUP_UNCOMPRESSED_ENTRY_BYTES",
+        10_000
+    )
+    monkeypatch.setattr(
+        backup_utils,
+        "MAX_BACKUP_UNCOMPRESSED_TOTAL_BYTES",
+        15_000
+    )
+
+    fake_zip_path = tmp_path / "oversized_total.zip"
+
+    with zipfile.ZipFile(fake_zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+
+        for i in range(3):
+            # 3x 8000 bajtov = 24 000 > limit 15 000 spolu, hoci každý
+            # jednotlivo (8000) je pod limitom jedného súboru (10 000).
+            zf.writestr(f"uploads/photo{i}.png", b"\x00" * 8000)
+
+    with pytest.raises(Exception):
+        backup_utils._validate_backup_file(fake_zip_path.read_bytes())
+
+
+def test_validate_backup_within_limits_still_accepted(temp_env, monkeypatch):
+    """Poistka, že novo pridaná kontrola nezačala zamietať aj bežné,
+    v rámci limitov ležiace zálohy."""
+
+    monkeypatch.setattr(backup_utils, "MAX_BACKUP_ENTRY_COUNT", 5)
+    monkeypatch.setattr(
+        backup_utils,
+        "MAX_BACKUP_UNCOMPRESSED_ENTRY_BYTES",
+        200_000
+    )
+    monkeypatch.setattr(
+        backup_utils,
+        "MAX_BACKUP_UNCOMPRESSED_TOTAL_BYTES",
+        500_000
+    )
+
+    valid_bytes = backup_utils.create_backup_bytes()
+
+    # nesmie vyhodiť výnimku
+    backup_utils._validate_backup_file(valid_bytes)
+
+
+# =========================================
 # restore_from_upload
 # =========================================
 
@@ -329,6 +421,79 @@ def test_restore_creates_safety_backup_before_overwriting(temp_env):
     conn.close()
 
     assert "Pôvodný zákazník pred obnovou" in names
+
+
+def test_restore_writes_audit_log_entry_into_restored_db(temp_env):
+    """
+    Log o obnove sa musí zapísať AŽ do (novej, práve obnovenej) DB -
+    logovať by malo zmysel len tam, keďže samotná obnova prepíše celý
+    predchádzajúci obsah audit_log tabuľky spolu so zvyškom dát.
+    """
+
+    valid_backup = backup_utils.create_backup_bytes()
+
+    safety_backup_path = backup_utils.restore_from_upload(valid_backup)
+
+    conn = sqlite3.connect(str(temp_env["db_path"]))
+
+    cursor = conn.execute(
+        "SELECT action, entity_type, detail FROM audit_log "
+        "ORDER BY id DESC LIMIT 1"
+    )
+    row = cursor.fetchone()
+    conn.close()
+
+    assert row is not None
+
+    action, entity_type, detail = row
+
+    assert action == "backup.restore"
+    assert entity_type == "backup"
+    assert safety_backup_path.name in detail
+
+
+def test_restore_of_backup_without_audit_log_table_still_succeeds(temp_env):
+    """
+    Staršia záloha (spravená appkou pred zavedením audit logu) nemá
+    audit_log tabuľku vôbec - zápis logu po obnove sa má ticho
+    preskočiť, nie zhodiť inak úspešnú obnovu.
+    """
+
+    from sqlalchemy import create_engine
+
+    old_db_path = temp_env["db_path"].parent / "old_without_audit_log.db"
+
+    engine = create_engine(f"sqlite:///{old_db_path}")
+    # Zámerne BEZ audit_log - simuluje schému spred tejto funkcie.
+    tables_without_audit_log = [
+        table for table in Base.metadata.sorted_tables
+        if table.name != "audit_log"
+    ]
+    Base.metadata.create_all(bind=engine, tables=tables_without_audit_log)
+
+    conn = sqlite3.connect(str(old_db_path))
+    conn.execute(
+        "CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)"
+    )
+    conn.execute("INSERT INTO alembic_version VALUES ('test-head')")
+    conn.commit()
+    conn.close()
+
+    zip_bytes_io = io.BytesIO()
+    with zipfile.ZipFile(zip_bytes_io, "w") as zf:
+        zf.write(old_db_path, "database.db")
+
+    # nesmie vyhodiť výnimku, aj keď cieľová DB nemá audit_log tabuľku
+    backup_utils.restore_from_upload(zip_bytes_io.getvalue())
+
+    conn = sqlite3.connect(str(temp_env["db_path"]))
+    tables = {
+        row[0] for row in
+        conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    }
+    conn.close()
+
+    assert "audit_log" not in tables
 
 
 def test_restore_rejects_invalid_file(temp_env):

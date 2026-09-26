@@ -82,7 +82,10 @@ Aplikácia beží na `http://127.0.0.1:8000` a pri prvom vstupe ťa presmeruje n
 - Session cookie je kryptograficky podpísaná (`itsdangerous`) – akákoľvek manipulácia s cookie sa odmietne. Cookie sa navyše posiela iba cez HTTPS (`https_only`, konfigurovateľné cez `SESSION_HTTPS_ONLY` - viď sekcia `.env` vyššie).
 - **CSRF ochrana** – všetky formuláre (POST/PUT/PATCH/DELETE) nesú skrytý token naviazaný na session (double-submit pattern); požiadavka bez platného tokenu sa odmietne s `403`.
 - Nahrávané obrázky (logo, podpis, fotky zákaziek) sa overujú podľa **skutočného obsahu súboru** (cez Pillow), nielen podľa prípony – zabraňuje to nahratiu skrytého škodlivého súboru pod príponou `.png`. Zároveň sa kontroluje aj rozlíšenie (max. 40 megapixelov) ako ochrana proti "decompression bomb" útoku (malý súbor, ktorý sa pri dekódovaní rozvinie do enormnej veľkosti v pamäti).
+- Obnova zo zálohy má rovnakú ochranu na úrovni ZIP archívu – pred rozbalením sa overí počet položiek aj ich nekomprimovaná veľkosť (jednotlivo aj spolu), nielen veľkosť nahraného súboru.
 - SQLite má explicitne zapnuté vynucovanie `FOREIGN KEY` obmedzení (`PRAGMA foreign_keys=ON`) – bez tejto pragmy by ich SQLite defaultne ignoroval.
+- **Audit log** (`/audit-log`, odkaz zo stránky Nastavenia) – zaznamenáva dôležité udalosti: vytvorenie/zmazanie/zmenu stavu faktúry a cenovej ponuky, dobropis, konverziu ponuky na faktúru, zmenu fakturačných údajov firmy, obnovu zo zálohy a prihlásenie/odhlásenie. Appka je jednopoužívateľská, takže záznam nesleduje "kto", len "čo a kedy" – pre spätnú dohľadateľnosť.
+- **Kontrola integrity dát** (`/settings/integrity-check`, odkaz zo stránky Nastavenia) – porovná databázu (logo, podpis, fotky zákaziek) so súbormi v `uploads/`: nahlási chýbajúce súbory (DB odkazuje na niečo, čo na disku nie je) aj osirotené súbory (súbor na disku, na ktorý sa DB neodkazuje), s možnosťou osirotené súbory rovno zmazať.
 
 ---
 
@@ -155,19 +158,21 @@ Pri vytváraní zákazníka appka vie podľa zadaného IČO automaticky doplniť
 python -m pytest tests/ -q
 ```
 
-Aktuálne **381 testov**, rozdelených podľa oblasti:
+Aktuálne **409 testov**, rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|
 | `test_main.py` | CRUD zákazníkov a zákaziek, validácia |
 | `test_auth.py`, `test_auth_security.py` | Prihlásenie, rate limiting, session bezpečnosť, systematická kontrola všetkých chránených routes |
 | `test_csrf.py` | CSRF ochrana (double-submit token) – chýbajúci/nesprávny/cudzí token, správny tok |
+| `test_audit_log.py` | Audit log – zápis pri vytvorení/zmazaní/zmene stavu faktúry a ponuky, zmene nastavení firmy, zobrazenie `/audit-log` |
+| `test_integrity_check.py` | Kontrola integrity DB ↔ uploads – chýbajúce aj osirotené súbory, vyčistenie, stránka `/settings/integrity-check` |
 | `test_invoices.py` | Fakturácia, DPH režim, stavy, PDF, Peppol XML, dátum úhrady, kopírovanie, vyhľadávanie/filter |
 | `test_quotes.py` | Cenové ponuky, konverzia na faktúru, proforma |
 | `test_jobs_extras.py` | Fotodokumentácia, náklady/zisk, kalendár |
 | `test_uploads.py` | Nahrávanie loga/podpisu/fotiek zákaziek, overenie typu súboru, auto-resize a EXIF orientácia fotiek |
 | `test_ico_lookup.py` | Auto-doplnenie podľa IČO (mockované externé API) |
-| `test_backup.py` | Záloha a obnova databázy (izolované na dočasnom súbore) |
+| `test_backup.py` | Záloha a obnova databázy (izolované na dočasnom súbore), ochrana proti zip bomb, audit log záznam o obnove |
 
 Testy bežia proti oddelenej in-memory SQLite databáze (alebo izolovanému dočasnému súboru pri zálohe/obnove) a nikdy nezasahujú do reálnych dát appky. `tests/conftest.py` pre testy vynucuje `SESSION_HTTPS_ONLY=false` (testovací klient beží cez obyčajné `http://`, nie `https://`).
 
@@ -185,7 +190,7 @@ digitalny-zosit/
 │
 ├── routers/
 │   ├── auth.py          # /login, /logout, rate limiting
-│   ├── company.py       # /settings - fakturačné údaje, záloha/obnova DB
+│   ├── company.py       # /settings - fakturačné údaje, záloha/obnova DB, /audit-log, /settings/integrity-check
 │   ├── customers.py     # CRUD zákazníkov, auto-doplnenie podľa IČO
 │   ├── invoices.py      # CRUD faktúr, PDF, Peppol XML, kopírovanie, vyhľadávanie
 │   ├── jobs.py           # CRUD zákaziek, fotky, náklady, kalendár
@@ -205,12 +210,14 @@ digitalny-zosit/
 ├── backups/              # automatické zálohy pred obnovou (negituje sa)
 │
 ├── auth.py                 # hashovanie hesla, session, rate limiting
+├── audit_log.py             # zápis do audit logu (história zmien)
 ├── backup_utils.py         # záloha/obnova cez SQLite backup API
 ├── csrf.py                  # CSRF ochrana (double-submit token)
 ├── database.py
 ├── delivery_note_pdf.py    # PDF dodacieho listu (z faktúry aj ponuky)
 ├── form_utils.py           # zdieľané parsovanie formulárov (faktúry aj ponuky)
 ├── ico_lookup.py           # auto-doplnenie firmy podľa IČO
+├── integrity_check.py       # kontrola DB <-> uploads (chýbajúce/osirotené súbory)
 ├── invoice_pdf.py          # generovanie PDF faktúr
 ├── invoice_utils.py        # číslovanie, DPH výpočty, stavové prechody
 ├── main.py                 # dashboard, routing

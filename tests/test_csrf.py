@@ -3,8 +3,7 @@ Testy pre CSRF ochranu (csrf.py).
 
 Na rozdiel od ostatných testovacích súborov tento NEOBCHÁDZA
 Depends(verify_csrf) - overuje priamo mechanizmus double-submit
-tokenu na reálnych routách /login a /logout (tie nepotrebujú DB, takže
-tu nie je potrebný ani override get_db).
+tokenu na reálnych routách /login a /logout.
 """
 
 import os
@@ -22,8 +21,13 @@ sys.path.insert(
 )
 
 from fastapi.testclient import TestClient
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from auth import hash_password
+from database import Base, get_db
 from main import app
 
 
@@ -45,8 +49,59 @@ auth_router_module.ADMIN_USERNAME = "testadmin"
 auth_router_module.ADMIN_PASSWORD_HASH = os.environ["ADMIN_PASSWORD_HASH"]
 
 
+# Login/logout teraz zapisujú do audit logu (audit_log.py), takže
+# potrebujú funkčnú DB - rovnaká izolovaná in-memory SQLite ako v
+# ostatných test súboroch (viď tests/test_auth.py).
+TEST_DATABASE_URL = "sqlite://"
+
+test_engine = create_engine(
+    TEST_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool
+)
+
+TestingSessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=test_engine
+)
+
+
+def override_get_db():
+
+    db = TestingSessionLocal()
+
+    try:
+        yield db
+
+    finally:
+        db.close()
+
+
+Base.metadata.create_all(bind=test_engine)
+
+app.dependency_overrides[get_db] = override_get_db
+
 # Zámerne ŽIADNY app.dependency_overrides[verify_csrf] - to je presne to,
 # čo tento súbor testuje.
+
+
+@pytest.fixture(autouse=True)
+def _ensure_get_db_override():
+    """
+    Iné testovacie súbory (napr. tests/test_backup.py) majú vlastnú
+    autouse fixtúru, ktorá na konci KAŽDÉHO svojho testu robí
+    app.dependency_overrides.clear() - keďže `app` je v rámci jedného
+    behu pytestu jedna zdieľaná inštancia naprieč všetkými súbormi,
+    to zmaže aj override nastavený vyššie (ten sa nastavil len raz,
+    pri importe tohto súboru). Táto fixture ho preto pred KAŽDÝM
+    testom v tomto súbore znova nastaví, nech poradie spúšťania
+    ostatných test súborov nič nepokazí. verify_csrf sa tu nedotýka -
+    ten musí zostať skutočný, to je predmet tohto súboru.
+    """
+
+    app.dependency_overrides[get_db] = override_get_db
+    yield
 
 
 CSRF_INPUT_RE = re.compile(
@@ -196,10 +251,7 @@ def test_logout_requires_valid_csrf_token():
     assert response.status_code == 403
 
     # Prihlásenie session nevyčistilo (login_user len nastaví "user"),
-    # takže pôvodný token z /login je stále platný aj po prihlásení -
-    # zámerne nepoužívame inú stránku (napr. "/"), lebo tá už závisí od
-    # DB, ktorú tento test (zámerne, nech testuje čisto CSRF) nemá
-    # nastavenú.
+    # takže pôvodný token z /login je stále platný aj po prihlásení.
     response = client.post(
         "/logout",
         data={"csrf_token": token},

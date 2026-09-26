@@ -27,7 +27,7 @@ import shutil
 import sqlite3
 import tempfile
 import zipfile
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import HTTPException
@@ -52,6 +52,18 @@ BACKUPS_DIR = Path(__file__).parent / "backups"
 UPLOADS_DIR = Path(__file__).parent / "uploads"
 
 MAX_UPLOAD_SIZE_BYTES = 200 * 1024 * 1024  # 200 MB - záloha teraz obsahuje aj fotky
+
+# Ochrana proti "zip bomb" pri obnove zo zálohy - škodlivo skonštruovaný
+# ZIP môže mať malú KOMPRIMOVANÚ veľkosť (v rámci MAX_UPLOAD_SIZE_BYTES
+# vyššie, ktorý limituje len veľkosť nahrávaného súboru), ale po
+# rozbalení zabrať rádovo väčšie miesto na disku/v pamäti appky.
+# ZipInfo pozná nekomprimovanú veľkosť aj počet položiek priamo z
+# centrálneho adresára ZIPu (koniec súboru) - BEZ toho, aby appka
+# čokoľvek reálne rozbaľovala - takže túto kontrolu vieme spraviť skôr,
+# než appka čo i len začne dáta dekomprimovať.
+MAX_BACKUP_ENTRY_COUNT = 20_000
+MAX_BACKUP_UNCOMPRESSED_ENTRY_BYTES = 500 * 1024 * 1024  # 500 MB na 1 súbor
+MAX_BACKUP_UNCOMPRESSED_TOTAL_BYTES = 2 * 1024 * 1024 * 1024  # 2 GB spolu
 
 
 def _sqlite_file_path() -> Path:
@@ -169,6 +181,55 @@ def save_automatic_backup() -> Path:
     return backup_path
 
 
+def _validate_zip_members(zf: zipfile.ZipFile) -> None:
+    """
+    Overí METADÁTA položiek ZIP archívu (počet, nekomprimovaná
+    veľkosť každej z nich aj spolu) priamo z centrálneho adresára ZIPu
+    - BEZ toho, aby sa čokoľvek reálne rozbaľovalo. Ochrana proti "zip
+    bomb": maličký komprimovaný súbor (stále v rámci
+    MAX_UPLOAD_SIZE_BYTES), ktorý by sa po rozbalení "nafúkol" na
+    rádovo väčšiu veľkosť a zaplnil appke disk alebo pamäť.
+
+    Volať PRED akýmkoľvek zf.read()/zf.extract() na jednotlivých
+    položkách.
+    """
+
+    infos = zf.infolist()
+
+    if len(infos) > MAX_BACKUP_ENTRY_COUNT:
+
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Záloha obsahuje príliš veľa súborov ({len(infos)}, "
+                f"limit je {MAX_BACKUP_ENTRY_COUNT})."
+            )
+        )
+
+    total_uncompressed = 0
+
+    for info in infos:
+
+        if info.file_size > MAX_BACKUP_UNCOMPRESSED_ENTRY_BYTES:
+
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"Súbor '{info.filename}' v zálohe je po rozbalení "
+                    "príliš veľký."
+                )
+            )
+
+        total_uncompressed += info.file_size
+
+        if total_uncompressed > MAX_BACKUP_UNCOMPRESSED_TOTAL_BYTES:
+
+            raise HTTPException(
+                status_code=422,
+                detail="Záloha je po rozbalení príliš veľká."
+            )
+
+
 def _extract_and_validate_db_bytes(zf: zipfile.ZipFile) -> bytes:
     """
     Vytiahne database.db zo ZIP archívu zálohy a overí, že je to
@@ -273,6 +334,7 @@ def _validate_backup_file(file_bytes: bytes) -> None:
 
         with zipfile.ZipFile(io.BytesIO(file_bytes)) as zf:
 
+            _validate_zip_members(zf)
             _extract_and_validate_db_bytes(zf)
 
     except zipfile.BadZipFile:
@@ -370,5 +432,40 @@ def restore_from_upload(file_bytes: bytes) -> Path:
 
                 target_path.write_bytes(source_file.read())
 
+
+    # Záznam o obnove sa musí zapísať AŽ TERAZ, priamo do (už
+    # obnoveného) DB súboru - logovať PRED obnovou by bolo zbytočné,
+    # keďže obnova celý obsah audit_log tabuľky (spolu so zvyškom
+    # databázy) prepíše obsahom zo zálohy. Robí sa to surovým SQL cez
+    # čerstvé sqlite3 spojenie (nie cez SQLAlchemy session) - spojenia
+    # z poolu boli práve zatvorené vyššie (engine.dispose()) a appka si
+    # nové vytvorí až pri ďalšej požiadavke. Ak by obnovovaná záloha
+    # bola zo staršej verzie appky ešte bez audit_log tabuľky, zápis sa
+    # ticho preskočí - chýbajúci log záznam nesmie zablokovať inak
+    # úspešnú obnovu.
+    try:
+
+        connection = sqlite3.connect(str(db_path))
+
+        connection.execute(
+            "INSERT INTO audit_log (created_at, action, entity_type, "
+            "entity_id, detail) VALUES (?, ?, ?, ?, ?)",
+            (
+                datetime.now(timezone.utc).isoformat(),
+                "backup.restore",
+                "backup",
+                None,
+                (
+                    "Databáza obnovená zo zálohy. Automatická záloha "
+                    f"predchádzajúceho stavu: {safety_backup_path.name}"
+                )
+            )
+        )
+
+        connection.commit()
+        connection.close()
+
+    except sqlite3.Error:
+        pass
 
     return safety_backup_path

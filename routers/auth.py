@@ -2,7 +2,9 @@ import hmac
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
+from sqlalchemy.orm import Session
 
+from audit_log import log_action
 from auth import (
     ADMIN_PASSWORD_HASH,
     ADMIN_USERNAME,
@@ -14,6 +16,7 @@ from auth import (
     verify_password,
 )
 from csrf import verify_csrf
+from database import get_db
 from templates_config import templates
 
 
@@ -44,7 +47,8 @@ def login_form(request: Request):
 def login_submit(
     request: Request,
     username: str = Form(...),
-    password: str = Form(...)
+    password: str = Form(...),
+    db: Session = Depends(get_db)
 ):
 
     locked, retry_after_seconds = is_login_locked()
@@ -52,6 +56,14 @@ def login_submit(
     if locked:
 
         retry_minutes = max(1, retry_after_seconds // 60)
+
+        log_action(
+            db,
+            "auth.login_failed",
+            entity_type="auth",
+            detail="Zamietnuté - prihlásenie dočasne zablokované po viacerých zlyhaniach"
+        )
+        db.commit()
 
         return templates.TemplateResponse(
             request=request,
@@ -72,6 +84,16 @@ def login_submit(
 
         register_failed_login()
 
+        # Zámerne nelogujeme zadané meno/heslo - len fakt neúspešného
+        # pokusu, nech log nikdy neobsahuje citlivé prihlasovacie údaje.
+        log_action(
+            db,
+            "auth.login_failed",
+            entity_type="auth",
+            detail="Nesprávne meno alebo heslo"
+        )
+        db.commit()
+
         return templates.TemplateResponse(
             request=request,
             name="login.html",
@@ -84,6 +106,9 @@ def login_submit(
     register_successful_login()
     login_user(request, username)
 
+    log_action(db, "auth.login_success", entity_type="auth")
+    db.commit()
+
     return RedirectResponse(
         url="/",
         status_code=303
@@ -95,9 +120,12 @@ def login_submit(
 # =========================================
 
 @router.post("/logout")
-def logout(request: Request):
+def logout(request: Request, db: Session = Depends(get_db)):
 
     logout_user(request)
+
+    log_action(db, "auth.logout", entity_type="auth")
+    db.commit()
 
     return RedirectResponse(
         url="/login",

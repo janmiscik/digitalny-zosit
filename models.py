@@ -1,4 +1,6 @@
-from sqlalchemy import Boolean, CheckConstraint, Column, Integer, String, Text, ForeignKey, Date, Numeric, event
+from datetime import datetime, timezone
+
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, Integer, String, Text, ForeignKey, Date, Numeric, event
 from sqlalchemy.orm import relationship
 
 from database import Base
@@ -769,3 +771,71 @@ def _delete_job_photo_file_on_row_delete(mapper, connection, target):
     from uploads_utils import delete_job_photo
 
     delete_job_photo(target.filename)
+
+
+# =========================================
+# AUDIT LOG
+# =========================================
+
+class AuditLog(Base):
+    """
+    Záznam o dôležitej (najmä nevratnej alebo účtovne/právne
+    významnej) zmene v appke - vytvorenie/úprava/zmazanie faktúry a
+    cenovej ponuky, zmeny stavu, zmena fakturačných údajov firmy,
+    obnova zo zálohy, prihlásenie/odhlásenie.
+
+    Appka je jednopoužívateľská (viď README) - záznam preto
+    nepotrebuje "kto" (vždy je to ten istý jediný admin účet),
+    dôležité je hlavne "čo sa stalo a kedy", pre spätnú
+    dohľadateľnosť (napr. "kedy bola faktúra stornovaná" alebo "kedy
+    bola naposledy obnovená záloha").
+
+    Log sa cez appku nikdy needituje ani nemaže - žiadny endpoint na
+    to nie je, je to čisto na spätné dohľadanie. Zápis do neho robí
+    pomocná funkcia audit_log.log_action().
+    """
+
+    __tablename__ = "audit_log"
+
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True
+    )
+
+
+    created_at = Column(
+        DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        index=True
+    )
+
+
+    # napr. "invoice.status_change", "auth.login_failed" - viď
+    # audit_log.py pre presný zoznam používaných akcií.
+    action = Column(
+        String,
+        nullable=False
+    )
+
+    # napr. "invoice", "quote", "company", "auth", "backup" - None pre
+    # akcie, ktoré sa neviažu na konkrétny typ záznamu.
+    entity_type = Column(
+        String,
+        nullable=True
+    )
+
+    entity_id = Column(
+        Integer,
+        nullable=True
+    )
+
+    # Krátky ľudsky čitateľný popis (napr. "Faktúra 2026015: Odoslaná
+    # -> Uhradená"), nie štruktúrované dáta - log slúži na prehľad pre
+    # človeka, nie na strojové spracovanie.
+    detail = Column(
+        Text,
+        nullable=True
+    )

@@ -6,6 +6,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from csrf import verify_csrf
+from audit_log import log_action
 from auth import require_login_api, require_login_page
 from database import get_db
 from delivery_note_pdf import generate_delivery_note_pdf
@@ -445,6 +446,15 @@ async def create_invoice(
 
     db.refresh(new_invoice)
 
+    log_action(
+        db,
+        "invoice.create",
+        entity_type="invoice",
+        entity_id=new_invoice.id,
+        detail=f"Faktúra {new_invoice.invoice_number}, zákazník {customer.name}"
+    )
+    db.commit()
+
 
     return RedirectResponse(
 
@@ -781,6 +791,14 @@ def delete_invoice(
 
     customer_id = invoice.customer_id
 
+    log_action(
+        db,
+        "invoice.delete",
+        entity_type="invoice",
+        entity_id=invoice.id,
+        detail=f"Faktúra {invoice.invoice_number}"
+    )
+
     db.delete(invoice)
 
     db.commit()
@@ -900,6 +918,18 @@ def duplicate_invoice(
 
     commit_with_number_retry(db, _regenerate_dup)
     db.refresh(new_invoice)
+
+    log_action(
+        db,
+        "invoice.duplicate",
+        entity_type="invoice",
+        entity_id=new_invoice.id,
+        detail=(
+            f"Nová faktúra {new_invoice.invoice_number} "
+            f"(kópia {original.invoice_number})"
+        )
+    )
+    db.commit()
 
 
     return RedirectResponse(
@@ -1103,6 +1133,18 @@ async def create_credit_note(
 
     commit_with_number_retry(db, _regenerate_cn)
     db.refresh(credit_note)
+
+    log_action(
+        db,
+        "invoice.credit_note",
+        entity_type="invoice",
+        entity_id=credit_note.id,
+        detail=(
+            f"Dobropis {credit_note.invoice_number} k faktúre "
+            f"{original.invoice_number}. Dôvod: {reason}"
+        )
+    )
+    db.commit()
 
 
     return RedirectResponse(
@@ -1365,6 +1407,8 @@ def update_invoice_status(
         )
 
 
+    old_status = invoice.status
+
     invoice.status = new_status
 
     # Pri prechode na "Uhradená" nastavíme dátum úhrady na dnešok, ak
@@ -1375,6 +1419,17 @@ def update_invoice_status(
     if new_status == InvoiceStatus.PAID.value and invoice.paid_date is None:
 
         invoice.paid_date = date.today()
+
+    log_action(
+        db,
+        "invoice.status_change",
+        entity_type="invoice",
+        entity_id=invoice.id,
+        detail=(
+            f"Faktúra {invoice.invoice_number}: "
+            f"{old_status} -> {new_status}"
+        )
+    )
 
     db.commit()
 

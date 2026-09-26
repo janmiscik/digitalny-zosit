@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="sk">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Kontrola integrity - Digitálny zošit</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', path='style.css') }}"
+    >
+
+    <style>
+
+        .integrity-section {
+            margin-bottom: 24px;
+        }
+
+        .integrity-issue {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 10px 14px;
+            background: var(--surface);
+            border: 1.5px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+
+        .integrity-issue-file {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .integrity-clean {
+            color: var(--text-muted);
+            padding: 16px 0;
+        }
+
+        .integrity-ok-banner {
+            padding: 14px 16px;
+            border-radius: 8px;
+            background: rgba(34, 197, 94, 0.12);
+            border: 1.5px solid rgba(34, 197, 94, 0.4);
+            margin-bottom: 20px;
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+
+<header class="topbar">
+
+    <div class="logo">
+        <img src="/static/logo-icon.png" alt="" class="logo-icon"> Digitálny zošit
+    </div>
+
+    <div class="topbar-actions">
+
+        <button
+            type="button"
+            class="theme-button"
+            id="themeButton"
+            onclick="toggleTheme()"
+            title="Prepnúť tému"
+        >
+            🌙
+        </button>
+
+        <a
+            href="/settings"
+            class="back-button"
+        >
+            ← Nastavenia
+        </a>
+
+    </div>
+
+</header>
+
+
+<main class="container">
+
+
+    <section class="customers-section">
+
+        <div class="section-heading">
+
+            <div>
+
+                <h2>
+                    Kontrola integrity dát
+                </h2>
+
+                <p>
+                    Porovnanie databázy (logo, podpis, fotky zákaziek)
+                    so súbormi v uploads/.
+                </p>
+
+            </div>
+
+        </div>
+
+
+        {% if report.is_clean %}
+
+            <div class="integrity-ok-banner">
+                ✅ Všetko v poriadku - databáza a súbory na disku si
+                zodpovedajú.
+            </div>
+
+        {% else %}
+
+            {% if report.missing_files %}
+
+                <div class="integrity-section">
+
+                    <h3>
+                        ⚠️ Chýbajúce súbory ({{ report.missing_files | length }})
+                    </h3>
+
+                    <p style="color: var(--text-muted); font-size: 0.9em;">
+                        Databáza sa odkazuje na tieto súbory, ale na disku
+                        neexistujú. Opravíš to opätovným nahratím
+                        (logo/podpis v Nastaveniach, fotka na zákazke)
+                        alebo obnovou zo staršej zálohy, ktorá ich ešte
+                        obsahuje.
+                    </p>
+
+                    {% for issue in report.missing_files %}
+
+                        <div class="integrity-issue">
+                            <span>{{ issue.description }}</span>
+                            <span class="integrity-issue-file">{{ issue.filename }}</span>
+                        </div>
+
+                    {% endfor %}
+
+                </div>
+
+            {% endif %}
+
+
+            {% if report.orphan_files %}
+
+                <div class="integrity-section">
+
+                    <h3>
+                        🗑️ Osirotené súbory ({{ report.orphan_files | length }})
+                    </h3>
+
+                    <p style="color: var(--text-muted); font-size: 0.9em;">
+                        Tieto súbory ležia na disku, ale žiadny záznam v
+                        databáze sa na ne neodkazuje - zbytočne zaberajú
+                        miesto. Dajú sa bezpečne zmazať.
+                    </p>
+
+                    {% for issue in report.orphan_files %}
+
+                        <div class="integrity-issue">
+                            <span class="integrity-issue-file">{{ issue.relative_path }}</span>
+                        </div>
+
+                    {% endfor %}
+
+                    <form
+                        method="post"
+                        action="/settings/integrity-check/cleanup"
+                        style="margin-top: 12px;"
+                        onsubmit="return confirm('Naozaj zmazať všetky osirotené súbory? Táto akcia sa nedá vrátiť späť.');"
+                    >
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+
+                        <button type="submit" class="save-button">
+                            Zmazať osirotené súbory
+                        </button>
+                    </form>
+
+                </div>
+
+            {% endif %}
+
+        {% endif %}
+
+    </section>
+
+
+</main>
+
+
+<script>
+
+function applyTheme(theme) {
+
+    document.documentElement.setAttribute(
+        "data-theme",
+        theme
+    );
+
+    const button =
+        document.getElementById("themeButton");
+
+    if (theme === "dark") {
+
+        button.textContent = "☀️";
+
+    } else {
+
+        button.textContent = "🌙";
+
+    }
+
+}
+
+
+function toggleTheme() {
+
+    const currentTheme =
+        document.documentElement.getAttribute(
+            "data-theme"
+        );
+
+    const newTheme =
+        currentTheme === "dark"
+            ? "light"
+            : "dark";
+
+    localStorage.setItem(
+        "digitalnyZositTheme",
+        newTheme
+    );
+
+    applyTheme(newTheme);
+
+}
+
+
+const savedTheme =
+    localStorage.getItem(
+        "digitalnyZositTheme"
+    );
+
+
+if (savedTheme === "dark") {
+
+    applyTheme("dark");
+
+} else {
+
+    applyTheme("light");
+
+}
+
+</script>
+
+
+</body>
+
+</html>

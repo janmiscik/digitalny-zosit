@@ -96,6 +96,24 @@ app.dependency_overrides[get_db] = override_get_db
 app.dependency_overrides[verify_csrf] = lambda: None
 
 
+@pytest.fixture(autouse=True)
+def _ensure_dependency_overrides():
+    """
+    Iné testovacie súbory (napr. tests/test_invoices.py a ďalšie s
+    vlastnou per-test fixtúrou) na konci KAŽDÉHO svojho testu robia
+    app.dependency_overrides.clear() - keďže `app` je v rámci jedného
+    behu pytestu jedna zdieľaná inštancia naprieč všetkými súbormi, to
+    zmaže aj override nastavený vyššie (ten sa nastavil len raz, pri
+    importe tohto súboru). Táto fixture ho preto pred KAŽDÝM testom v
+    tomto súbore znova nastaví, nech poradie/výber spúšťaných test
+    súborov nič nepokazí.
+    """
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[verify_csrf] = lambda: None
+    yield
+
+
 def fresh_client() -> TestClient:
     """Nová, úplne izolovaná inštancia klienta - žiadne cookies zdieľané
     s inými testami ani medzi sebou."""
