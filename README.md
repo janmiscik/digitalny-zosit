@@ -87,6 +87,7 @@ Aplikácia beží na `http://127.0.0.1:8000` a pri prvom vstupe ťa presmeruje n
 - **Audit log** (`/audit-log`, odkaz zo stránky Nastavenia) – zaznamenáva dôležité udalosti: vytvorenie/zmazanie/zmenu stavu faktúry a cenovej ponuky, dobropis, konverziu ponuky na faktúru, zmenu fakturačných údajov firmy, obnovu zo zálohy a prihlásenie/odhlásenie. Appka je jednopoužívateľská, takže záznam nesleduje "kto", len "čo a kedy" – pre spätnú dohľadateľnosť.
 - **Kontrola integrity dát** (`/settings/integrity-check`, odkaz zo stránky Nastavenia) – porovná databázu (logo, podpis, fotky zákaziek) so súbormi v `uploads/`: nahlási chýbajúce súbory (DB odkazuje na niečo, čo na disku nie je) aj osirotené súbory (súbor na disku, na ktorý sa DB neodkazuje), s možnosťou osirotené súbory rovno zmazať.
 - **Validácia e-mailu, IBAN, IČO, DIČ a IČ DPH** (`validators.py`) – pri zadávaní zákazníka aj vo fakturačných údajoch firmy. E-mail sa overí formátom a normalizuje na malé písmená; IBAN sa overí kontrolným súčtom (mod-97, ISO 13616, funguje pre IBAN akejkoľvek krajiny) aj presnou dĺžkou pre bežné krajiny; slovenské IČO (8 číslic) sa overí kontrolnou číslicou (modulo 11); DIČ a IČ DPH sa overujú len formátom (počet číslic, resp. `SK` + 10 číslic), bez kontrolného súčtu, keďže pre slovenské DIČ žiadny verejne zdokumentovaný nie je. Hodnoty, ktoré nevyzerajú na slovenský formát (zahraniční zákazníci), appka neodmieta – validácia sa cez ne jednoducho preskočí. Rovnaké validátory (v "best-effort" režime, ktorý nikdy nezlyhá na historicky uložených dátach) sa používajú aj pri generovaní Peppol XML a QR platby.
+- **Validácia vygenerovaného Peppol XML** (`peppol_validation.py`) – po vygenerovaní skontroluje vybrané pravidlá EN16931/Peppol BIS 3.0 (povinné polia BR-01/02/03/05/06/07/16 a aritmetickú konzistenciu súčtov BR-CO-10/13/14/15/17 – súčet položiek, DPH podľa sadzieb, celkové sumy). **Nie je to náhrada oficiálnej validácie** (plná Schematron/XSD sada nie je appke k dispozícii) – slúži hlavne ako regresná poistka v testoch a ako nezáväzné upozornenie pri stiahnutí (hlavička `X-Peppol-Validation-Issues` + záznam do audit logu), export nikdy neblokuje.
 
 ---
 
@@ -159,7 +160,7 @@ Pri vytváraní zákazníka appka vie podľa zadaného IČO automaticky doplniť
 python -m pytest tests/ -q
 ```
 
-Aktuálne **451 testov**, rozdelených podľa oblasti:
+Aktuálne **467 testov**, rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|
@@ -169,6 +170,7 @@ Aktuálne **451 testov**, rozdelených podľa oblasti:
 | `test_audit_log.py` | Audit log – zápis pri vytvorení/zmazaní/zmene stavu faktúry a ponuky, zmene nastavení firmy, zobrazenie `/audit-log` |
 | `test_integrity_check.py` | Kontrola integrity DB ↔ uploads – chýbajúce aj osirotené súbory, vyčistenie, stránka `/settings/integrity-check` |
 | `test_validators.py` | Validácia e-mailu, IBAN (mod-97), IČO (mod-11), DIČ, IČ DPH – formát, kontrolné súčty, normalizácia |
+| `test_peppol_validation.py` | Validácia vygenerovaného Peppol XML (BR-01/02/03/05/06/07/16, BR-CO-10/13/14/15/17) – správne aj úmyselne pokazené scenáre |
 | `test_invoices.py` | Fakturácia, DPH režim, stavy, PDF, Peppol XML, dátum úhrady, kopírovanie, vyhľadávanie/filter |
 | `test_quotes.py` | Cenové ponuky, konverzia na faktúru, proforma |
 | `test_jobs_extras.py` | Fotodokumentácia, náklady/zisk, kalendár |
@@ -225,6 +227,7 @@ digitalny-zosit/
 ├── main.py                 # dashboard, routing
 ├── models.py                # SQLAlchemy modely
 ├── peppol_xml.py            # export do Peppol BIS 3.0 XML formátu
+├── peppol_validation.py      # kontrola vygenerovaného Peppol XML (BR-01.., BR-CO-10..)
 ├── qr_payment.py             # QR platobný kód (PAY by square)
 ├── quote_pdf.py               # generovanie PDF cenových ponúk
 ├── schemas.py                  # Pydantic modely (validácia)

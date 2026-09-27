@@ -27,6 +27,7 @@ from invoice_utils import (
 from models import Company, Customer, Invoice, InvoiceItem, Job
 from routers.company import get_or_create_company
 from peppol_xml import generate_peppol_xml
+from peppol_validation import validate_peppol_invoice_xml
 from schemas import InvoiceItemCreate, InvoiceRead, InvoiceStatus
 from templates_config import templates
 
@@ -1319,6 +1320,34 @@ def invoice_peppol_xml(
 
     xml_bytes = generate_peppol_xml(invoice, company)
 
+    # Nikdy neblokuje stiahnutie - appka aj tak nie je priamym
+    # odosielateľom do Peppol siete (na to slúži certifikovaný
+    # poskytovateľ, tzv. Digitálny poštár, ktorý XML aj tak overí
+    # svojou plnou validáciou). Nájdené problémy sa len zaznamenajú do
+    # audit logu a odošlú v hlavičke odpovede, nech sú viditeľné bez
+    # toho, aby prekážali sťahovaniu súboru.
+    validation_issues = validate_peppol_invoice_xml(xml_bytes)
+
+    response_headers = {
+        "Content-Disposition": f'attachment; filename="faktura-{invoice.invoice_number}-peppol.xml"'
+    }
+
+    if validation_issues:
+
+        response_headers["X-Peppol-Validation-Issues"] = str(len(validation_issues))
+
+        log_action(
+            db,
+            "invoice.peppol_export_warning",
+            entity_type="invoice",
+            entity_id=invoice.id,
+            detail=(
+                f"Export Peppol XML pre faktúru {invoice.invoice_number} "
+                f"má {len(validation_issues)} nález(y): "
+                + "; ".join(validation_issues)
+            )
+        )
+        db.commit()
 
     return Response(
 
@@ -1326,9 +1355,7 @@ def invoice_peppol_xml(
 
         media_type="application/xml",
 
-        headers={
-            "Content-Disposition": f'attachment; filename="faktura-{invoice.invoice_number}-peppol.xml"'
-        }
+        headers=response_headers
 
     )
 

@@ -37,7 +37,7 @@ from invoice_utils import (
     validate_vat_regime,
 )
 from main import app
-from models import Company, Customer, Invoice, InvoiceItem, Job
+from models import AuditLog, Company, Customer, Invoice, InvoiceItem, Job
 
 
 # =========================================
@@ -1178,6 +1178,62 @@ def test_peppol_xml_download():
     assert response.content.startswith(b"<?xml")
 
 
+def test_peppol_xml_download_has_no_validation_warning_header_when_clean():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice_id = invoice.id
+    db.close()
+
+    response = client.get(f"/invoices/{invoice_id}/peppol-xml")
+
+    assert response.status_code == 200
+    assert "X-Peppol-Validation-Issues" not in response.headers
+
+
+def test_peppol_xml_download_flags_and_logs_validation_issues(monkeypatch):
+    """
+    Priamo overuje zapojenie peppol_validation do routera - donúti
+    generate_peppol_xml() vrátiť zámerne pokazené XML (bez toho, aby
+    sme museli reálne pokaziť appkin výpočet) a overí, že sa to prejaví
+    v hlavičke odpovede aj v audit logu.
+    """
+
+    import routers.invoices as invoices_module
+
+    def broken_generate_peppol_xml(invoice, company):
+        return (
+            b'<?xml version="1.0"?>'
+            b'<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" '
+            b'xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">'
+            b"</Invoice>"
+        )
+
+    monkeypatch.setattr(
+        invoices_module,
+        "generate_peppol_xml",
+        broken_generate_peppol_xml
+    )
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice_id = invoice.id
+    db.close()
+
+    response = client.get(f"/invoices/{invoice_id}/peppol-xml")
+
+    assert response.status_code == 200
+    assert "X-Peppol-Validation-Issues" in response.headers
+    assert int(response.headers["X-Peppol-Validation-Issues"]) > 0
+
+    db = TestingSessionLocal()
+    entry = db.query(AuditLog).order_by(AuditLog.id.desc()).first()
+    db.close()
+
+    assert entry.action == "invoice.peppol_export_warning"
+    assert entry.entity_id == invoice_id
+
+
 def test_peppol_xml_not_found():
 
     response = client.get("/invoices/999999/peppol-xml")
@@ -1285,6 +1341,10 @@ def test_peppol_xml_well_formed_and_valid_structure():
     # Celková suma s DPH: (2*25*1.23) + 100 = 61.50 + 100 = 161.50
     payable = root.find("cac:LegalMonetaryTotal/cbc:PayableAmount", ns)
     assert payable.text == "161.50"
+
+    from peppol_validation import validate_peppol_invoice_xml
+
+    assert validate_peppol_invoice_xml(xml_bytes) == []
 
 
 def test_peppol_xml_does_not_reuse_supplier_scheme_for_customer():
@@ -3579,6 +3639,10 @@ def test_peppol_xml_reverse_charge_uses_ae_category():
 
     category_ids = root.findall(".//cac:TaxCategory/cbc:ID", ns)
     assert any(el.text == "AE" for el in category_ids)
+
+    from peppol_validation import validate_peppol_invoice_xml
+
+    assert validate_peppol_invoice_xml(xml_bytes) == []
 
 
 # =========================================
