@@ -252,6 +252,88 @@ def test_create_customer_missing_name():
     assert response.status_code == 422
 
 
+def test_create_customer_invalid_email_rejected():
+
+    response = client.post(
+        "/customers",
+        data={
+            "name": "Zákazník",
+            "email": "nieco-zle-bez-zaviinaca"
+        },
+        follow_redirects=False
+    )
+
+    assert response.status_code == 422
+
+
+def test_create_customer_invalid_ico_checksum_rejected():
+
+    response = client.post(
+        "/customers",
+        data={
+            "name": "Zákazník",
+            "ico": "12345678"  # 8 číslic, zlá kontrolná číslica
+        },
+        follow_redirects=False
+    )
+
+    assert response.status_code == 422
+
+
+def test_create_customer_valid_ico_accepted():
+
+    response = client.post(
+        "/customers",
+        data={
+            "name": "Zákazník s platným IČO",
+            "ico": "10482245"  # zdokumentovaný platný príklad
+        },
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+
+
+def test_create_customer_foreign_ico_not_rejected():
+    """Zahraničná firma s iným formátom IČO (nie 8 číslic) sa
+    nesmie odmietnuť - appka to nevie spoľahlivo overiť."""
+
+    response = client.post(
+        "/customers",
+        data={
+            "name": "Zahraničná firma",
+            "ico": "CZ12345678"
+        },
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+
+
+def test_create_customer_email_is_normalized_to_lowercase():
+
+    response = client.post(
+        "/customers",
+        data={
+            "name": "Zákazník s VEĽKÝM emailom",
+            "email": "  Velky.Email@Example.COM  "
+        },
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+
+    db = TestingSessionLocal()
+    customer = (
+        db.query(Customer)
+        .filter(Customer.name == "Zákazník s VEĽKÝM emailom")
+        .first()
+    )
+    db.close()
+
+    assert customer.email == "velky.email@example.com"
+
+
 def test_update_customer():
 
     response = client.post(

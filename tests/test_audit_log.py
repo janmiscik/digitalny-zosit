@@ -354,7 +354,7 @@ def test_updating_company_settings_writes_audit_log():
         "/settings",
         data={
             "name": "Nová firma s.r.o.",
-            "ico": "99998888",
+            "ico": "99998882",
             "is_vat_payer": "1"
         },
         follow_redirects=False

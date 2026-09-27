@@ -258,9 +258,13 @@ def create_customer(
 
     except ValidationError as exc:
 
+        # include_context=False - pydantic inak do 'ctx' vkladá
+        # priamo pôvodný Python ValueError objekt (z field_validator),
+        # ktorý nie je JSON-serializovateľný a FastAPI by pri jeho
+        # posielaní ako HTTPException detail spadol s 500.
         raise HTTPException(
             status_code=422,
-            detail=exc.errors()
+            detail=exc.errors(include_context=False)
         )
 
 
@@ -407,9 +411,13 @@ def update_customer(
 
     except ValidationError as exc:
 
+        # include_context=False - pydantic inak do 'ctx' vkladá
+        # priamo pôvodný Python ValueError objekt (z field_validator),
+        # ktorý nie je JSON-serializovateľný a FastAPI by pri jeho
+        # posielaní ako HTTPException detail spadol s 500.
         raise HTTPException(
             status_code=422,
-            detail=exc.errors()
+            detail=exc.errors(include_context=False)
         )
 
 

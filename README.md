@@ -86,6 +86,7 @@ Aplikácia beží na `http://127.0.0.1:8000` a pri prvom vstupe ťa presmeruje n
 - SQLite má explicitne zapnuté vynucovanie `FOREIGN KEY` obmedzení (`PRAGMA foreign_keys=ON`) – bez tejto pragmy by ich SQLite defaultne ignoroval.
 - **Audit log** (`/audit-log`, odkaz zo stránky Nastavenia) – zaznamenáva dôležité udalosti: vytvorenie/zmazanie/zmenu stavu faktúry a cenovej ponuky, dobropis, konverziu ponuky na faktúru, zmenu fakturačných údajov firmy, obnovu zo zálohy a prihlásenie/odhlásenie. Appka je jednopoužívateľská, takže záznam nesleduje "kto", len "čo a kedy" – pre spätnú dohľadateľnosť.
 - **Kontrola integrity dát** (`/settings/integrity-check`, odkaz zo stránky Nastavenia) – porovná databázu (logo, podpis, fotky zákaziek) so súbormi v `uploads/`: nahlási chýbajúce súbory (DB odkazuje na niečo, čo na disku nie je) aj osirotené súbory (súbor na disku, na ktorý sa DB neodkazuje), s možnosťou osirotené súbory rovno zmazať.
+- **Validácia e-mailu, IBAN, IČO, DIČ a IČ DPH** (`validators.py`) – pri zadávaní zákazníka aj vo fakturačných údajoch firmy. E-mail sa overí formátom a normalizuje na malé písmená; IBAN sa overí kontrolným súčtom (mod-97, ISO 13616, funguje pre IBAN akejkoľvek krajiny) aj presnou dĺžkou pre bežné krajiny; slovenské IČO (8 číslic) sa overí kontrolnou číslicou (modulo 11); DIČ a IČ DPH sa overujú len formátom (počet číslic, resp. `SK` + 10 číslic), bez kontrolného súčtu, keďže pre slovenské DIČ žiadny verejne zdokumentovaný nie je. Hodnoty, ktoré nevyzerajú na slovenský formát (zahraniční zákazníci), appka neodmieta – validácia sa cez ne jednoducho preskočí. Rovnaké validátory (v "best-effort" režime, ktorý nikdy nezlyhá na historicky uložených dátach) sa používajú aj pri generovaní Peppol XML a QR platby.
 
 ---
 
@@ -158,7 +159,7 @@ Pri vytváraní zákazníka appka vie podľa zadaného IČO automaticky doplniť
 python -m pytest tests/ -q
 ```
 
-Aktuálne **409 testov**, rozdelených podľa oblasti:
+Aktuálne **451 testov**, rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|
@@ -167,6 +168,7 @@ Aktuálne **409 testov**, rozdelených podľa oblasti:
 | `test_csrf.py` | CSRF ochrana (double-submit token) – chýbajúci/nesprávny/cudzí token, správny tok |
 | `test_audit_log.py` | Audit log – zápis pri vytvorení/zmazaní/zmene stavu faktúry a ponuky, zmene nastavení firmy, zobrazenie `/audit-log` |
 | `test_integrity_check.py` | Kontrola integrity DB ↔ uploads – chýbajúce aj osirotené súbory, vyčistenie, stránka `/settings/integrity-check` |
+| `test_validators.py` | Validácia e-mailu, IBAN (mod-97), IČO (mod-11), DIČ, IČ DPH – formát, kontrolné súčty, normalizácia |
 | `test_invoices.py` | Fakturácia, DPH režim, stavy, PDF, Peppol XML, dátum úhrady, kopírovanie, vyhľadávanie/filter |
 | `test_quotes.py` | Cenové ponuky, konverzia na faktúru, proforma |
 | `test_jobs_extras.py` | Fotodokumentácia, náklady/zisk, kalendár |
@@ -228,6 +230,7 @@ digitalny-zosit/
 ├── schemas.py                  # Pydantic modely (validácia)
 ├── templates_config.py         # zdieľaná Jinja2Templates inštancia
 ├── uploads_utils.py             # nahrávanie/overenie obrázkov
+├── validators.py                # validácia e-mailu, IBAN, IČO, DIČ, IČ DPH
 │
 ├── .env.example
 ├── .gitignore

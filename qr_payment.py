@@ -12,6 +12,8 @@ from io import BytesIO
 import pay_by_square
 import qrcode
 
+from validators import normalize_iban
+
 
 def generate_payment_qr_image(
     iban: str | None,
@@ -37,7 +39,7 @@ def generate_payment_qr_image(
 
         payment_string = pay_by_square.generate(
             amount=float(amount),
-            iban=iban.replace(" ", ""),
+            iban=normalize_iban(iban),
             swift=(swift or "").replace(" ", ""),
             beneficiary_name=beneficiary_name or "",
             variable_symbol=variable_symbol or "",

@@ -16,6 +16,7 @@ from xml.dom import minidom
 from xml.etree.ElementTree import Element, SubElement, register_namespace, tostring
 
 from invoice_utils import calculate_invoice_totals
+from validators import normalize_ic_dph, normalize_iban
 
 
 # =========================================
@@ -244,7 +245,7 @@ def generate_peppol_xml(invoice, company) -> bytes:
 
     company_name = company.name if company else ""
     company_ico = company.ico if company else None
-    company_ic_dph = company.ic_dph if company else None
+    company_ic_dph = normalize_ic_dph(company.ic_dph) if company else None
     company_address = company.address if company else None
     company_city = company.city if company else None
     company_zip = company.zip_code if company else None
@@ -290,7 +291,7 @@ def generate_peppol_xml(invoice, company) -> bytes:
         root,
         name=customer.name,
         ico=customer.ico,
-        ic_dph=customer.ic_dph,
+        ic_dph=normalize_ic_dph(customer.ic_dph),
         address=customer.address,
         city=customer.city,
         zip_code=customer.zip_code,
@@ -318,7 +319,7 @@ def generate_peppol_xml(invoice, company) -> bytes:
         )
 
         payee_account = SubElement(payment_means, qn(NS_CAC, "PayeeFinancialAccount"))
-        add_text(payee_account, NS_CBC, "ID", company.iban)
+        add_text(payee_account, NS_CBC, "ID", normalize_iban(company.iban))
 
         if company.swift_bic:
 

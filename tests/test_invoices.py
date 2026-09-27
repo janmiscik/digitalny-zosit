@@ -316,13 +316,13 @@ def test_settings_save():
         "/settings",
         data={
             "name": "Ján Novák - Vodoinštalatér",
-            "ico": "87654321",
+            "ico": "87654326",
             "dic": "2087654321",
             "ic_dph": "",
             "address": "Hlavná 1",
             "city": "Prešov",
             "zip_code": "08001",
-            "iban": "SK0000000000000000000000",
+            "iban": "SK7700000000000000000000",
             "email": "jan@example.com",
             "phone": "0900123456"
         },
@@ -336,8 +336,72 @@ def test_settings_save():
     db.close()
 
     assert company.name == "Ján Novák - Vodoinštalatér"
-    assert company.ico == "87654321"
+    assert company.ico == "87654326"
     assert company.ic_dph is None
+
+
+def test_settings_save_rejects_invalid_iban():
+
+    response = client.post(
+        "/settings",
+        data={
+            "name": "Firma",
+            "iban": "SK7700000000000000000001"  # zlý kontrolný súčet
+        },
+        follow_redirects=False
+    )
+
+    assert response.status_code == 422
+
+
+def test_settings_save_rejects_invalid_email():
+
+    response = client.post(
+        "/settings",
+        data={
+            "name": "Firma",
+            "email": "nieco-zle-bez-zaviinaca"
+        },
+        follow_redirects=False
+    )
+
+    assert response.status_code == 422
+
+
+def test_settings_save_rejects_invalid_ico_checksum():
+
+    response = client.post(
+        "/settings",
+        data={
+            "name": "Firma",
+            "ico": "12345678"
+        },
+        follow_redirects=False
+    )
+
+    assert response.status_code == 422
+
+
+def test_settings_save_normalizes_iban_and_email():
+
+    response = client.post(
+        "/settings",
+        data={
+            "name": "Firma",
+            "iban": "sk77 0000 0000 0000 0000 0000",
+            "email": "  Firma@Example.COM  "
+        },
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+
+    db = TestingSessionLocal()
+    company = db.query(Company).first()
+    db.close()
+
+    assert company.iban == "SK7700000000000000000000"
+    assert company.email == "firma@example.com"
 
 
 # =========================================

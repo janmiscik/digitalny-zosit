@@ -4,6 +4,14 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from validators import (
+    validate_dic_format,
+    validate_email_format,
+    validate_ic_dph_format,
+    validate_ico_format,
+    validate_iban_format,
+)
+
 
 # =========================================
 # JOB STATUS
@@ -69,6 +77,42 @@ class CustomerBase(BaseModel):
     ico: str | None = None
     dic: str | None = None
     ic_dph: str | None = None
+
+    @field_validator("email")
+    @classmethod
+    def check_email(cls, value: str | None) -> str | None:
+
+        if not value:
+            return value
+
+        return validate_email_format(value)
+
+    @field_validator("ico")
+    @classmethod
+    def check_ico(cls, value: str | None) -> str | None:
+
+        if not value:
+            return value
+
+        return validate_ico_format(value)
+
+    @field_validator("dic")
+    @classmethod
+    def check_dic(cls, value: str | None) -> str | None:
+
+        if not value:
+            return value
+
+        return validate_dic_format(value)
+
+    @field_validator("ic_dph")
+    @classmethod
+    def check_ic_dph(cls, value: str | None) -> str | None:
+
+        if not value:
+            return value
+
+        return validate_ic_dph_format(value)
 
 
 class CustomerCreate(CustomerBase):

@@ -14,6 +14,13 @@ from backup_utils import create_backup_bytes, restore_from_upload
 from invoice_utils import NON_VAT_PAYER_NOTICE
 from models import AuditLog, Company
 from templates_config import templates
+from validators import (
+    validate_dic_format,
+    validate_email_format,
+    validate_ic_dph_format,
+    validate_ico_format,
+    validate_iban_format,
+)
 from uploads_utils import (
     delete_image,
     discard_staged_image,
@@ -159,20 +166,38 @@ async def settings_save(
 
 ):
 
+    # Validácia PRED akýmkoľvek zápisom do DB alebo nahrávaním súborov -
+    # pri neplatnej hodnote sa nemá zmeniť vôbec nič (ani nastavenia,
+    # ani stiahnuť/uložiť logo/podpis).
+    try:
+
+        validated_email = validate_email_format(email) if email else None
+        validated_ico = validate_ico_format(ico) if ico else None
+        validated_dic = validate_dic_format(dic) if dic else None
+        validated_ic_dph = validate_ic_dph_format(ic_dph) if ic_dph else None
+        validated_iban = validate_iban_format(iban) if iban else None
+
+    except ValueError as exc:
+
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc)
+        )
+
     company = get_or_create_company(db)
 
 
     company.name = name
-    company.ico = ico or None
-    company.dic = dic or None
-    company.ic_dph = ic_dph or None
+    company.ico = validated_ico
+    company.dic = validated_dic
+    company.ic_dph = validated_ic_dph
     company.is_vat_payer = is_vat_payer == "1"
     company.address = address or None
     company.city = city or None
     company.zip_code = zip_code or None
-    company.iban = iban or None
+    company.iban = validated_iban
     company.swift_bic = swift_bic or None
-    company.email = email or None
+    company.email = validated_email
     company.phone = phone or None
     company.website = website or None
     company.peppol_scheme_id = peppol_scheme_id or None
