@@ -10,7 +10,12 @@ from audit_log import log_action
 from auth import require_login_api, require_login_page
 from database import get_db
 from delivery_note_pdf import generate_delivery_note_pdf
-from form_utils import parse_items_from_form, parse_optional_date, parse_required_date
+from form_utils import (
+    parse_items_from_form,
+    parse_optional_date,
+    parse_optional_job_id,
+    parse_required_date
+)
 from invoice_pdf import generate_invoice_pdf
 from invoice_utils import (
     allowed_next_invoice_statuses,
@@ -339,9 +344,7 @@ async def create_invoice(
     items_data = parse_items_from_form(form, InvoiceItemCreate, "Faktúra musí obsahovať aspoň jednu položku")
 
 
-    job_id_raw = form.get("job_id", "")
-
-    job_id = int(job_id_raw) if job_id_raw else None
+    job_id = parse_optional_job_id(form.get("job_id", ""))
 
 
     if job_id is not None:

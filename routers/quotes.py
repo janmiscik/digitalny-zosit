@@ -9,7 +9,12 @@ from audit_log import log_action
 from auth import require_login_page
 from database import get_db
 from delivery_note_pdf import generate_delivery_note_pdf
-from form_utils import parse_items_from_form, parse_optional_date, parse_required_date
+from form_utils import (
+    parse_items_from_form,
+    parse_optional_date,
+    parse_optional_job_id,
+    parse_required_date
+)
 from invoice_utils import (
     commit_with_number_retry,
     allowed_next_quote_statuses,
@@ -238,8 +243,7 @@ async def create_quote(
 
     form = await request.form()
 
-    job_id_raw = form.get("job_id", "").strip()
-    job_id = int(job_id_raw) if job_id_raw else None
+    job_id = parse_optional_job_id(form.get("job_id", ""))
 
     if job_id is not None:
 

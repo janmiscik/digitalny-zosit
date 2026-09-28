@@ -3811,3 +3811,31 @@ def test_invoice_detail_hides_peppol_block_when_clean():
 
     assert response.status_code == 200
     assert "Peppol XML:" not in response.text
+
+
+# =========================================
+# NEPLATNÉ job_id VO FORMULÁRI (upravený/poškodený formulár)
+# =========================================
+
+def test_create_invoice_with_non_numeric_job_id_is_rejected_cleanly():
+
+    customer, _job = get_test_customer_and_job()
+
+    issue_date = date.today()
+
+    response = post_form(
+        f"/customers/{customer.id}/invoices",
+        [
+            ("issue_date", issue_date.isoformat()),
+            ("due_date", (issue_date + timedelta(days=14)).isoformat()),
+            ("job_id", "abc"),
+            ("description", "Práca"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", "10.00"),
+            ("vat_rate", "23"),
+        ],
+        follow_redirects=False
+    )
+
+    assert response.status_code == 422

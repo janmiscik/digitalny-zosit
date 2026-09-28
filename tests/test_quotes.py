@@ -877,3 +877,32 @@ def test_quote_routes_require_login(method, path):
     finally:
 
         app.dependency_overrides[require_login_page] = lambda: "testuser"
+
+
+def test_create_quote_with_non_numeric_job_id_is_rejected_cleanly():
+
+    from urllib.parse import urlencode
+
+    db = TestingSessionLocal()
+    customer_id = db.query(Customer).first().id
+    db.close()
+
+    body = urlencode([
+        ("issue_date", date.today().isoformat()),
+        ("valid_until", (date.today() + timedelta(days=14)).isoformat()),
+        ("job_id", "abc"),
+        ("description", "Práca"),
+        ("quantity", "1"),
+        ("unit", "ks"),
+        ("unit_price", "10.00"),
+        ("vat_rate", "23"),
+    ])
+
+    response = client.post(
+        f"/customers/{customer_id}/quotes",
+        content=body,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        follow_redirects=False
+    )
+
+    assert response.status_code == 422

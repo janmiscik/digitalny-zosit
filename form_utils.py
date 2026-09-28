@@ -11,6 +11,29 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 
 
+def parse_optional_job_id(raw_value: str | None) -> int | None:
+    """
+    Prevedie hodnotu poľa job_id z formulára na int (prázdne = None).
+    Neplatná hodnota (napr. text v upravenom formulári) vráti čistú
+    chybu 422 namiesto neošetreného ValueError (500).
+    """
+
+    stripped = (raw_value or "").strip()
+
+    if not stripped:
+        return None
+
+    try:
+        return int(stripped)
+
+    except ValueError:
+
+        raise HTTPException(
+            status_code=422,
+            detail="Neplatné ID zákazky"
+        )
+
+
 def parse_optional_date(raw_value: str) -> date | None:
 
     if not raw_value:
