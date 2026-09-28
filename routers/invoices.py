@@ -526,6 +526,24 @@ def invoice_detail(
     can_change_status = len(next_statuses) > 0
 
 
+    # Nálezy Peppol validácie sa zobrazujú priamo na detaile faktúry
+    # (predtým boli len v hlavičke odpovede exportu a v audit logu).
+    # Nikdy nesmú rozbiť samotnú stránku - pri akejkoľvek chybe pri
+    # generovaní/validácii XML sa blok jednoducho nezobrazí.
+    try:
+
+        peppol_issues = validate_peppol_invoice_xml(
+            generate_peppol_xml(
+                invoice,
+                db.query(Company).first()
+            )
+        )
+
+    except Exception:
+
+        peppol_issues = []
+
+
     return templates.TemplateResponse(
 
         request=request,
@@ -544,7 +562,9 @@ def invoice_detail(
 
             "is_overdue": is_invoice_overdue(invoice),
 
-            "today": date.today()
+            "today": date.today(),
+
+            "peppol_issues": peppol_issues
 
         }
 

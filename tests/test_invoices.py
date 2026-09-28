@@ -3773,3 +3773,41 @@ def test_settings_rejects_wrong_company_scheme():
     )
 
     assert response.status_code in (400, 422)
+
+
+# =========================================
+# PEPPOL NÁLEZY NA DETAILE FAKTÚRY
+# =========================================
+
+def test_invoice_detail_shows_peppol_issues_when_scheme_missing():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice_id = invoice.id
+    db.close()
+
+    response = client.get(f"/invoices/{invoice_id}")
+
+    assert response.status_code == 200
+    assert "Peppol XML:" in response.text
+    assert "PEPPOL-EN16931-R010" in response.text
+
+
+def test_invoice_detail_hides_peppol_block_when_clean():
+
+    db = TestingSessionLocal()
+
+    customer = db.query(Customer).first()
+    customer.peppol_scheme_id = "9950"
+    db.commit()
+
+    set_test_company(db, ico="11223344", peppol_scheme_id="9950")
+
+    invoice = create_sample_invoice(db)
+    invoice_id = invoice.id
+    db.close()
+
+    response = client.get(f"/invoices/{invoice_id}")
+
+    assert response.status_code == 200
+    assert "Peppol XML:" not in response.text
