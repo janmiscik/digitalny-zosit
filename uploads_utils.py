@@ -456,9 +456,15 @@ def job_photo_path(filename: str) -> Path | None:
     if not filename or not re.fullmatch(r"[A-Za-z0-9_.-]+", filename):
         return None
 
+    # Názov nesmie začínať bodkou - inak by prešlo ".." (priečinok, nie
+    # fotka; FileResponse by na ňom spadla s 500) aj skryté súbory.
+    if filename.startswith("."):
+        return None
+
     path = JOB_PHOTOS_DIR / filename
 
-    if not path.exists() or path.parent != JOB_PHOTOS_DIR:
+    # is_file() namiesto exists() - musí to byť skutočný súbor.
+    if not path.is_file() or path.parent != JOB_PHOTOS_DIR:
         return None
 
     return path

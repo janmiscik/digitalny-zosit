@@ -54,3 +54,9 @@ def test_unexpected_programming_error_is_not_swallowed(monkeypatch):
 
     with pytest.raises(RuntimeError):
         _resize_and_reencode_photo(_png_bytes(), "PNG")
+
+
+def test_job_photo_path_rejects_dot_names_and_directories():
+
+    for name in ["..", ".", "...", ".hidden", "../x"]:
+        assert uploads_utils.job_photo_path(name) is None, name
