@@ -1181,6 +1181,16 @@ def test_peppol_xml_download():
 def test_peppol_xml_download_has_no_validation_warning_header_when_clean():
 
     db = TestingSessionLocal()
+
+    # Peppol vyžaduje EndpointID (schému) pre predávajúceho aj odberateľa
+    # (PEPPOL-EN16931-R020 / R010) - "čistý" export ich musí mať oboje.
+    customer = db.query(Customer).first()
+    customer.peppol_scheme_id = "9950"
+    customer.country_code = "SK"
+    db.commit()
+
+    set_test_company(db, ico="11223344", peppol_scheme_id="9950")
+
     invoice = create_sample_invoice(db)
     invoice_id = invoice.id
     db.close()
@@ -1248,6 +1258,8 @@ def test_peppol_xml_well_formed_and_valid_structure():
     db = TestingSessionLocal()
 
     customer = db.query(Customer).first()
+    customer.peppol_scheme_id = "9950"
+    db.commit()
 
     invoice = Invoice(
         invoice_number="2026200",
@@ -1287,7 +1299,7 @@ def test_peppol_xml_well_formed_and_valid_structure():
         city="Bratislava",
         zip_code="81101",
         iban="SK1234567890123456789012",
-        peppol_scheme_id="9946"
+        peppol_scheme_id="9950"
     )
 
     db.add(invoice)
@@ -1387,7 +1399,7 @@ def test_peppol_xml_does_not_reuse_supplier_scheme_for_customer():
         db,
         name="Firma XY",
         ico="11223344",
-        peppol_scheme_id="9946"
+        peppol_scheme_id="9950"
     )
 
     db.add(invoice)
@@ -1418,10 +1430,10 @@ def test_peppol_xml_does_not_reuse_supplier_scheme_for_customer():
 
     # Dodávateľ svoj EndpointID (so svojou schémou) má...
     assert supplier_endpoint is not None
-    assert supplier_endpoint.get("schemeID") == "9946"
+    assert supplier_endpoint.get("schemeID") == "9950"
 
     # ...ale odberateľ NESMIE dostať schému dodávateľa - keďže vlastnú
-    # nemá, element sa má úplne vynechať, nie obsahovať "9946".
+    # nemá, element sa má úplne vynechať, nie obsahovať "9950".
     assert customer_endpoint is None
 
 
@@ -1458,7 +1470,7 @@ def test_peppol_xml_uses_customers_own_scheme_when_set():
         db,
         name="Firma XY",
         ico="11223344",
-        peppol_scheme_id="9946"
+        peppol_scheme_id="9950"
     )
 
     db.add(invoice)
@@ -3617,13 +3629,21 @@ def test_peppol_xml_reverse_charge_uses_ae_category():
 
     customer = db.query(Customer).first()
     customer.ic_dph = "SK1234567890"
+    customer.peppol_scheme_id = "9950"
     db.commit()
 
     invoice = create_sample_invoice(db)
     invoice.reverse_charge = True
     invoice.items[0].vat_rate = 0
 
-    company = set_test_company(db, name="Firma", ico="12345678", is_vat_payer=True)
+    company = set_test_company(
+        db,
+        name="Firma",
+        ico="12345678",
+        ic_dph="SK1122334455",
+        peppol_scheme_id="9950",
+        is_vat_payer=True
+    )
     db.commit()
     db.refresh(invoice)
 
@@ -3697,3 +3717,59 @@ def test_update_customer_city_and_zip():
 
     assert customer.city == "Prešov"
     assert customer.zip_code == "08001"
+
+
+# =========================================
+# ZÁKAZNÍK: KRAJINA A PEPPOL SCHÉMA ID (formulár)
+# =========================================
+
+def test_customer_form_saves_country_and_peppol_scheme():
+
+    response = client.post(
+        "/customers",
+        data={
+            "name": "Český zákazník s.r.o.",
+            "country_code": "cz",
+            "peppol_scheme_id": "9929"
+        },
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+
+    db = TestingSessionLocal()
+    saved = db.query(Customer).filter(
+        Customer.name == "Český zákazník s.r.o."
+    ).first()
+
+    assert saved.country_code == "CZ"
+    assert saved.peppol_scheme_id == "9929"
+
+    db.close()
+
+
+def test_customer_form_rejects_scheme_of_other_country():
+    """9946 je PT:VAT - pre slovenského zákazníka to musí byť chyba."""
+
+    response = client.post(
+        "/customers",
+        data={
+            "name": "Zlá schéma s.r.o.",
+            "country_code": "SK",
+            "peppol_scheme_id": "9946"
+        },
+        follow_redirects=False
+    )
+
+    assert response.status_code == 422
+
+
+def test_settings_rejects_wrong_company_scheme():
+
+    response = client.post(
+        "/settings",
+        data={"name": "Firma", "peppol_scheme_id": "9946"},
+        follow_redirects=False
+    )
+
+    assert response.status_code in (400, 422)

@@ -145,7 +145,8 @@ def build_party(
     zip_code: str | None = None,
     email: str | None = None,
     phone: str | None = None,
-    peppol_scheme_id: str | None = None
+    peppol_scheme_id: str | None = None,
+    country_code: str = DEFAULT_COUNTRY_CODE
 ) -> Element:
 
     party_wrapper = SubElement(root, qn(NS_CAC, parent_tag_name))
@@ -169,7 +170,7 @@ def build_party(
         add_text(party_name, NS_CBC, "Name", name)
 
 
-    build_postal_address(party, address, city, zip_code)
+    build_postal_address(party, address, city, zip_code, country_code)
 
 
     if ic_dph:
@@ -285,6 +286,7 @@ def generate_peppol_xml(invoice, company) -> bytes:
     # ho vynechá, ak je peppol_scheme_id None) - je to bezpečnejšie než
     # vygenerovať nesprávny/zavádzajúci identifikátor.
     customer_peppol_scheme = getattr(customer, "peppol_scheme_id", None)
+    customer_country_code = getattr(customer, "country_code", None) or DEFAULT_COUNTRY_CODE
 
     build_party(
         "AccountingCustomerParty",
@@ -297,7 +299,8 @@ def generate_peppol_xml(invoice, company) -> bytes:
         zip_code=customer.zip_code,
         email=customer.email,
         phone=customer.phone,
-        peppol_scheme_id=customer_peppol_scheme
+        peppol_scheme_id=customer_peppol_scheme,
+        country_code=customer_country_code
     )
 
 

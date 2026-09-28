@@ -20,6 +20,7 @@ from validators import (
     validate_ic_dph_format,
     validate_ico_format,
     validate_iban_format,
+    validate_peppol_scheme_id,
 )
 from uploads_utils import (
     delete_image,
@@ -177,6 +178,15 @@ async def settings_save(
         validated_ic_dph = validate_ic_dph_format(ic_dph) if ic_dph else None
         validated_iban = validate_iban_format(iban) if iban else None
 
+        # Firma v appke je vždy slovenská (viď models.Company docstring),
+        # preto sa schéma tu vždy overuje oproti "SK" - odchytí to napr.
+        # omylom zadanú schému inej krajiny (napr. 9946 - Portugalsko).
+        validated_peppol_scheme_id = (
+            validate_peppol_scheme_id(peppol_scheme_id, expected_country_code="SK")
+            if peppol_scheme_id
+            else None
+        )
+
     except ValueError as exc:
 
         raise HTTPException(
@@ -200,7 +210,7 @@ async def settings_save(
     company.email = validated_email
     company.phone = phone or None
     company.website = website or None
-    company.peppol_scheme_id = peppol_scheme_id or None
+    company.peppol_scheme_id = validated_peppol_scheme_id
 
 
     # Nahrávanie súborov je zámerne "stage -> DB commit -> finalize/

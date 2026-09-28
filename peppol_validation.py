@@ -30,10 +30,21 @@ pamäte):
             neprázdny reťazec).
     BR-02   Invoice musí mať číslo (cbc:ID).
     BR-03   Invoice musí mať dátum vystavenia (cbc:IssueDate).
+    BR-04   Invoice musí mať kód typu dokladu (cbc:InvoiceTypeCode).
     BR-05   Invoice musí mať kód meny (cbc:DocumentCurrencyCode).
     BR-06   Predávajúci musí mať meno.
     BR-07   Odberateľ musí mať meno.
+    BR-08   Predávajúci musí mať poštovú adresu (aspoň krajinu).
+    BR-09   Predávajúci musí mať kód krajiny.
+    BR-10   Odberateľ musí mať poštovú adresu (aspoň krajinu).
+    BR-11   Odberateľ musí mať kód krajiny.
     BR-16   Invoice musí mať aspoň jednu položku (cac:InvoiceLine).
+    BR-21   Každá položka musí mať ID (BT-126).
+    BR-22   Každá položka musí mať fakturované množstvo (BT-129).
+    BR-23   Merná jednotka každej položky musí byť kódovaná (BT-130).
+    BR-24   Každá položka musí mať sumu položky (BT-131).
+    BR-25   Každá položka musí mať názov (BT-153).
+    BR-26   Každá položka musí mať jednotkovú cenu (BT-146).
     BR-CO-10  Súčet LineExtensionAmount položiek = LineExtensionAmount
               v LegalMonetaryTotal.
     BR-CO-13  TaxExclusiveAmount = súčet netto súm položiek (appka
@@ -47,6 +58,26 @@ pamäte):
     (bez čísla, odvodené z BT-115 definície) PayableAmount =
               TaxInclusiveAmount (appka negeneruje zálohové platby ani
               zaokrúhlenie platby, takže sa musia rovnať priamo).
+
+    PEPPOL-EN16931-R020  Predávajúci musí mať elektronickú adresu
+              (cbc:EndpointID pod AccountingSupplierParty/Party - BT-34).
+    PEPPOL-EN16931-R010  Odberateľ musí mať elektronickú adresu
+              (cbc:EndpointID pod AccountingCustomerParty/Party - BT-49).
+              Peppol vyžaduje kardinalitu 1..1 pre obe - appka ich
+              zámerne negeneruje bez schémy (viď peppol_xml.py), takže
+              táto kontrola na to explicitne upozorní namiesto ticha.
+    (bez oficiálneho čísla, ale zdokumentované v EAS/ISO 6523
+              pravidlách pre EndpointID)  Ak EndpointID existuje, MUSÍ
+              mať atribút schemeID (inak Peppol validátor odmietne
+              celý dokument, nielen EndpointID).
+
+    BR-AE-02  Ak je ktorákoľvek položka v režime prenesenia daňovej
+              povinnosti (VAT kategória "AE"), faktúra musí obsahovať
+              IČ DPH predávajúceho AJ odberateľa.
+    BR-AE-09  TaxAmount v DPH kategórii "AE" musí byť 0.
+    BR-Z-02   Ak je ktorákoľvek položka s nulovou sadzbou DPH (VAT
+              kategória "Z"), faktúra musí obsahovať IČ DPH
+              predávajúceho.
 """
 
 from decimal import Decimal, ROUND_HALF_UP
@@ -148,7 +179,16 @@ def validate_peppol_invoice_xml(xml_bytes: bytes) -> list[str]:
             "BR-05: Faktúra nemá kód meny (cbc:DocumentCurrencyCode / BT-5)."
         )
 
+    if not _text(root, "cbc:InvoiceTypeCode"):
+
+        issues.append(
+            "BR-04: Faktúra nemá kód typu dokladu "
+            "(cbc:InvoiceTypeCode / BT-3)."
+        )
+
     # --- BR-06, BR-07 - meno predávajúceho a odberateľa ---
+
+    supplier_party = root.find("cac:AccountingSupplierParty/cac:Party", NS)
 
     supplier_name = _text(
         root,
@@ -161,6 +201,8 @@ def validate_peppol_invoice_xml(xml_bytes: bytes) -> list[str]:
             "BR-06: Chýba meno predávajúceho (BT-27)."
         )
 
+    customer_party = root.find("cac:AccountingCustomerParty/cac:Party", NS)
+
     customer_name = _text(
         root,
         "cac:AccountingCustomerParty/cac:Party/cac:PartyName/cbc:Name"
@@ -172,6 +214,110 @@ def validate_peppol_invoice_xml(xml_bytes: bytes) -> list[str]:
             "BR-07: Chýba meno odberateľa (BT-44)."
         )
 
+    # --- BR-08, BR-09 - adresa a krajina predávajúceho ---
+
+    supplier_address = (
+        supplier_party.find("cac:PostalAddress", NS)
+        if supplier_party is not None
+        else None
+    )
+
+    if supplier_address is None:
+
+        issues.append(
+            "BR-08: Chýba poštová adresa predávajúceho (BG-5)."
+        )
+
+    supplier_country = (
+        _text(supplier_address, "cac:Country/cbc:IdentificationCode")
+        if supplier_address is not None
+        else None
+    )
+
+    if not supplier_country:
+
+        issues.append(
+            "BR-09: Chýba kód krajiny predávajúceho (BT-40)."
+        )
+
+    # --- BR-10, BR-11 - adresa a krajina odberateľa ---
+
+    customer_address = (
+        customer_party.find("cac:PostalAddress", NS)
+        if customer_party is not None
+        else None
+    )
+
+    if customer_address is None:
+
+        issues.append(
+            "BR-10: Chýba poštová adresa odberateľa (BG-8)."
+        )
+
+    customer_country = (
+        _text(customer_address, "cac:Country/cbc:IdentificationCode")
+        if customer_address is not None
+        else None
+    )
+
+    if not customer_country:
+
+        issues.append(
+            "BR-11: Chýba kód krajiny odberateľa (BT-55)."
+        )
+
+    # --- PEPPOL-EN16931-R020, PEPPOL-EN16931-R010 - elektronická
+    #     adresa (EndpointID) predávajúceho a odberateľa (BT-34, BT-49) -
+    #     Peppol (na rozdiel od holého EN16931) ju vyžaduje s
+    #     kardinalitou 1..1 pre oboch. Ak chýba schemeID (hoci
+    #     EndpointID existuje), je to rovnako fatálna chyba - appka
+    #     to sama zámerne negeneruje bez schémy (peppol_xml.py), takže
+    #     tu na to explicitne upozorníme, nech to nezostane skryté.
+
+    supplier_endpoint = (
+        supplier_party.find("cbc:EndpointID", NS)
+        if supplier_party is not None
+        else None
+    )
+
+    if supplier_endpoint is None or not (supplier_endpoint.text or "").strip():
+
+        issues.append(
+            "PEPPOL-EN16931-R020: Chýba elektronická adresa "
+            "predávajúceho (cbc:EndpointID / BT-34) - vyplň Peppol "
+            "schéma ID predávajúceho v Nastaveniach."
+        )
+
+    elif not supplier_endpoint.get("schemeID"):
+
+        issues.append(
+            "Elektronická adresa predávajúceho (BT-34) nemá atribút "
+            "schemeID - bez neho Peppol validátor odmietne celý "
+            "dokument."
+        )
+
+    customer_endpoint = (
+        customer_party.find("cbc:EndpointID", NS)
+        if customer_party is not None
+        else None
+    )
+
+    if customer_endpoint is None or not (customer_endpoint.text or "").strip():
+
+        issues.append(
+            "PEPPOL-EN16931-R010: Chýba elektronická adresa odberateľa "
+            "(cbc:EndpointID / BT-49) - vyplň Peppol schéma ID "
+            "odberateľa v jeho karte."
+        )
+
+    elif not customer_endpoint.get("schemeID"):
+
+        issues.append(
+            "Elektronická adresa odberateľa (BT-49) nemá atribút "
+            "schemeID - bez neho Peppol validátor odmietne celý "
+            "dokument."
+        )
+
     # --- BR-16 - aspoň jedna položka ---
 
     invoice_lines = root.findall("cac:InvoiceLine", NS)
@@ -181,6 +327,56 @@ def validate_peppol_invoice_xml(xml_bytes: bytes) -> list[str]:
         issues.append(
             "BR-16: Faktúra nemá žiadnu položku (cac:InvoiceLine / BG-25)."
         )
+
+    # --- BR-21 až BR-26 - povinné polia na úrovni položky ---
+    # Číslujeme položky od 1 (ako appka pri generovaní XML - viď
+    # peppol_xml.py) len pre čitateľnosť chybovej hlášky, nie preto,
+    # že by BR-21 vyžadovalo konkrétnu hodnotu ID.
+
+    for position, line in enumerate(invoice_lines, start=1):
+
+        if not _text(line, "cbc:ID"):
+
+            issues.append(
+                f"BR-21: Položka č. {position} nemá ID (cbc:ID / BT-126)."
+            )
+
+        quantity_el = line.find("cbc:InvoicedQuantity", NS)
+
+        if quantity_el is None or not (quantity_el.text or "").strip():
+
+            issues.append(
+                f"BR-22: Položka č. {position} nemá fakturované "
+                "množstvo (cbc:InvoicedQuantity / BT-129)."
+            )
+
+        elif not quantity_el.get("unitCode"):
+
+            issues.append(
+                f"BR-23: Položka č. {position} nemá kódovanú mernú "
+                "jednotku (unitCode / BT-130)."
+            )
+
+        if _decimal(line, "cbc:LineExtensionAmount") is None:
+
+            issues.append(
+                f"BR-24: Položka č. {position} nemá sumu "
+                "(cbc:LineExtensionAmount / BT-131)."
+            )
+
+        if not _text(line, "cac:Item/cbc:Name"):
+
+            issues.append(
+                f"BR-25: Položka č. {position} nemá názov "
+                "(cac:Item/cbc:Name / BT-153)."
+            )
+
+        if _decimal(line, "cac:Price/cbc:PriceAmount") is None:
+
+            issues.append(
+                f"BR-26: Položka č. {position} nemá jednotkovú cenu "
+                "(cac:Price/cbc:PriceAmount / BT-146)."
+            )
 
     # --- BR-CO-10: súčet položiek = LineExtensionAmount v hlavičke ---
 
@@ -261,11 +457,31 @@ def validate_peppol_invoice_xml(xml_bytes: bytes) -> list[str]:
 
     subtotal_sum = Decimal("0")
 
+    has_reverse_charge_category = False
+    has_zero_rated_category = False
+
     for subtotal in tax_subtotals:
 
         taxable_amount = _decimal(subtotal, "cbc:TaxableAmount")
         tax_amount = _decimal(subtotal, "cbc:TaxAmount")
         percent = _decimal(subtotal, "cac:TaxCategory/cbc:Percent")
+        category_id = _text(subtotal, "cac:TaxCategory/cbc:ID")
+
+        if category_id == "AE":
+
+            has_reverse_charge_category = True
+
+            if tax_amount is not None and tax_amount != Decimal("0"):
+
+                issues.append(
+                    "BR-AE-09: TaxAmount v DPH kategórii \"AE\" "
+                    f"(prenesenie daňovej povinnosti) musí byť 0, "
+                    f"nájdená hodnota je {tax_amount}."
+                )
+
+        elif category_id == "Z":
+
+            has_zero_rated_category = True
 
         if taxable_amount is None or tax_amount is None:
 
@@ -295,6 +511,57 @@ def validate_peppol_invoice_xml(xml_bytes: bytes) -> list[str]:
             f"BR-CO-14: Celkový TaxAmount ({header_tax_amount}) nesedí "
             f"so súčtom TaxAmount v DPH kategóriách ({_round2(subtotal_sum)})."
         )
+
+    # --- BR-AE-02: prenesenie daňovej povinnosti vyžaduje IČ DPH
+    #     predávajúceho AJ odberateľa ---
+
+    if has_reverse_charge_category:
+
+        supplier_vat_id = (
+            _text(supplier_party, "cac:PartyTaxScheme/cbc:CompanyID")
+            if supplier_party is not None
+            else None
+        )
+
+        customer_vat_id = (
+            _text(customer_party, "cac:PartyTaxScheme/cbc:CompanyID")
+            if customer_party is not None
+            else None
+        )
+
+        if not supplier_vat_id:
+
+            issues.append(
+                "BR-AE-02: Pri prenesení daňovej povinnosti (Reverse "
+                "Charge) musí faktúra obsahovať IČ DPH predávajúceho "
+                "(BT-31) - vyplň ho v Nastaveniach."
+            )
+
+        if not customer_vat_id:
+
+            issues.append(
+                "BR-AE-02: Pri prenesení daňovej povinnosti (Reverse "
+                "Charge) musí faktúra obsahovať IČ DPH odberateľa "
+                "(BT-48) - vyplň ho v karte zákazníka."
+            )
+
+    # --- BR-Z-02: nulová sadzba DPH vyžaduje IČ DPH predávajúceho ---
+
+    if has_zero_rated_category:
+
+        supplier_vat_id = (
+            _text(supplier_party, "cac:PartyTaxScheme/cbc:CompanyID")
+            if supplier_party is not None
+            else None
+        )
+
+        if not supplier_vat_id:
+
+            issues.append(
+                "BR-Z-02: Pri nulovej sadzbe DPH (kategória \"Z\") "
+                "musí faktúra obsahovať IČ DPH predávajúceho (BT-31) "
+                "- vyplň ho v Nastaveniach."
+            )
 
     # --- BR-CO-15: TaxInclusiveAmount = TaxExclusiveAmount + TaxAmount ---
 

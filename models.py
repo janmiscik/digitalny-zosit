@@ -55,6 +55,19 @@ class Customer(Base):
         nullable=True
     )
 
+    # Krajina odberateľa (ISO 3166-1 alpha-2, napr. "SK", "CZ") - Peppol
+    # BIS 3.0 (BT-55 pri odberateľovi) ju vyžaduje ako súčasť štruktúrovanej
+    # adresy (BR-11). Predtým appka pri generovaní XML tvrdila, že KAŽDÝ
+    # odberateľ je zo Slovenska (natvrdo zapísaný DEFAULT_COUNTRY_CODE v
+    # peppol_xml.py) - pre zahraničných zákazníkov to bolo nesprávne.
+    # Default "SK", lebo väčšina zákazníkov appky sú slovenskí odberatelia.
+    country_code = Column(
+        String,
+        nullable=True,
+        default="SK",
+        server_default="SK"
+    )
+
 
     note = Column(
         Text,

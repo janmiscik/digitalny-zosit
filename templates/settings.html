@@ -251,11 +251,12 @@
                     type="text"
                     name="peppol_scheme_id"
                     value="{{ company.peppol_scheme_id or '' }}"
-                    placeholder="napr. 9946"
+                    placeholder="napr. 9950"
+                    maxlength="4"
                 >
 
                 <p style="font-size: 13px; color: var(--text-muted); margin-top: -8px;">
-                    Tento kód (ISO 6523 schéma) ti potvrdí tvoj poskytovateľ Peppol pripojenia (tzv. Digitálny poštár) pri registrácii. Zatiaľ ho môžeš nechať prázdne - Peppol export bude fungovať aj bez neho, len s prázdnym poľom schémy, ktoré si doplníš neskôr.
+                    Tento kód (ISO 6523 schéma) ti potvrdí tvoj poskytovateľ Peppol pripojenia (tzv. Digitálny poštár) pri registrácii. Pre slovenskú firmu je to zvyčajne <strong>9950</strong> (SK:VAT) - pozor, nezamieňaj si to s podobne vyzerajúcimi kódmi iných krajín (napr. 9946 je Portugalsko). Zatiaľ ho môžeš nechať prázdne - Peppol export bude fungovať aj bez neho, len s prázdnym poľom schémy, ktoré si doplníš neskôr.
                 </p>
 
 

@@ -393,6 +393,23 @@
 
                 </div>
 
+                <div style="flex: 1;">
+
+                    <label>
+                        Krajina <span style="font-weight: 400; color: var(--text-muted);">(ISO kód, napr. SK)</span>
+                    </label>
+
+                    <input
+                        type="text"
+                        id="new-customer-country_code"
+                        name="country_code"
+                        value="SK"
+                        maxlength="2"
+                        style="text-transform: uppercase;"
+                    >
+
+                </div>
+
             </div>
 
 
@@ -417,6 +434,23 @@
                 name="ic_dph"
                 placeholder="napr. SK1234567890"
             >
+
+
+            <label>
+                Peppol schéma ID <span style="font-weight: 400; color: var(--text-muted);">(nepovinné - identifikačná schéma odberateľa v Peppol sieti)</span>
+            </label>
+
+            <input
+                type="text"
+                id="new-customer-peppol_scheme_id"
+                name="peppol_scheme_id"
+                placeholder="napr. 9950 pre slovenskú firmu"
+                maxlength="4"
+            >
+
+            <p style="font-size: 13px; color: var(--text-muted); margin-top: -8px;">
+                Kód (ISO 6523 schéma) ti potvrdí Peppol poskytovateľ zákazníka. Zatiaľ môžeš nechať prázdne.
+            </p>
 
 
             <label>

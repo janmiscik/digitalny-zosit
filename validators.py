@@ -247,3 +247,117 @@ def normalize_ic_dph(value: str | None) -> str | None:
 
     except ValueError:
         return value.strip().replace(" ", "").upper()
+
+
+# =========================================
+# PEPPOL EAS / ISO 6523 SCHÉMA (schemeID pre EndpointID)
+#
+# Malý, ručne udržiavaný výber z oficiálneho zoznamu "Electronic
+# Address Scheme" (https://docs.peppol.eu/poacc/billing/3.0/codelist/eas/),
+# overený webovým vyhľadávaním, nie z pamäte - NIE je to úplný zoznam
+# všetkých cca 70 schém, len tie, s ktorými sa appka (slovenská firma +
+# typickí zahraniční odberatelia z okolitých krajín) reálne stretne.
+#
+# Cieľom tejto validácie je hlavne odchytiť najčastejšiu chybu: zámenu
+# schémy inej krajiny za slovenskú. Napr. 9946 je Portugalsko, NIE
+# Slovensko (slovenská schéma je 9950 - SK:VAT) - presne táto zámena
+# sa predtým vyskytovala v appke ako testovacia/príkladová hodnota.
+# =========================================
+
+PEPPOL_EAS_SCHEMES: dict[str, tuple[str, str]] = {
+    "9922": ("AD", "AD:VAT - Andorra VAT number"),
+    "9923": ("AL", "AL:VAT - Albania VAT number"),
+    "9914": ("AT", "AT:VAT - Österreichische Umsatzsteuer-Identifikationsnummer"),
+    "9924": ("BA", "BA:VAT - Bosnia and Herzegovina VAT number"),
+    "0208": ("BE", "BE:EN - Belgické firemné číslo (KBO/BCE)"),
+    "9925": ("BE", "BE:VAT - Belgium VAT number"),
+    "9926": ("BG", "BG:VAT - Bulgaria VAT number"),
+    "9927": ("CH", "CH:VAT - Switzerland VAT number"),
+    "9928": ("CY", "CY:VAT - Cyprus VAT number"),
+    "9929": ("CZ", "CZ:VAT - Czech Republic VAT number"),
+    "9930": ("DE", "DE:VAT - Germany VAT number"),
+    "9901": ("DK", "DK:CPR"),
+    "9902": ("DK", "DK:CVR"),
+    "9931": ("EE", "EE:VAT - Estonia VAT number"),
+    "9920": ("ES", "ES:VAT - Agencia Española de Administración Tributaria"),
+    "9957": ("FR", "FR:VAT - France VAT number"),
+    "9932": ("GB", "GB:VAT - United Kingdom VAT number"),
+    "9933": ("GR", "GR:VAT - Greece VAT number"),
+    "9934": ("HR", "HR:VAT - Croatia VAT number"),
+    "9910": ("HU", "HU:VAT - Hungarian Tax Board"),
+    "9935": ("IE", "IE:VAT - Ireland VAT number"),
+    "0211": ("IT", "IT:VAT - Italy VAT number"),
+    "9936": ("LI", "LI:VAT - Liechtenstein VAT number"),
+    "9937": ("LT", "LT:VAT - Lithuania VAT number"),
+    "9938": ("LU", "LU:VAT - Luxemburg VAT number"),
+    "9939": ("LV", "LV:VAT - Latvia VAT number"),
+    "9944": ("NL", "NL:VAT - Netherlands VAT number (doplnková, nie hlavná NL identifikácia)"),
+    "0106": ("NL", "NL:KVK - Dutch Chamber of Commerce number"),
+    "9945": ("PL", "PL:VAT - Poland VAT number"),
+    "9946": ("PT", "PT:VAT - Portugal VAT number"),
+    "9947": ("RO", "RO:VAT - Romania VAT number"),
+    "0007": ("SE", "SE:ORG - Swedish organisationsnummer"),
+    "9950": ("SK", "SK:VAT - Slovakia VAT number"),
+}
+
+# Historicky odporúčaná (nesprávna) príkladová hodnota, s ktorou sa
+# appka predtým stretávala pri slovenských firmách - explicitne
+# pomenovaná pre čitateľnú chybovú hlášku.
+_SK_WRONG_EXAMPLE_SCHEMES = {"9946"}
+
+
+def validate_peppol_scheme_id(
+    value: str,
+    expected_country_code: str | None = None
+) -> str:
+    """
+    Overí formát Peppol EAS/ISO 6523 schemeID (4 znaky, podľa
+    dokumentácie buď 4 číslice, alebo - pri novších schémach ako
+    napr. IT 0211 - 4 alfanumerické znaky).
+
+    Ak je hodnota v PEPPOL_EAS_SCHEMES (náš výber najbežnejších
+    schém), overí sa navyše, či zodpovedá `expected_country_code`
+    (ak je zadaný) - odchytí to typickú chybu, keď si niekto omylom
+    zadá schému inej krajiny (napr. 9946 pre slovenskú firmu).
+
+    Schémy, ktoré nie sú v našom (zámerne neúplnom) výbere, sa
+    NEODMIETAJÚ len na základe formátu - appku môžu používať aj
+    zákazníci z krajín, ktoré tu nemáme zdokumentované.
+    """
+
+    stripped = value.strip().upper()
+
+    if not re.match(r"^[A-Z0-9]{4}$", stripped):
+
+        raise ValueError(
+            f"Peppol schéma ID '{value}' by mala mať presne 4 znaky "
+            "(číslice, príp. písmená pri novších schémach) - "
+            "napr. 9950 pre slovenské IČ DPH."
+        )
+
+    known = PEPPOL_EAS_SCHEMES.get(stripped)
+
+    if known is not None:
+
+        scheme_country, scheme_label = known
+
+        if (
+            expected_country_code
+            and scheme_country != expected_country_code.strip().upper()
+        ):
+
+            hint = (
+                " (bežná chyba - zameniteľné so slovenskou schémou "
+                "9950 - SK:VAT)"
+                if stripped in _SK_WRONG_EXAMPLE_SCHEMES
+                and expected_country_code.strip().upper() == "SK"
+                else ""
+            )
+
+            raise ValueError(
+                f"Peppol schéma ID '{stripped}' je '{scheme_label}', "
+                f"nie schéma pre krajinu {expected_country_code}"
+                f"{hint}."
+            )
+
+    return stripped

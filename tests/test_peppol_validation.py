@@ -43,7 +43,12 @@ def make_customer(**overrides):
         zip_code="81101",
         email="zakaznik@example.com",
         phone="0900111222",
-        peppol_scheme_id=None
+        country_code="SK",
+        # Peppol vyžaduje elektronickú adresu (EndpointID) aj pre
+        # odberateľa s kardinalitou 1..1 (PEPPOL-EN16931-R010) - v
+        # "šťastných" scenároch (žiadny nález) preto musí byť vyplnená
+        # aj tu, nielen na strane firmy.
+        peppol_scheme_id="9950"
     )
     defaults.update(overrides)
 
@@ -61,7 +66,10 @@ def make_company(**overrides):
         zip_code="82109",
         email="firma@example.com",
         phone="0900999888",
-        peppol_scheme_id="9946",
+        # 9950 = SK:VAT (slovenské IČ DPH). Predtým tu bola omylom
+        # 9946, čo je PT:VAT (Portugalsko) - presne tá zámena, ktorú
+        # teraz validators.validate_peppol_scheme_id() odchytí.
+        peppol_scheme_id="9950",
         iban="SK3112000000198742637541",
         swift_bic="TATRSKBX"
     )
@@ -168,7 +176,11 @@ def test_invoice_without_company_has_no_arithmetic_issues():
 
     issues = validate_peppol_invoice_xml(xml_bytes)
 
-    assert issues == ["BR-06: Chýba meno predávajúceho (BT-27)."]
+    # BR-06 (meno) + PEPPOL-EN16931-R020 (bez firmy nie je čo použiť
+    # ako elektronickú adresu predávajúceho) - obe sú legitímne nálezy.
+    assert len(issues) == 2
+    assert issues[0] == "BR-06: Chýba meno predávajúceho (BT-27)."
+    assert issues[1].startswith("PEPPOL-EN16931-R020")
 
 
 def test_invoice_without_iban_has_no_issues():
@@ -357,3 +369,214 @@ def test_detects_wrong_vat_percent_calculation():
         "BR-CO-17" in issue or "BR-CO-14" in issue
         for issue in issues
     )
+
+
+# =========================================
+# NOVÉ PRAVIDLÁ - KAŽDÉ MUSÍ SKUTOČNE ZACHYTIŤ PROBLÉM
+# =========================================
+
+def test_detects_missing_invoice_type_code():
+    """BR-04"""
+
+    broken = _valid_xml_bytes()
+
+    import re
+
+    broken = re.sub(
+        rb"<cbc:InvoiceTypeCode>.*?</cbc:InvoiceTypeCode>",
+        b"",
+        broken
+    )
+
+    assert any("BR-04" in i for i in validate_peppol_invoice_xml(broken))
+
+
+def test_detects_missing_supplier_endpoint_id():
+    """PEPPOL-EN16931-R020 (BT-34)"""
+
+    invoice = make_invoice([make_item()])
+
+    xml_bytes = generate_peppol_xml(
+        invoice,
+        make_company(peppol_scheme_id=None)
+    )
+
+    issues = validate_peppol_invoice_xml(xml_bytes)
+
+    assert any("PEPPOL-EN16931-R020" in i for i in issues)
+
+
+def test_detects_missing_customer_endpoint_id():
+    """PEPPOL-EN16931-R010 (BT-49)"""
+
+    invoice = make_invoice(
+        [make_item()],
+        customer=make_customer(peppol_scheme_id=None)
+    )
+
+    xml_bytes = generate_peppol_xml(invoice, make_company())
+
+    issues = validate_peppol_invoice_xml(xml_bytes)
+
+    assert any("PEPPOL-EN16931-R010" in i for i in issues)
+
+
+def test_detects_endpoint_id_without_scheme_id():
+
+    import re
+
+    broken = re.sub(
+        rb'(<cbc:EndpointID) schemeID="[^"]*"',
+        rb"\1",
+        _valid_xml_bytes()
+    )
+
+    issues = validate_peppol_invoice_xml(broken)
+
+    assert any("schemeID" in i for i in issues)
+
+
+def test_detects_missing_country_codes():
+    """BR-09 a BR-11"""
+
+    import re
+
+    broken = re.sub(
+        rb"<cbc:IdentificationCode>.*?</cbc:IdentificationCode>",
+        b"",
+        _valid_xml_bytes()
+    )
+
+    issues = validate_peppol_invoice_xml(broken)
+
+    assert any("BR-09" in i for i in issues)
+    assert any("BR-11" in i for i in issues)
+
+
+def test_detects_missing_postal_addresses():
+    """BR-08 a BR-10"""
+
+    import re
+
+    broken = re.sub(
+        rb"<cac:PostalAddress>.*?</cac:PostalAddress>",
+        b"",
+        _valid_xml_bytes(),
+        flags=re.DOTALL
+    )
+
+    issues = validate_peppol_invoice_xml(broken)
+
+    assert any("BR-08" in i for i in issues)
+    assert any("BR-10" in i for i in issues)
+
+
+def test_detects_missing_line_fields():
+    """BR-21 až BR-26"""
+
+    import re
+
+    xml_bytes = _valid_xml_bytes()
+
+    def strip_in_lines(pattern):
+        return re.sub(pattern, b"", xml_bytes, flags=re.DOTALL)
+
+    # BR-21 - ID položky (prvé <cbc:ID> vnútri InvoiceLine)
+    broken = re.sub(
+        rb"(<cac:InvoiceLine>\s*)<cbc:ID>.*?</cbc:ID>",
+        rb"\1",
+        xml_bytes,
+        flags=re.DOTALL
+    )
+    assert any("BR-21" in i for i in validate_peppol_invoice_xml(broken))
+
+    # BR-22 - množstvo
+    broken = strip_in_lines(rb"<cbc:InvoicedQuantity[^>]*>.*?</cbc:InvoicedQuantity>")
+    assert any("BR-22" in i for i in validate_peppol_invoice_xml(broken))
+
+    # BR-23 - unitCode
+    broken = re.sub(rb' unitCode="[^"]*"', b"", xml_bytes)
+    assert any("BR-23" in i for i in validate_peppol_invoice_xml(broken))
+
+    # BR-25 - názov položky
+    broken = re.sub(
+        rb"(<cac:Item>\s*)<cbc:Name>.*?</cbc:Name>",
+        rb"\1",
+        xml_bytes,
+        flags=re.DOTALL
+    )
+    assert any("BR-25" in i for i in validate_peppol_invoice_xml(broken))
+
+    # BR-26 - cena položky
+    broken = strip_in_lines(rb"<cbc:PriceAmount[^>]*>.*?</cbc:PriceAmount>")
+    assert any("BR-26" in i for i in validate_peppol_invoice_xml(broken))
+
+
+def test_detects_reverse_charge_without_vat_ids():
+    """BR-AE-02 - chýba IČ DPH predávajúceho aj odberateľa"""
+
+    invoice = make_invoice(
+        [make_item(vat_rate=0)],
+        customer=make_customer(ic_dph=None),
+        reverse_charge=True
+    )
+
+    xml_bytes = generate_peppol_xml(
+        invoice,
+        make_company(ic_dph=None)
+    )
+
+    issues = validate_peppol_invoice_xml(xml_bytes)
+
+    assert sum("BR-AE-02" in i for i in issues) == 2
+
+
+def test_detects_reverse_charge_nonzero_tax():
+    """BR-AE-09 - TaxAmount v kategórii AE musí byť 0"""
+
+    import re
+
+    invoice = make_invoice([make_item(vat_rate=0)], reverse_charge=True)
+
+    xml_bytes = generate_peppol_xml(invoice, make_company())
+
+    broken = re.sub(
+        rb'(<cac:TaxSubtotal>.*?<cbc:TaxAmount currencyID="EUR">)[\d.]+',
+        rb"\g<1>5.00",
+        xml_bytes,
+        count=1,
+        flags=re.DOTALL
+    )
+
+    issues = validate_peppol_invoice_xml(broken)
+
+    assert any("BR-AE-09" in i for i in issues)
+
+
+def test_detects_zero_vat_without_supplier_vat_id():
+    """BR-Z-02"""
+
+    invoice = make_invoice([make_item(vat_rate=0)])
+
+    xml_bytes = generate_peppol_xml(
+        invoice,
+        make_company(ic_dph=None)
+    )
+
+    issues = validate_peppol_invoice_xml(xml_bytes)
+
+    assert any("BR-Z-02" in i for i in issues)
+
+
+def test_customer_country_code_is_used_in_xml():
+
+    invoice = make_invoice(
+        [make_item()],
+        customer=make_customer(country_code="CZ", peppol_scheme_id="9929")
+    )
+
+    xml_bytes = generate_peppol_xml(invoice, make_company())
+
+    customer_part = xml_bytes.split(b"<cac:AccountingCustomerParty>")[1]
+
+    assert b"<cbc:IdentificationCode>CZ</cbc:IdentificationCode>" in customer_part

@@ -1,8 +1,9 @@
+import re
 from datetime import date
 from decimal import Decimal
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from validators import (
     validate_dic_format,
@@ -10,6 +11,7 @@ from validators import (
     validate_ic_dph_format,
     validate_ico_format,
     validate_iban_format,
+    validate_peppol_scheme_id,
 )
 
 
@@ -78,6 +80,13 @@ class CustomerBase(BaseModel):
     dic: str | None = None
     ic_dph: str | None = None
 
+    # Peppol (fáza 2) - krajina a identifikačná schéma odberateľa v
+    # Peppol sieti. Obe nepovinné - appka bez nich Peppol export
+    # jednoducho nepridá EndpointID/presnú krajinu, len na to
+    # informatívne upozorní (viď peppol_validation.py).
+    country_code: str | None = "SK"
+    peppol_scheme_id: str | None = None
+
     @field_validator("email")
     @classmethod
     def check_email(cls, value: str | None) -> str | None:
@@ -113,6 +122,56 @@ class CustomerBase(BaseModel):
             return value
 
         return validate_ic_dph_format(value)
+
+    @field_validator("country_code")
+    @classmethod
+    def check_country_code(cls, value: str | None) -> str | None:
+
+        if not value:
+            return value
+
+        stripped = value.strip().upper()
+
+        if not re.match(r"^[A-Z]{2}$", stripped):
+
+            raise ValueError(
+                f"Kód krajiny '{value}' by mal mať presne 2 písmená "
+                "(ISO 3166-1 alpha-2), napr. SK, CZ, DE."
+            )
+
+        return stripped
+
+    @field_validator("peppol_scheme_id")
+    @classmethod
+    def check_peppol_scheme_id(cls, value: str | None) -> str | None:
+
+        if not value:
+            return value
+
+        # Krajina sa tu (na úrovni jedného poľa) ešte nedá skrížiť s
+        # country_code - Pydantic field_validator vidí len jednu
+        # hodnotu naraz, format-only kontrola je zámerne v
+        # validators.py. Kríženie (schéma vs. krajina odberateľa)
+        # rieši model_validator nižšie, kde sú obe hodnoty k
+        # dispozícii súčasne.
+        return validate_peppol_scheme_id(value)
+
+    @model_validator(mode="after")
+    def check_peppol_scheme_matches_country(self) -> "CustomerBase":
+
+        if self.peppol_scheme_id and self.country_code:
+
+            try:
+                validate_peppol_scheme_id(
+                    self.peppol_scheme_id,
+                    expected_country_code=self.country_code
+                )
+
+            except ValueError as exc:
+
+                raise ValueError(str(exc))
+
+        return self
 
 
 class CustomerCreate(CustomerBase):
@@ -184,6 +243,19 @@ class CompanyBase(BaseModel):
     peppol_scheme_id: str | None = None
     logo_filename: str | None = None
     signature_filename: str | None = None
+
+    # Appka počíta vždy s jednou (slovenskou) firmou ako predávajúcim
+    # (viď models.Company docstring), preto sa schéma tu vždy overuje
+    # oproti "SK" - na rozdiel od CustomerBase, kde krajina odberateľa
+    # je premenlivá.
+    @field_validator("peppol_scheme_id")
+    @classmethod
+    def check_peppol_scheme_id(cls, value: str | None) -> str | None:
+
+        if not value:
+            return value
+
+        return validate_peppol_scheme_id(value, expected_country_code="SK")
 
 
 class CompanyUpdate(CompanyBase):

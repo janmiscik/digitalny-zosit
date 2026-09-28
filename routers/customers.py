@@ -235,6 +235,10 @@ def create_customer(
 
     ic_dph: str = Form(""),
 
+    country_code: str = Form("SK"),
+
+    peppol_scheme_id: str = Form(""),
+
     db: Session = Depends(get_db),
 
     user: str = Depends(require_login_page)
@@ -253,7 +257,9 @@ def create_customer(
             note=note or None,
             ico=ico or None,
             dic=dic or None,
-            ic_dph=ic_dph or None
+            ic_dph=ic_dph or None,
+            country_code=country_code or None,
+            peppol_scheme_id=peppol_scheme_id or None
         )
 
     except ValidationError as exc:
@@ -368,6 +374,10 @@ def update_customer(
 
     ic_dph: str = Form(""),
 
+    country_code: str = Form("SK"),
+
+    peppol_scheme_id: str = Form(""),
+
     db: Session = Depends(get_db),
 
     user: str = Depends(require_login_page)
@@ -406,7 +416,9 @@ def update_customer(
             note=note or None,
             ico=ico or None,
             dic=dic or None,
-            ic_dph=ic_dph or None
+            ic_dph=ic_dph or None,
+            country_code=country_code or None,
+            peppol_scheme_id=peppol_scheme_id or None
         )
 
     except ValidationError as exc:
