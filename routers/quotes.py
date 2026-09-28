@@ -307,7 +307,7 @@ async def create_quote(
     def _regenerate_quote():
         new_quote.quote_number = _generate_quote_number()
 
-    commit_with_number_retry(db, _regenerate_quote)
+    commit_with_number_retry(db, _regenerate_quote, new_quote)
     db.refresh(new_quote)
 
     log_action(
@@ -872,8 +872,10 @@ def convert_quote_to_invoice(
 
     def _regenerate_conv():
         new_invoice.invoice_number = _generate_conv_number()
+        # rollback vrátil aj zmenu stavu ponuky - nastaviť znova
+        quote.status = QuoteStatus.CONVERTED.value
 
-    commit_with_number_retry(db, _regenerate_conv)
+    commit_with_number_retry(db, _regenerate_conv, new_invoice)
     db.refresh(new_invoice)
 
     log_action(

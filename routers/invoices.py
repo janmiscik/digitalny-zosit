@@ -443,7 +443,7 @@ async def create_invoice(
     def _regenerate():
         new_invoice.invoice_number = next_invoice_number(db, issue_date.year)
 
-    commit_with_number_retry(db, _regenerate)
+    commit_with_number_retry(db, _regenerate, new_invoice)
 
     db.refresh(new_invoice)
 
@@ -937,7 +937,7 @@ def duplicate_invoice(
     def _regenerate_dup():
         new_invoice.invoice_number = _generate_dup_number()
 
-    commit_with_number_retry(db, _regenerate_dup)
+    commit_with_number_retry(db, _regenerate_dup, new_invoice)
     db.refresh(new_invoice)
 
     log_action(
@@ -1152,7 +1152,7 @@ async def create_credit_note(
     def _regenerate_cn():
         credit_note.invoice_number = _generate_cn_number()
 
-    commit_with_number_retry(db, _regenerate_cn)
+    commit_with_number_retry(db, _regenerate_cn, credit_note)
     db.refresh(credit_note)
 
     log_action(

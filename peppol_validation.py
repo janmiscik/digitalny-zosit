@@ -80,8 +80,8 @@ pamäte):
               predávajúceho.
 """
 
-from decimal import Decimal, ROUND_HALF_UP
-from xml.etree.ElementTree import fromstring
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from xml.etree.ElementTree import ParseError, fromstring
 
 
 NS = {
@@ -114,10 +114,14 @@ def _decimal(element, path: str) -> Decimal | None:
         return None
 
     try:
-        return Decimal(raw)
+        value = Decimal(raw)
 
-    except Exception:
+    except InvalidOperation:
         return None
+
+    # "NaN"/"Infinity" sú pre Decimal platné hodnoty, ale porovnania a
+    # zaokrúhľovanie s nimi končia výnimkou - v XML sú to neplatné sumy.
+    return value if value.is_finite() else None
 
 
 def _round2(value: Decimal) -> Decimal:
@@ -140,7 +144,7 @@ def validate_peppol_invoice_xml(xml_bytes: bytes) -> list[str]:
     try:
         root = fromstring(xml_bytes)
 
-    except Exception as exc:
+    except ParseError as exc:
 
         return [f"XML sa nepodarilo naparsovať: {exc}"]
 

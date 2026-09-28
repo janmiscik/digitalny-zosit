@@ -1,5 +1,5 @@
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 import calendar as calendar_module
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
@@ -15,6 +15,11 @@ from models import Customer, Job, JobCost, JobPhoto
 from schemas import InvoiceStatus, JobCreate, JobRead, JobStatus, JobUpdate
 from templates_config import templates
 from uploads_utils import delete_job_photo, job_photo_path, save_job_photo_upload
+
+
+# Horná hranica sumy jedného nákladu (chráni súčty zákazky pred absurdnými
+# hodnotami typu 1e999999).
+MAX_COST_AMOUNT = Decimal("999999999.99")
 
 
 router = APIRouter(dependencies=[Depends(verify_csrf)])
@@ -737,7 +742,17 @@ def add_job_cost(
 
         amount_decimal = Decimal(amount)
 
-    except Exception:
+    except InvalidOperation:
+
+        raise HTTPException(
+            status_code=422,
+            detail="Neplatná suma nákladu"
+        )
+
+    # Decimal prijme aj "NaN", "Infinity" či "1e999999" - "NaN" by pri
+    # porovnaní nižšie spadlo s 500 a zvyšné dve hodnoty by sa uložili
+    # a pokazili súčty zákazky.
+    if not amount_decimal.is_finite() or abs(amount_decimal) > MAX_COST_AMOUNT:
 
         raise HTTPException(
             status_code=422,

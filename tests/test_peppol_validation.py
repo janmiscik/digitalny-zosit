@@ -580,3 +580,26 @@ def test_customer_country_code_is_used_in_xml():
     customer_part = xml_bytes.split(b"<cac:AccountingCustomerParty>")[1]
 
     assert b"<cbc:IdentificationCode>CZ</cbc:IdentificationCode>" in customer_part
+
+
+def test_non_finite_amount_in_xml_is_reported_not_crashing():
+
+    import re
+
+    broken = re.sub(
+        rb'(<cbc:PayableAmount currencyID="EUR">)[\d.]+',
+        rb"\g<1>NaN",
+        _valid_xml_bytes(),
+        count=1
+    )
+
+    # nesmie vyhodiť výnimku - chýbajúca/neplatná suma sa nahlási
+    assert isinstance(validate_peppol_invoice_xml(broken), list)
+
+
+def test_malformed_xml_returns_parse_issue():
+
+    issues = validate_peppol_invoice_xml(b"<Invoice><nezavrete>")
+
+    assert len(issues) == 1
+    assert "naparsovať" in issues[0]

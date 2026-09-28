@@ -462,12 +462,41 @@ def is_valid_quote_status_transition(current_status: str, new_status: str) -> bo
 MAX_NUMBER_RETRY_ATTEMPTS = 5
 
 
-def commit_with_number_retry(db: Session, regenerate_number) -> None:
+def _is_unique_violation(exc: IntegrityError) -> bool:
+    """
+    True, ak IntegrityError vznikla porušením UNIQUE obmedzenia
+    (SQLite: "UNIQUE constraint failed", PostgreSQL: "duplicate key
+    value violates unique constraint"). Iné IntegrityError (napr.
+    NOT NULL, cudzí kľúč) sú skutočné chyby dát a opakovaním s novým
+    číslom dokladu sa nikdy nevyriešia.
+    """
+
+    message = str(getattr(exc, "orig", exc)).lower()
+
+    return "unique" in message or "duplicate key" in message
+
+
+def commit_with_number_retry(
+    db: Session,
+    regenerate_number,
+    *instances
+) -> None:
     """
     Skúsi db.commit(). Ak zlyhá na UNIQUE constraint čísla dokladu (dve
     súbežné požiadavky si mohli vygenerovať to isté "ďalšie" číslo -
     next_invoice_number atď. nie je atomické), zavolá regenerate_number()
     a skúsi znova, max MAX_NUMBER_RETRY_ATTEMPTS krát.
+
+    DÔLEŽITÉ: db.rollback() odpojí od session všetky ešte neuložené
+    (pending) objekty - bez toho by ďalší commit() nič neuložil a doklad
+    by sa stratil. Preto sa `instances` (nový doklad, ktorý sa ukladá)
+    po rollbacku pridajú do session znova (položky sa pridajú
+    kaskádou). Zmeny na už existujúcich objektoch (napr. zmena stavu
+    ponuky) rollback vráti späť - tie musí znova nastaviť
+    regenerate_number().
+
+    Opakuje sa LEN pri porušení UNIQUE obmedzenia; každá iná
+    IntegrityError sa vyhodí hneď.
 
     Pri appke s jedným používateľom je toto riziko nízke, ale appka je
     už dosť serózna na to, aby bola voči tomu odolná.
@@ -481,11 +510,17 @@ def commit_with_number_retry(db: Session, regenerate_number) -> None:
 
             return
 
-        except IntegrityError:
+        except IntegrityError as exc:
 
             db.rollback()
 
-            if attempt == MAX_NUMBER_RETRY_ATTEMPTS - 1:
+            if (
+                not _is_unique_violation(exc)
+                or attempt == MAX_NUMBER_RETRY_ATTEMPTS - 1
+            ):
                 raise
 
             regenerate_number()
+
+            for instance in instances:
+                db.add(instance)

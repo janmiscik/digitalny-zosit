@@ -98,6 +98,30 @@ def ensure_backups_dir() -> None:
     )
 
 
+def _integrity_check_failure(conn: sqlite3.Connection) -> str | None:
+    """
+    Spustí `PRAGMA integrity_check` nad danou SQLite databázou. Vráti
+    None, ak je všetko v poriadku ("ok"), inak textový popis prvých
+    nájdených problémov. Ak sa kontrola nedá ani spustiť (poškodený
+    súbor), vráti text chyby - nikdy nevyhodí výnimku.
+    """
+
+    try:
+
+        rows = conn.execute("PRAGMA integrity_check").fetchall()
+
+    except sqlite3.DatabaseError as exc:
+
+        return f"kontrolu sa nepodarilo spustiť ({exc})"
+
+    results = [str(row[0]) for row in rows]
+
+    if results == ["ok"]:
+        return None
+
+    return "; ".join(results[:3])
+
+
 def _create_db_snapshot_bytes(db_path: Path) -> bytes:
     """
     Vytvorí konzistentnú kópiu SQLite súboru cez natívne backup API a
@@ -117,7 +141,22 @@ def _create_db_snapshot_bytes(db_path: Path) -> bytes:
             source.backup(destination)
 
         source.close()
+
+        # Záloha poškodenej databázy by bola falošnou istotou - radšej
+        # ju vôbec nevytvoríme a upozorníme, kým je ešte čo zachraňovať.
+        problem = _integrity_check_failure(destination)
+
         destination.close()
+
+        if problem is not None:
+
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "Databáza appky je poškodená (PRAGMA integrity_check: "
+                    f"{problem}) - záloha nebola vytvorená."
+                )
+            )
 
         return tmp_path.read_bytes()
 
@@ -280,6 +319,8 @@ def _extract_and_validate_db_bytes(zf: zipfile.ZipFile) -> bytes:
 
             table_names = {row[0] for row in cursor.fetchall()}
 
+            integrity_problem = _integrity_check_failure(conn)
+
         except sqlite3.DatabaseError:
 
             raise HTTPException(
@@ -290,6 +331,16 @@ def _extract_and_validate_db_bytes(zf: zipfile.ZipFile) -> bytes:
         finally:
 
             conn.close()
+
+        if integrity_problem is not None:
+
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "database.db v zálohe je poškodený "
+                    f"(PRAGMA integrity_check: {integrity_problem})."
+                )
+            )
 
         missing_tables = REQUIRED_TABLES - table_names
 

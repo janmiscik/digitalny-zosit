@@ -1,4 +1,5 @@
 import io
+import logging
 import os
 import re
 import uuid
@@ -6,6 +7,8 @@ from pathlib import Path
 
 from fastapi import HTTPException, UploadFile
 from PIL import Image, ImageOps, UnidentifiedImageError
+
+logger = logging.getLogger(__name__)
 
 
 UPLOADS_DIR = Path(__file__).parent / "uploads"
@@ -379,7 +382,26 @@ def _resize_and_reencode_photo(contents: bytes, pillow_format: str) -> bytes:
 
             return output.getvalue()
 
-    except Exception:
+    except (
+        OSError,
+        ValueError,
+        SyntaxError,
+        Image.DecompressionBombError
+    ) as exc:
+
+        # Len chyby, ktoré Pillow reálne vyhadzuje pri poškodenom/
+        # nezvyčajnom obrázku (OSError vrátane UnidentifiedImageError a
+        # skrátených súborov, ValueError, SyntaxError pri poškodenom
+        # PNG, DecompressionBombError). Iné (programátorské) chyby sa
+        # zámerne NEZACHYTIA - inak by ich tento "ticho vráť pôvodný
+        # obsah" fallback skryl. Zlyhanie sa zaloguje, aby nebolo
+        # úplne nemé.
+        logger.warning(
+            "Zmena veľkosti fotky zlyhala (%s: %s) - ukladá sa pôvodný "
+            "obsah.",
+            type(exc).__name__,
+            exc
+        )
 
         return contents
 

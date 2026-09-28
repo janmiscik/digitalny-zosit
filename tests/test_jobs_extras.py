@@ -667,3 +667,21 @@ def test_routes_require_login(method, path):
     finally:
 
         app.dependency_overrides[require_login_page] = lambda: "testuser"
+
+
+def test_add_job_cost_nan_and_infinity_rejected():
+    """Decimal prijme NaN/Infinity/1e999999 - nesmú spadnúť na 500 ani sa uložiť."""
+
+    job = get_test_job()
+
+    for bad in ["NaN", "Infinity", "-Infinity", "1e999999"]:
+
+        response = post_form(
+            f"/jobs/{job.id}/costs",
+            [
+                ("description", "Zlá suma"),
+                ("amount", bad),
+            ]
+        )
+
+        assert response.status_code == 422, bad
