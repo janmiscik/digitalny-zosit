@@ -448,8 +448,19 @@
                 maxlength="4"
             >
 
+            <label>
+                Peppol Endpoint ID <span style="font-weight: 400; color: var(--text-muted);">(hodnota adresy v tejto schéme)</span>
+            </label>
+
+            <input
+                type="text"
+                id="new-customer-peppol_endpoint_id"
+                name="peppol_endpoint_id"
+                placeholder="napr. SK2020123456"
+            >
+
             <p style="font-size: 13px; color: var(--text-muted); margin-top: -8px;">
-                Kód (ISO 6523 schéma) ti potvrdí Peppol poskytovateľ zákazníka. Zatiaľ môžeš nechať prázdne.
+                Oba kódy ti potvrdí Peppol poskytovateľ zákazníka - pri schéme 9950 (SK:VAT) je Endpoint ID zákazníkovo IČ DPH, nie IČO. Musia sa vyplniť spolu. Zatiaľ môžeš nechať obe prázdne.
             </p>
 
 

@@ -256,7 +256,23 @@
                 >
 
                 <p style="font-size: 13px; color: var(--text-muted); margin-top: -8px;">
-                    Tento kód (ISO 6523 schéma) ti potvrdí tvoj poskytovateľ Peppol pripojenia (tzv. Digitálny poštár) pri registrácii. Pre slovenskú firmu je to zvyčajne <strong>9950</strong> (SK:VAT) - pozor, nezamieňaj si to s podobne vyzerajúcimi kódmi iných krajín (napr. 9946 je Portugalsko). Zatiaľ ho môžeš nechať prázdne - Peppol export bude fungovať aj bez neho, len s prázdnym poľom schémy, ktoré si doplníš neskôr.
+                    Tento kód (ISO 6523/EAS schéma) ti potvrdí tvoj poskytovateľ Peppol pripojenia (tzv. Digitálny poštár) pri registrácii. Pre slovenskú firmu je to zvyčajne <strong>9950</strong> (SK:VAT) - pozor, nezamieňaj si to s podobne vyzerajúcimi kódmi iných krajín (napr. 9946 je Portugalsko).
+                </p>
+
+
+                <label>
+                    Peppol Endpoint ID <span style="font-weight: 400; color: var(--text-muted);">(hodnota adresy v tejto schéme)</span>
+                </label>
+
+                <input
+                    type="text"
+                    name="peppol_endpoint_id"
+                    value="{{ company.peppol_endpoint_id or '' }}"
+                    placeholder="napr. SK2020123456"
+                >
+
+                <p style="font-size: 13px; color: var(--text-muted); margin-top: -8px;">
+                    Samotná hodnota elektronickej adresy v zvolenej schéme - <strong>pri schéme 9950 (SK:VAT) je to IČ DPH, nie IČO.</strong> Obe polia (schéma aj Endpoint ID) sa musia vyplniť spolu, inak sa neuloží ani jedno. Zatiaľ ich môžeš nechať prázdne - Peppol export bude fungovať aj bez nich, len bez elektronickej adresy predávajúceho, ktorú si doplníš neskôr.
                 </p>
 
 

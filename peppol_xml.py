@@ -146,6 +146,7 @@ def build_party(
     email: str | None = None,
     phone: str | None = None,
     peppol_scheme_id: str | None = None,
+    peppol_endpoint_id: str | None = None,
     country_code: str = DEFAULT_COUNTRY_CODE
 ) -> Element:
 
@@ -153,13 +154,18 @@ def build_party(
     party = SubElement(party_wrapper, qn(NS_CAC, "Party"))
 
 
-    if peppol_scheme_id and ico:
+    # DÔLEŽITÉ: hodnota EndpointID je peppol_endpoint_id, NIE ico.
+    # Predtým appka do EndpointID posielala vždy IČO bez ohľadu na
+    # zvolenú schému - pri schéme "9950" (SK:VAT) to malo byť IČ DPH.
+    # Obe polia sa zadávajú/validujú spolu (schemas.py), takže tu
+    # stačí kontrolovať jedno z nich.
+    if peppol_scheme_id and peppol_endpoint_id:
 
         add_text(
             party,
             NS_CBC,
             "EndpointID",
-            ico,
+            peppol_endpoint_id,
             schemeID=peppol_scheme_id
         )
 
@@ -253,6 +259,7 @@ def generate_peppol_xml(invoice, company) -> bytes:
     company_email = company.email if company else None
     company_phone = company.phone if company else None
     company_peppol_scheme = company.peppol_scheme_id if company else None
+    company_peppol_endpoint = getattr(company, "peppol_endpoint_id", None) if company else None
 
     build_party(
         "AccountingSupplierParty",
@@ -265,7 +272,8 @@ def generate_peppol_xml(invoice, company) -> bytes:
         zip_code=company_zip,
         email=company_email,
         phone=company_phone,
-        peppol_scheme_id=company_peppol_scheme
+        peppol_scheme_id=company_peppol_scheme,
+        peppol_endpoint_id=company_peppol_endpoint
     )
 
 
@@ -286,6 +294,7 @@ def generate_peppol_xml(invoice, company) -> bytes:
     # ho vynechá, ak je peppol_scheme_id None) - je to bezpečnejšie než
     # vygenerovať nesprávny/zavádzajúci identifikátor.
     customer_peppol_scheme = getattr(customer, "peppol_scheme_id", None)
+    customer_peppol_endpoint = getattr(customer, "peppol_endpoint_id", None)
     customer_country_code = getattr(customer, "country_code", None) or DEFAULT_COUNTRY_CODE
 
     build_party(
@@ -300,6 +309,7 @@ def generate_peppol_xml(invoice, company) -> bytes:
         email=customer.email,
         phone=customer.phone,
         peppol_scheme_id=customer_peppol_scheme,
+        peppol_endpoint_id=customer_peppol_endpoint,
         country_code=customer_country_code
     )
 

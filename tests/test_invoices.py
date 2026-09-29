@@ -1186,10 +1186,17 @@ def test_peppol_xml_download_has_no_validation_warning_header_when_clean():
     # (PEPPOL-EN16931-R020 / R010) - "čistý" export ich musí mať oboje.
     customer = db.query(Customer).first()
     customer.peppol_scheme_id = "9950"
+    customer.peppol_endpoint_id = "SK2020123456"
     customer.country_code = "SK"
     db.commit()
 
-    set_test_company(db, ico="11223344", peppol_scheme_id="9950")
+    set_test_company(
+        db,
+        ico="11223344",
+        ic_dph="SK1122334455",
+        peppol_scheme_id="9950",
+        peppol_endpoint_id="SK1122334455"
+    )
 
     invoice = create_sample_invoice(db)
     invoice_id = invoice.id
@@ -1259,6 +1266,7 @@ def test_peppol_xml_well_formed_and_valid_structure():
 
     customer = db.query(Customer).first()
     customer.peppol_scheme_id = "9950"
+    customer.peppol_endpoint_id = "SK2020123456"
     db.commit()
 
     invoice = Invoice(
@@ -1299,7 +1307,8 @@ def test_peppol_xml_well_formed_and_valid_structure():
         city="Bratislava",
         zip_code="81101",
         iban="SK1234567890123456789012",
-        peppol_scheme_id="9950"
+        peppol_scheme_id="9950",
+        peppol_endpoint_id="SK1122334455"
     )
 
     db.add(invoice)
@@ -1399,7 +1408,9 @@ def test_peppol_xml_does_not_reuse_supplier_scheme_for_customer():
         db,
         name="Firma XY",
         ico="11223344",
-        peppol_scheme_id="9950"
+        ic_dph="SK1122334455",
+        peppol_scheme_id="9950",
+        peppol_endpoint_id="SK1122334455"
     )
 
     db.add(invoice)
@@ -1431,6 +1442,7 @@ def test_peppol_xml_does_not_reuse_supplier_scheme_for_customer():
     # Dodávateľ svoj EndpointID (so svojou schémou) má...
     assert supplier_endpoint is not None
     assert supplier_endpoint.get("schemeID") == "9950"
+    assert supplier_endpoint.text == "SK1122334455"
 
     # ...ale odberateľ NESMIE dostať schému dodávateľa - keďže vlastnú
     # nemá, element sa má úplne vynechať, nie obsahovať "9950".
@@ -1444,8 +1456,8 @@ def test_peppol_xml_uses_customers_own_scheme_when_set():
     db = TestingSessionLocal()
 
     customer = db.query(Customer).first()
-    customer.ico = "99887766"
     customer.peppol_scheme_id = "0088"
+    customer.peppol_endpoint_id = "99887766"
     db.commit()
 
     invoice = Invoice(
@@ -1470,7 +1482,8 @@ def test_peppol_xml_uses_customers_own_scheme_when_set():
         db,
         name="Firma XY",
         ico="11223344",
-        peppol_scheme_id="9950"
+        peppol_scheme_id="9950",
+        peppol_endpoint_id="SK1122334455"
     )
 
     db.add(invoice)
@@ -3630,6 +3643,7 @@ def test_peppol_xml_reverse_charge_uses_ae_category():
     customer = db.query(Customer).first()
     customer.ic_dph = "SK1234567890"
     customer.peppol_scheme_id = "9950"
+    customer.peppol_endpoint_id = "SK1234567890"
     db.commit()
 
     invoice = create_sample_invoice(db)
@@ -3642,6 +3656,7 @@ def test_peppol_xml_reverse_charge_uses_ae_category():
         ico="12345678",
         ic_dph="SK1122334455",
         peppol_scheme_id="9950",
+        peppol_endpoint_id="SK1122334455",
         is_vat_payer=True
     )
     db.commit()
@@ -3730,7 +3745,8 @@ def test_customer_form_saves_country_and_peppol_scheme():
         data={
             "name": "Český zákazník s.r.o.",
             "country_code": "cz",
-            "peppol_scheme_id": "9929"
+            "peppol_scheme_id": "9929",
+            "peppol_endpoint_id": "CZ12345678"
         },
         follow_redirects=False
     )
@@ -3744,8 +3760,25 @@ def test_customer_form_saves_country_and_peppol_scheme():
 
     assert saved.country_code == "CZ"
     assert saved.peppol_scheme_id == "9929"
+    assert saved.peppol_endpoint_id == "CZ12345678"
 
     db.close()
+
+
+def test_customer_form_rejects_scheme_without_endpoint_id():
+    """Schéma bez Endpoint ID (alebo naopak) sa musí odmietnuť."""
+
+    response = client.post(
+        "/customers",
+        data={
+            "name": "Neúplný Peppol s.r.o.",
+            "country_code": "SK",
+            "peppol_scheme_id": "9950"
+        },
+        follow_redirects=False
+    )
+
+    assert response.status_code == 422
 
 
 def test_customer_form_rejects_scheme_of_other_country():
@@ -3799,9 +3832,16 @@ def test_invoice_detail_hides_peppol_block_when_clean():
 
     customer = db.query(Customer).first()
     customer.peppol_scheme_id = "9950"
+    customer.peppol_endpoint_id = "SK2020123456"
     db.commit()
 
-    set_test_company(db, ico="11223344", peppol_scheme_id="9950")
+    set_test_company(
+        db,
+        ico="11223344",
+        ic_dph="SK1122334455",
+        peppol_scheme_id="9950",
+        peppol_endpoint_id="SK1122334455"
+    )
 
     invoice = create_sample_invoice(db)
     invoice_id = invoice.id

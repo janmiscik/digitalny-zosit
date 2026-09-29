@@ -11,6 +11,7 @@ from validators import (
     validate_ic_dph_format,
     validate_ico_format,
     validate_iban_format,
+    validate_peppol_endpoint_id,
     validate_peppol_scheme_id,
 )
 
@@ -86,6 +87,12 @@ class CustomerBase(BaseModel):
     # informatívne upozorní (viď peppol_validation.py).
     country_code: str | None = "SK"
     peppol_scheme_id: str | None = None
+
+    # Samotná hodnota elektronickej adresy (BT-49) - pri schéme "9950"
+    # (SK:VAT) je to IČ DPH, NIE IČO. Appka ju sama nevymýšľa a
+    # nedosádza z ic_dph/ico - musí ju zadať používateľ (viď
+    # peppol_xml.py, kde predtým chybne posielalo vždy IČO).
+    peppol_endpoint_id: str | None = None
 
     @field_validator("email")
     @classmethod
@@ -171,6 +178,28 @@ class CustomerBase(BaseModel):
 
                 raise ValueError(str(exc))
 
+        # Schéma bez hodnoty (alebo naopak) je takmer isto zabudnuté
+        # pole, nie zámer - Peppol vyžaduje oboje naraz (BR-63/schemeID
+        # je bezpredmetné bez samotnej adresy).
+        if bool(self.peppol_scheme_id) != bool(self.peppol_endpoint_id):
+
+            raise ValueError(
+                "Peppol schéma a Peppol Endpoint ID sa musia vyplniť "
+                "spolu - buď obe, alebo žiadne."
+            )
+
+        if self.peppol_endpoint_id:
+
+            try:
+                self.peppol_endpoint_id = validate_peppol_endpoint_id(
+                    self.peppol_endpoint_id,
+                    scheme_id=self.peppol_scheme_id
+                )
+
+            except ValueError as exc:
+
+                raise ValueError(str(exc))
+
         return self
 
 
@@ -241,6 +270,11 @@ class CompanyBase(BaseModel):
     phone: str | None = None
     website: str | None = None
     peppol_scheme_id: str | None = None
+
+    # Hodnota elektronickej adresy (BT-34) v danej schéme - pri "9950"
+    # (SK:VAT) je to IČ DPH, NIE IČO (viď peppol_xml.py).
+    peppol_endpoint_id: str | None = None
+
     logo_filename: str | None = None
     signature_filename: str | None = None
 
@@ -256,6 +290,30 @@ class CompanyBase(BaseModel):
             return value
 
         return validate_peppol_scheme_id(value, expected_country_code="SK")
+
+    @model_validator(mode="after")
+    def check_peppol_scheme_and_endpoint_together(self) -> "CompanyBase":
+
+        if bool(self.peppol_scheme_id) != bool(self.peppol_endpoint_id):
+
+            raise ValueError(
+                "Peppol schéma a Peppol Endpoint ID sa musia vyplniť "
+                "spolu - buď obe, alebo žiadne."
+            )
+
+        if self.peppol_endpoint_id:
+
+            try:
+                self.peppol_endpoint_id = validate_peppol_endpoint_id(
+                    self.peppol_endpoint_id,
+                    scheme_id=self.peppol_scheme_id
+                )
+
+            except ValueError as exc:
+
+                raise ValueError(str(exc))
+
+        return self
 
 
 class CompanyUpdate(CompanyBase):

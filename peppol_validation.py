@@ -66,20 +66,43 @@ pamäte):
               Peppol vyžaduje kardinalitu 1..1 pre obe - appka ich
               zámerne negeneruje bez schémy (viď peppol_xml.py), takže
               táto kontrola na to explicitne upozorní namiesto ticha.
-    (bez oficiálneho čísla, ale zdokumentované v EAS/ISO 6523
-              pravidlách pre EndpointID)  Ak EndpointID existuje, MUSÍ
-              mať atribút schemeID (inak Peppol validátor odmietne
-              celý dokument, nielen EndpointID).
+    BR-62, BR-63  Ak EndpointID existuje, MUSÍ mať atribút schemeID
+              (predávajúci, odberateľ).
+    BR-CL-25  schemeID pri EndpointID musí patriť do EAS/ISO 6523
+              číselníka - overuje sa len tvar a pár známych odstránených
+              kódov (viď _is_plausible_eas_scheme), nie plná zhoda
+              s oficiálnym číselníkom.
 
+    BR-AE-01  Ak faktúra obsahuje položku s kategóriou "AE", DPH rozpis
+              musí mať práve jeden zodpovedajúci TaxSubtotal.
     BR-AE-02  Ak je ktorákoľvek položka v režime prenesenia daňovej
               povinnosti (VAT kategória "AE"), faktúra musí obsahovať
               IČ DPH predávajúceho AJ odberateľa.
+    BR-AE-05  Položka s kategóriou "AE" musí mať sadzbu DPH 0.
+    BR-AE-08  TaxableAmount v kategórii "AE" = súčet súm položiek
+              s touto kategóriou.
     BR-AE-09  TaxAmount v DPH kategórii "AE" musí byť 0.
+    BR-AE-10  DPH rozpis v kategórii "AE" musí mať dôvod oslobodenia
+              od DPH (TaxExemptionReasonCode/TaxExemptionReason).
+    BR-Z-01   Ak faktúra obsahuje položku s kategóriou "Z", DPH rozpis
+              musí mať práve jeden zodpovedajúci TaxSubtotal.
     BR-Z-02   Ak je ktorákoľvek položka s nulovou sadzbou DPH (VAT
               kategória "Z"), faktúra musí obsahovať IČ DPH
               predávajúceho.
+    BR-Z-05   Položka s kategóriou "Z" musí mať sadzbu DPH 0.
+    BR-Z-08   TaxableAmount v kategórii "Z" = súčet súm položiek
+              s touto kategóriou.
+    BR-Z-09   TaxAmount v DPH kategórii "Z" musí byť 0.
+    BR-Z-10   DPH rozpis v kategórii "Z" NESMIE mať dôvod oslobodenia
+              od DPH.
+
+Verzia: kontroly vychádzajú z Peppol BIS Billing 3.0.21 (máj 2026,
+povinná od 17.8.2026). Rozsah je zámerne výberový (najčastejšie/
+najzávažnejšie pravidlá), nie kompletná implementácia všetkých ~200+
+pravidiel EN16931 + Peppol schematronu.
 """
 
+import re
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from xml.etree.ElementTree import ParseError, fromstring
 
@@ -127,6 +150,26 @@ def _decimal(element, path: str) -> Decimal | None:
 def _round2(value: Decimal) -> Decimal:
 
     return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+# Kódy, ktoré boli z EAS/ISO 6523 číselníka odstránené vo verzii 3.0.21
+# (máj 2026, povinná od 17.8.2026) - overené webovým vyhľadávaním. Nie
+# je to úplný zoznam všetkých historicky odstránených kódov, len tie,
+# ktoré appka predtým sama používala alebo ponúkala ako príklad.
+_REMOVED_EAS_SCHEMES = {"0037", "9901", "9906"}
+
+
+def _is_plausible_eas_scheme(scheme_id: str) -> bool:
+    """
+    Len tvarová/hrubá kontrola (NIE plná zhoda s oficiálnym číselníkom,
+    ten má rádovo stovky kódov a appka ho v celku neudržiava - pozri
+    PEPPOL_EAS_SCHEMES vo validators.py pre výber, ktorý appka pozná
+    podrobnejšie vrátane priradenia ku krajine).
+    """
+
+    stripped = (scheme_id or "").strip().upper()
+
+    return bool(re.match(r"^[A-Z0-9]{4}$", stripped)) and stripped not in _REMOVED_EAS_SCHEMES
 
 
 def validate_peppol_invoice_xml(xml_bytes: bytes) -> list[str]:
@@ -273,10 +316,17 @@ def validate_peppol_invoice_xml(xml_bytes: bytes) -> list[str]:
     # --- PEPPOL-EN16931-R020, PEPPOL-EN16931-R010 - elektronická
     #     adresa (EndpointID) predávajúceho a odberateľa (BT-34, BT-49) -
     #     Peppol (na rozdiel od holého EN16931) ju vyžaduje s
-    #     kardinalitou 1..1 pre oboch. Ak chýba schemeID (hoci
-    #     EndpointID existuje), je to rovnako fatálna chyba - appka
-    #     to sama zámerne negeneruje bez schémy (peppol_xml.py), takže
-    #     tu na to explicitne upozorníme, nech to nezostane skryté.
+    #     kardinalitou 1..1 pre oboch.
+    #
+    #     BR-62/BR-63 - ak EndpointID existuje, MUSÍ mať atribút
+    #     schemeID. Appka to sama zámerne negeneruje bez schémy
+    #     (peppol_xml.py), takže tu na to explicitne upozorníme.
+    #
+    #     BR-CL-25 - schemeID musí patriť do EAS/ISO 6523 číselníka.
+    #     Overuje sa len tvar (4 alfanumerické znaky) a niekoľko kódov,
+    #     ktoré boli z číselníka vo verzii 3.0.21 (máj 2026) odstránené
+    #     - NEJDE o kontrolu voči úplnému oficiálnemu číselníku (má
+    #     rádovo stovky kódov), len o odchytenie najčastejších chýb.
 
     supplier_endpoint = (
         supplier_party.find("cbc:EndpointID", NS)
@@ -289,16 +339,26 @@ def validate_peppol_invoice_xml(xml_bytes: bytes) -> list[str]:
         issues.append(
             "PEPPOL-EN16931-R020: Chýba elektronická adresa "
             "predávajúceho (cbc:EndpointID / BT-34) - vyplň Peppol "
-            "schéma ID predávajúceho v Nastaveniach."
+            "schému aj Endpoint ID predávajúceho v Nastaveniach."
         )
 
-    elif not supplier_endpoint.get("schemeID"):
+    else:
 
-        issues.append(
-            "Elektronická adresa predávajúceho (BT-34) nemá atribút "
-            "schemeID - bez neho Peppol validátor odmietne celý "
-            "dokument."
-        )
+        supplier_scheme = supplier_endpoint.get("schemeID")
+
+        if not supplier_scheme:
+
+            issues.append(
+                "BR-62: Elektronická adresa predávajúceho (BT-34) nemá "
+                "atribút schemeID."
+            )
+
+        elif not _is_plausible_eas_scheme(supplier_scheme):
+
+            issues.append(
+                f"BR-CL-25: Schéma predávajúceho '{supplier_scheme}' "
+                "nevyzerá ako platný EAS/ISO 6523 kód."
+            )
 
     customer_endpoint = (
         customer_party.find("cbc:EndpointID", NS)
@@ -310,17 +370,27 @@ def validate_peppol_invoice_xml(xml_bytes: bytes) -> list[str]:
 
         issues.append(
             "PEPPOL-EN16931-R010: Chýba elektronická adresa odberateľa "
-            "(cbc:EndpointID / BT-49) - vyplň Peppol schéma ID "
-            "odberateľa v jeho karte."
+            "(cbc:EndpointID / BT-49) - vyplň Peppol schému aj "
+            "Endpoint ID odberateľa v jeho karte."
         )
 
-    elif not customer_endpoint.get("schemeID"):
+    else:
 
-        issues.append(
-            "Elektronická adresa odberateľa (BT-49) nemá atribút "
-            "schemeID - bez neho Peppol validátor odmietne celý "
-            "dokument."
-        )
+        customer_scheme = customer_endpoint.get("schemeID")
+
+        if not customer_scheme:
+
+            issues.append(
+                "BR-63: Elektronická adresa odberateľa (BT-49) nemá "
+                "atribút schemeID."
+            )
+
+        elif not _is_plausible_eas_scheme(customer_scheme):
+
+            issues.append(
+                f"BR-CL-25: Schéma odberateľa '{customer_scheme}' "
+                "nevyzerá ako platný EAS/ISO 6523 kód."
+            )
 
     # --- BR-16 - aspoň jedna položka ---
 
@@ -336,6 +406,13 @@ def validate_peppol_invoice_xml(xml_bytes: bytes) -> list[str]:
     # Číslujeme položky od 1 (ako appka pri generovaní XML - viď
     # peppol_xml.py) len pre čitateľnosť chybovej hlášky, nie preto,
     # že by BR-21 vyžadovalo konkrétnu hodnotu ID.
+    #
+    # Súbežne (aby sa cez položky neprechádzalo dvakrát) sa tu zbiera
+    # súčet LineExtensionAmount podľa kategórie DPH (line_amounts_by_category)
+    # - použije sa nižšie pri BR-Z-08/BR-AE-08 (súčet netto súm riadkov
+    # danej kategórie sa musí rovnať TaxableAmount v TaxSubtotal).
+
+    line_amounts_by_category: dict[str, Decimal] = {}
 
     for position, line in enumerate(invoice_lines, start=1):
 
@@ -361,7 +438,9 @@ def validate_peppol_invoice_xml(xml_bytes: bytes) -> list[str]:
                 "jednotku (unitCode / BT-130)."
             )
 
-        if _decimal(line, "cbc:LineExtensionAmount") is None:
+        line_amount = _decimal(line, "cbc:LineExtensionAmount")
+
+        if line_amount is None:
 
             issues.append(
                 f"BR-24: Položka č. {position} nemá sumu "
@@ -380,6 +459,31 @@ def validate_peppol_invoice_xml(xml_bytes: bytes) -> list[str]:
             issues.append(
                 f"BR-26: Položka č. {position} nemá jednotkovú cenu "
                 "(cac:Price/cbc:PriceAmount / BT-146)."
+            )
+
+        line_category = _text(line, "cac:Item/cac:ClassifiedTaxCategory/cbc:ID")
+        line_rate = _decimal(line, "cac:Item/cac:ClassifiedTaxCategory/cbc:Percent")
+
+        if line_category == "Z" and line_rate is not None and line_rate != Decimal("0"):
+
+            issues.append(
+                f"BR-Z-05: Položka č. {position} má kategóriu DPH \"Z\" "
+                f"(nulová sadzba), ale jej sadzba je {line_rate}, nie 0."
+            )
+
+        if line_category == "AE" and line_rate is not None and line_rate != Decimal("0"):
+
+            issues.append(
+                f"BR-AE-05: Položka č. {position} má kategóriu DPH \"AE\" "
+                f"(prenesenie daňovej povinnosti), ale jej sadzba je "
+                f"{line_rate}, nie 0."
+            )
+
+        if line_category and line_amount is not None:
+
+            line_amounts_by_category[line_category] = (
+                line_amounts_by_category.get(line_category, Decimal("0"))
+                + line_amount
             )
 
     # --- BR-CO-10: súčet položiek = LineExtensionAmount v hlavičke ---
@@ -463,6 +567,8 @@ def validate_peppol_invoice_xml(xml_bytes: bytes) -> list[str]:
 
     has_reverse_charge_category = False
     has_zero_rated_category = False
+    reverse_charge_subtotal_count = 0
+    zero_rated_subtotal_count = 0
 
     for subtotal in tax_subtotals:
 
@@ -470,10 +576,13 @@ def validate_peppol_invoice_xml(xml_bytes: bytes) -> list[str]:
         tax_amount = _decimal(subtotal, "cbc:TaxAmount")
         percent = _decimal(subtotal, "cac:TaxCategory/cbc:Percent")
         category_id = _text(subtotal, "cac:TaxCategory/cbc:ID")
+        exemption_code = _text(subtotal, "cac:TaxCategory/cbc:TaxExemptionReasonCode")
+        exemption_text = _text(subtotal, "cac:TaxCategory/cbc:TaxExemptionReason")
 
         if category_id == "AE":
 
             has_reverse_charge_category = True
+            reverse_charge_subtotal_count += 1
 
             if tax_amount is not None and tax_amount != Decimal("0"):
 
@@ -483,9 +592,57 @@ def validate_peppol_invoice_xml(xml_bytes: bytes) -> list[str]:
                     f"nájdená hodnota je {tax_amount}."
                 )
 
+            if not exemption_code and not exemption_text:
+
+                issues.append(
+                    "BR-AE-10: DPH kategória \"AE\" (prenesenie daňovej "
+                    "povinnosti) musí mať dôvod oslobodenia od DPH "
+                    "(TaxExemptionReasonCode alebo TaxExemptionReason)."
+                )
+
+            if taxable_amount is not None and "AE" in line_amounts_by_category:
+
+                expected_taxable = _round2(line_amounts_by_category["AE"])
+
+                if _round2(taxable_amount) != expected_taxable:
+
+                    issues.append(
+                        "BR-AE-08: TaxableAmount v DPH kategórii \"AE\" "
+                        f"({taxable_amount}) nesedí so súčtom súm "
+                        f"položiek s touto kategóriou ({expected_taxable})."
+                    )
+
         elif category_id == "Z":
 
             has_zero_rated_category = True
+            zero_rated_subtotal_count += 1
+
+            if tax_amount is not None and tax_amount != Decimal("0"):
+
+                issues.append(
+                    "BR-Z-09: TaxAmount v DPH kategórii \"Z\" (nulová "
+                    f"sadzba) musí byť 0, nájdená hodnota je {tax_amount}."
+                )
+
+            if exemption_code or exemption_text:
+
+                issues.append(
+                    "BR-Z-10: DPH kategória \"Z\" (nulová sadzba) nesmie "
+                    "mať dôvod oslobodenia od DPH (TaxExemptionReasonCode "
+                    "ani TaxExemptionReason)."
+                )
+
+            if taxable_amount is not None and "Z" in line_amounts_by_category:
+
+                expected_taxable = _round2(line_amounts_by_category["Z"])
+
+                if _round2(taxable_amount) != expected_taxable:
+
+                    issues.append(
+                        "BR-Z-08: TaxableAmount v DPH kategórii \"Z\" "
+                        f"({taxable_amount}) nesedí so súčtom súm "
+                        f"položiek s touto kategóriou ({expected_taxable})."
+                    )
 
         if taxable_amount is None or tax_amount is None:
 
@@ -514,6 +671,26 @@ def validate_peppol_invoice_xml(xml_bytes: bytes) -> list[str]:
         issues.append(
             f"BR-CO-14: Celkový TaxAmount ({header_tax_amount}) nesedí "
             f"so súčtom TaxAmount v DPH kategóriách ({_round2(subtotal_sum)})."
+        )
+
+    # --- BR-AE-01, BR-Z-01: ak faktúra obsahuje riadok/zľavu/prirážku
+    #     v danej kategórii, musí mať v DPH rozpise PRÁVE JEDEN
+    #     zodpovedajúci TaxSubtotal (nie 0, nie 2+) ---
+
+    if "AE" in line_amounts_by_category and reverse_charge_subtotal_count != 1:
+
+        issues.append(
+            "BR-AE-01: Faktúra obsahuje položku s kategóriou DPH "
+            f"\"AE\", ale v DPH rozpise je {reverse_charge_subtotal_count} "
+            "zodpovedajúcich riadkov namiesto presne jedného."
+        )
+
+    if "Z" in line_amounts_by_category and zero_rated_subtotal_count != 1:
+
+        issues.append(
+            "BR-Z-01: Faktúra obsahuje položku s kategóriou DPH "
+            f"\"Z\", ale v DPH rozpise je {zero_rated_subtotal_count} "
+            "zodpovedajúcich riadkov namiesto presne jedného."
         )
 
     # --- BR-AE-02: prenesenie daňovej povinnosti vyžaduje IČ DPH

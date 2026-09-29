@@ -98,14 +98,26 @@ class Customer(Base):
 
     # =====================================
     # PEPPOL (fáza 2 - príprava na e-fakturáciu)
-    # Identifikačná schéma odberateľa v Peppol sieti - JE INÁ hodnota
-    # než Company.peppol_scheme_id (to je schéma dodávateľa). Kým appka
-    # nezbiera tento údaj aktívne, ostáva prázdna a appka jednoducho
+    # peppol_scheme_id - Identifikačná schéma odberateľa v Peppol sieti
+    # (ISO 6523/EAS kód, napr. "9950" pre SK:VAT) - JE INÁ hodnota než
+    # Company.peppol_scheme_id (to je schéma dodávateľa).
+    #
+    # peppol_endpoint_id - samotná hodnota elektronickej adresy v tejto
+    # schéme (BT-49/EndpointID). DÔLEŽITÉ: pri schéme "9950" (SK:VAT) to
+    # je IČ DPH ("SK2020123456"), NIE IČO - appka predtým do EndpointID
+    # posielala vždy IČO bez ohľadu na schému, čo bolo pre 9950 nesprávne.
+    #
+    # Kým appka tieto údaje nezbiera, ostávajú prázdne a jednoducho sa
     # nevygeneruje EndpointID pre odberateľa (radšej nič, než nesprávny
     # identifikátor - viď peppol_xml.py).
     # =====================================
 
     peppol_scheme_id = Column(
+        String,
+        nullable=True
+    )
+
+    peppol_endpoint_id = Column(
         String,
         nullable=True
     )
@@ -393,11 +405,17 @@ class Company(Base):
 
     # =====================================
     # PEPPOL (fáza 2 - príprava na e-fakturáciu)
-    # Presný kód schémy ti pridelí/potvrdí tvoj poskytovateľ
-    # (Digitálny poštár) pri registrácii na Peppol sieť.
+    # Presný kód schémy aj hodnotu (peppol_endpoint_id) ti pridelí/
+    # potvrdí tvoj poskytovateľ (Digitálny poštár) pri registrácii na
+    # Peppol sieť - pri schéme "9950" (SK:VAT) je to IČ DPH, nie IČO.
     # =====================================
 
     peppol_scheme_id = Column(
+        String,
+        nullable=True
+    )
+
+    peppol_endpoint_id = Column(
         String,
         nullable=True
     )

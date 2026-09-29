@@ -361,3 +361,28 @@ def validate_peppol_scheme_id(
             )
 
     return stripped
+
+
+def validate_peppol_endpoint_id(value: str, scheme_id: str | None = None) -> str:
+    """
+    Overí samotnú hodnotu Peppol elektronickej adresy (BT-34/BT-49).
+
+    Bez schémy sa overí len to, že hodnota nie je prázdna (rôzne schémy
+    majú úplne rôzny tvar hodnoty - IČ DPH, GLN, národné registračné
+    číslo...). So schémou "9950" (SK:VAT) sa navyše overí, že hodnota
+    vyzerá ako slovenské IČ DPH ("SK" + 10 číslic) - to je presne tá
+    chyba, ktorú má táto funkcia odchytiť (appka predtým do tejto
+    hodnoty posielala IČO, nie IČ DPH).
+    """
+
+    stripped = value.strip()
+
+    if not stripped:
+
+        raise ValueError("Peppol Endpoint ID nesmie byť prázdne.")
+
+    if scheme_id and scheme_id.strip().upper() == "9950":
+
+        return validate_ic_dph_format(stripped)
+
+    return stripped

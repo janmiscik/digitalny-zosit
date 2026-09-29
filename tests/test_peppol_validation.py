@@ -47,8 +47,10 @@ def make_customer(**overrides):
         # Peppol vyžaduje elektronickú adresu (EndpointID) aj pre
         # odberateľa s kardinalitou 1..1 (PEPPOL-EN16931-R010) - v
         # "šťastných" scenároch (žiadny nález) preto musí byť vyplnená
-        # aj tu, nielen na strane firmy.
-        peppol_scheme_id="9950"
+        # aj tu, nielen na strane firmy. Pri schéme 9950 (SK:VAT) je
+        # hodnotou IČ DPH, NIE IČO (viď peppol_xml.py).
+        peppol_scheme_id="9950",
+        peppol_endpoint_id="SK2020123456"
     )
     defaults.update(overrides)
 
@@ -66,10 +68,10 @@ def make_company(**overrides):
         zip_code="82109",
         email="firma@example.com",
         phone="0900999888",
-        # 9950 = SK:VAT (slovenské IČ DPH). Predtým tu bola omylom
-        # 9946, čo je PT:VAT (Portugalsko) - presne tá zámena, ktorú
-        # teraz validators.validate_peppol_scheme_id() odchytí.
+        # 9950 = SK:VAT. Endpoint ID je IČ DPH, NIE IČO - predtým
+        # appka do EndpointID posielala IČO bez ohľadu na schému.
         peppol_scheme_id="9950",
+        peppol_endpoint_id="SK2020123456",
         iban="SK3112000000198742637541",
         swift_bic="TATRSKBX"
     )
@@ -603,3 +605,346 @@ def test_malformed_xml_returns_parse_issue():
 
     assert len(issues) == 1
     assert "naparsovať" in issues[0]
+
+
+# =========================================
+# BR-62, BR-63, BR-CL-25 - schemeID pri EndpointID
+# =========================================
+
+def test_detects_removed_eas_scheme_on_supplier():
+    """BR-CL-25 - napr. 0037 bol z EAS číselníka vo verzii 3.0.21 odstránený."""
+
+    invoice = make_invoice([make_item()])
+
+    xml_bytes = generate_peppol_xml(
+        invoice,
+        make_company(peppol_scheme_id="0037", peppol_endpoint_id="123456")
+    )
+
+    issues = validate_peppol_invoice_xml(xml_bytes)
+
+    assert any("BR-CL-25" in i for i in issues)
+
+
+def test_detects_removed_eas_scheme_on_customer():
+    """BR-CL-25 na strane odberateľa."""
+
+    invoice = make_invoice(
+        [make_item()],
+        customer=make_customer(peppol_scheme_id="9901", peppol_endpoint_id="123456")
+    )
+
+    xml_bytes = generate_peppol_xml(invoice, make_company())
+
+    issues = validate_peppol_invoice_xml(xml_bytes)
+
+    assert any("BR-CL-25" in i for i in issues)
+
+
+def test_plausible_but_unknown_eas_scheme_is_not_flagged_by_cl25():
+    """Schéma mimo nášho (výberového) zoznamu sa nemá paušálne odmietať."""
+
+    invoice = make_invoice(
+        [make_item()],
+        customer=make_customer(peppol_scheme_id="0230", peppol_endpoint_id="123456")
+    )
+
+    xml_bytes = generate_peppol_xml(invoice, make_company())
+
+    issues = validate_peppol_invoice_xml(xml_bytes)
+
+    assert not any("BR-CL-25" in i for i in issues)
+
+
+# =========================================
+# BR-Z-01, BR-Z-05, BR-Z-08, BR-Z-09, BR-Z-10
+# =========================================
+
+def test_detects_zero_rated_line_with_nonzero_rate():
+    """BR-Z-05"""
+
+    import re
+
+    xml_bytes = generate_peppol_xml(
+        make_invoice([make_item(vat_rate=0)]),
+        make_company()
+    )
+
+    # Nastavíme Percent v ClassifiedTaxCategory POLOŽKY (nie v
+    # TaxSubtotal - obe majú rovnaký tvar <cbc:ID>Z</cbc:ID>, preto sa
+    # kotví na okolitý <cac:ClassifiedTaxCategory> element).
+    broken = re.sub(
+        rb'(<cac:ClassifiedTaxCategory>\s*<cbc:ID>Z</cbc:ID>\s*<cbc:Percent>)0(</cbc:Percent>)',
+        rb"\g<1>5\g<2>",
+        xml_bytes,
+        count=1
+    )
+
+    assert broken != xml_bytes
+
+    issues = validate_peppol_invoice_xml(broken)
+
+    assert any("BR-Z-05" in i for i in issues)
+
+
+def test_detects_zero_rated_taxable_amount_mismatch():
+    """BR-Z-08"""
+
+    import re
+
+    xml_bytes = generate_peppol_xml(
+        make_invoice([make_item(vat_rate=0)]),
+        make_company()
+    )
+
+    broken = re.sub(
+        rb'(<cac:TaxCategory>\s*<cbc:ID>Z</cbc:ID>)',
+        rb"\g<1>",
+        xml_bytes
+    )
+    broken = re.sub(
+        rb'(<cbc:TaxableAmount currencyID="EUR">)[\d.]+(</cbc:TaxableAmount>\s*<cbc:TaxAmount currencyID="EUR">0\.00</cbc:TaxAmount>\s*<cac:TaxCategory>\s*<cbc:ID>Z</cbc:ID>)',
+        rb"\g<1>999.00\g<2>",
+        xml_bytes,
+        count=1
+    )
+
+    assert broken != xml_bytes
+
+    issues = validate_peppol_invoice_xml(broken)
+
+    assert any("BR-Z-08" in i for i in issues)
+
+
+def test_detects_zero_rated_nonzero_tax_amount():
+    """BR-Z-09"""
+
+    import re
+
+    xml_bytes = generate_peppol_xml(
+        make_invoice([make_item(vat_rate=0)]),
+        make_company()
+    )
+
+    broken = re.sub(
+        rb'(<cbc:TaxAmount currencyID="EUR">)0\.00(</cbc:TaxAmount>\s*<cac:TaxCategory>\s*<cbc:ID>Z</cbc:ID>)',
+        rb"\g<1>3.50\g<2>",
+        xml_bytes,
+        count=1
+    )
+
+    assert broken != xml_bytes
+
+    issues = validate_peppol_invoice_xml(broken)
+
+    assert any("BR-Z-09" in i for i in issues)
+
+
+def test_detects_zero_rated_with_forbidden_exemption_reason():
+    """BR-Z-10 - kategória Z nesmie mať dôvod oslobodenia."""
+
+    import re
+
+    xml_bytes = generate_peppol_xml(
+        make_invoice([make_item(vat_rate=0)]),
+        make_company()
+    )
+
+    broken = re.sub(
+        rb'(<cac:TaxCategory>\s*<cbc:ID>Z</cbc:ID>\s*<cbc:Percent>0</cbc:Percent>)',
+        rb'\g<1><cbc:TaxExemptionReasonCode>VATEX-EU-O</cbc:TaxExemptionReasonCode>',
+        xml_bytes,
+        count=1
+    )
+
+    assert broken != xml_bytes
+
+    issues = validate_peppol_invoice_xml(broken)
+
+    assert any("BR-Z-10" in i for i in issues)
+
+
+def test_detects_zero_rated_subtotal_duplicated():
+    """BR-Z-01 - viac ako jeden TaxSubtotal s kategóriou Z je chyba."""
+
+    import re
+
+    xml_bytes = generate_peppol_xml(
+        make_invoice([make_item(vat_rate=0)]),
+        make_company()
+    )
+
+    match = re.search(
+        rb'<cac:TaxSubtotal>.*?</cac:TaxSubtotal>',
+        xml_bytes,
+        flags=re.DOTALL
+    )
+    duplicated_subtotal = match.group(0)
+
+    broken = xml_bytes.replace(
+        b"</cac:TaxTotal>",
+        duplicated_subtotal + b"</cac:TaxTotal>",
+        1
+    )
+
+    issues = validate_peppol_invoice_xml(broken)
+
+    assert any("BR-Z-01" in i for i in issues)
+
+
+# =========================================
+# BR-AE-01, BR-AE-05, BR-AE-08, BR-AE-10
+# =========================================
+
+def test_detects_reverse_charge_line_with_nonzero_rate():
+    """BR-AE-05"""
+
+    import re
+
+    xml_bytes = generate_peppol_xml(
+        make_invoice([make_item(vat_rate=0)], reverse_charge=True),
+        make_company()
+    )
+
+    broken = re.sub(
+        rb'(<cac:ClassifiedTaxCategory>\s*<cbc:ID>AE</cbc:ID>\s*<cbc:Percent>)0(</cbc:Percent>)',
+        rb"\g<1>19\g<2>",
+        xml_bytes,
+        count=1
+    )
+
+    assert broken != xml_bytes
+
+    issues = validate_peppol_invoice_xml(broken)
+
+    assert any("BR-AE-05" in i for i in issues)
+
+
+def test_detects_reverse_charge_taxable_amount_mismatch():
+    """BR-AE-08"""
+
+    import re
+
+    xml_bytes = generate_peppol_xml(
+        make_invoice([make_item(vat_rate=0)], reverse_charge=True),
+        make_company()
+    )
+
+    broken = re.sub(
+        rb'(<cbc:TaxableAmount currencyID="EUR">)[\d.]+(</cbc:TaxableAmount>\s*<cbc:TaxAmount currencyID="EUR">0\.00</cbc:TaxAmount>\s*<cac:TaxCategory>\s*<cbc:ID>AE</cbc:ID>)',
+        rb"\g<1>555.00\g<2>",
+        xml_bytes,
+        count=1
+    )
+
+    assert broken != xml_bytes
+
+    issues = validate_peppol_invoice_xml(broken)
+
+    assert any("BR-AE-08" in i for i in issues)
+
+
+def test_detects_reverse_charge_missing_exemption_reason():
+    """BR-AE-10 - kategória AE musí mať dôvod oslobodenia."""
+
+    import re
+
+    xml_bytes = generate_peppol_xml(
+        make_invoice([make_item(vat_rate=0)], reverse_charge=True),
+        make_company()
+    )
+
+    broken = re.sub(
+        rb'<cbc:TaxExemptionReasonCode>[^<]*</cbc:TaxExemptionReasonCode>',
+        b"",
+        xml_bytes
+    )
+    broken = re.sub(
+        rb'<cbc:TaxExemptionReason>[^<]*</cbc:TaxExemptionReason>',
+        b"",
+        broken
+    )
+
+    assert broken != xml_bytes
+
+    issues = validate_peppol_invoice_xml(broken)
+
+    assert any("BR-AE-10" in i for i in issues)
+
+
+def test_detects_reverse_charge_subtotal_duplicated():
+    """BR-AE-01 - viac ako jeden TaxSubtotal s kategóriou AE je chyba."""
+
+    import re
+
+    xml_bytes = generate_peppol_xml(
+        make_invoice([make_item(vat_rate=0)], reverse_charge=True),
+        make_company()
+    )
+
+    match = re.search(
+        rb'<cac:TaxSubtotal>.*?</cac:TaxSubtotal>',
+        xml_bytes,
+        flags=re.DOTALL
+    )
+    duplicated_subtotal = match.group(0)
+
+    broken = xml_bytes.replace(
+        b"</cac:TaxTotal>",
+        duplicated_subtotal + b"</cac:TaxTotal>",
+        1
+    )
+
+    issues = validate_peppol_invoice_xml(broken)
+
+    assert any("BR-AE-01" in i for i in issues)
+
+
+# =========================================
+# peppol_endpoint_id (samotná hodnota adresy, oddelená od schémy)
+# =========================================
+
+def test_endpoint_id_value_is_not_ico():
+    """
+    Regresný test na hlavný nález: EndpointID musí niesť
+    peppol_endpoint_id, NIE ico, aj keď sa (náhodou) líšia.
+    """
+
+    customer = make_customer(
+        ico="10482245",
+        peppol_scheme_id="9950",
+        peppol_endpoint_id="SK9999999999"
+    )
+
+    xml_bytes = generate_peppol_xml(
+        make_invoice([make_item()], customer=customer),
+        make_company()
+    )
+
+    customer_part = xml_bytes.split(b"<cac:AccountingCustomerParty>")[1]
+
+    assert b"<cbc:EndpointID schemeID=\"9950\">SK9999999999</cbc:EndpointID>" in customer_part
+    assert b">10482245<" not in customer_part.split(b"<cbc:EndpointID")[1].split(b"</cbc:EndpointID>")[0]
+
+
+def test_endpoint_id_omitted_when_only_scheme_set_without_ico_fallback():
+    """
+    Ak appka (napr. cez priamy zápis do DB mimo formulára) má schému
+    bez peppol_endpoint_id, EndpointID sa nemá vygenerovať s IČO ako
+    tichým náhradným riešením - radšej nič, než nesprávna hodnota.
+    """
+
+    customer = make_customer(
+        ico="10482245",
+        peppol_scheme_id="9950",
+        peppol_endpoint_id=None
+    )
+
+    xml_bytes = generate_peppol_xml(
+        make_invoice([make_item()], customer=customer),
+        make_company()
+    )
+
+    customer_part = xml_bytes.split(b"<cac:AccountingCustomerParty>")[1]
+
+    assert b"<cbc:EndpointID" not in customer_part

@@ -20,6 +20,7 @@ from validators import (
     validate_ic_dph_format,
     validate_ico_format,
     validate_iban_format,
+    validate_peppol_endpoint_id,
     validate_peppol_scheme_id,
 )
 from uploads_utils import (
@@ -153,6 +154,8 @@ async def settings_save(
 
     peppol_scheme_id: str = Form(""),
 
+    peppol_endpoint_id: str = Form(""),
+
     logo: UploadFile | None = None,
 
     signature: UploadFile | None = None,
@@ -187,6 +190,24 @@ async def settings_save(
             else None
         )
 
+        # Schéma bez hodnoty (alebo naopak) je takmer isto zabudnuté pole,
+        # nie zámer - Peppol vyžaduje oboje naraz.
+        if bool(peppol_scheme_id) != bool(peppol_endpoint_id):
+
+            raise ValueError(
+                "Peppol schéma a Peppol Endpoint ID sa musia vyplniť "
+                "spolu - buď obe, alebo žiadne."
+            )
+
+        validated_peppol_endpoint_id = (
+            validate_peppol_endpoint_id(
+                peppol_endpoint_id,
+                scheme_id=validated_peppol_scheme_id
+            )
+            if peppol_endpoint_id
+            else None
+        )
+
     except ValueError as exc:
 
         raise HTTPException(
@@ -211,6 +232,7 @@ async def settings_save(
     company.phone = phone or None
     company.website = website or None
     company.peppol_scheme_id = validated_peppol_scheme_id
+    company.peppol_endpoint_id = validated_peppol_endpoint_id
 
 
     # Nahrávanie súborov je zámerne "stage -> DB commit -> finalize/
