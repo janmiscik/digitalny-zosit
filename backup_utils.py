@@ -22,6 +22,7 @@ kopírovanie by mohlo zachytiť nekonzistentný stav.
 """
 
 import io
+import os
 import re
 import shutil
 import sqlite3
@@ -208,16 +209,53 @@ def save_automatic_backup() -> Path:
     Uloží časovo označenú kompletnú zálohu (ZIP) do lokálneho priečinka
     backups/ - volá sa automaticky PRED obnovou, nech je vždy k
     dispozícii posledný stav pred prípadnou chybnou obnovou.
+
+    Názov je založený na čase s presnosťou na sekundy - dve obnovy v
+    tej istej sekunde (napr. dvojklik na tlačidlo, alebo obnova
+    spustená z dvoch otvorených kariet) by inak vygenerovali RUJNÚCI
+    rovnaký názov súboru a druhý zápis by ticho PREPÍSAL prvú
+    bezpečnostnú zálohu - teda presne tú zálohu, ktorá mala zachrániť
+    dáta pred prvou (možno neúspešnou) obnovou. Preto sa pri kolízii
+    pripojí číselná prípona (-2, -3, ...), kým sa nenájde voľný názov.
+
+    Súbor sa otvára s O_EXCL (výhradné vytvorenie) namiesto najprv
+    "existuje?" a potom zápisu - tá dvojica krokov by pri dvoch
+    naozaj súbežných požiadavkách stále mohla skolidovať (obe stihnú
+    zistiť "neexistuje" skôr, než ktorákoľvek zapíše). S O_EXCL zápis
+    zlyhá, ak medzitým vznikol súbor s rovnakým menom, a skúsi sa
+    ďalšia prípona - správne aj pri súbežnosti, nielen pri opakovanom
+    volaní za sebou.
     """
 
     ensure_backups_dir()
 
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    backup_path = BACKUPS_DIR / f"pred-obnovou-{timestamp}.zip"
+    backup_bytes = create_backup_bytes()
 
-    backup_path.write_bytes(create_backup_bytes())
+    suffix = 1
 
-    return backup_path
+    while True:
+
+        name = (
+            f"pred-obnovou-{timestamp}.zip"
+            if suffix == 1
+            else f"pred-obnovou-{timestamp}-{suffix}.zip"
+        )
+        backup_path = BACKUPS_DIR / name
+
+        try:
+
+            fd = os.open(str(backup_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+
+        except FileExistsError:
+
+            suffix += 1
+            continue
+
+        with os.fdopen(fd, "wb") as f:
+            f.write(backup_bytes)
+
+        return backup_path
 
 
 def _validate_zip_members(zf: zipfile.ZipFile) -> None:

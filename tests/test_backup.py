@@ -604,3 +604,37 @@ def test_restore_endpoint_requires_login(temp_env):
     finally:
 
         app.dependency_overrides[require_login_page] = override_login
+
+
+def test_save_automatic_backup_does_not_overwrite_on_same_second_collision(
+    temp_env, monkeypatch
+):
+    """
+    Dve volania v tej istej sekunde (napr. dvojklik na Obnoviť) sa
+    predtým pokúsili zapísať do rovnakého názvu súboru - druhé volanie
+    by tak ticho prepísalo prvú bezpečnostnú zálohu.
+    """
+
+    from datetime import datetime as real_datetime
+
+    fixed_now = real_datetime(2026, 9, 28, 20, 4, 12)
+
+    class FrozenDatetime(real_datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed_now
+
+    monkeypatch.setattr(backup_utils, "datetime", FrozenDatetime)
+
+    first_path = backup_utils.save_automatic_backup()
+    second_path = backup_utils.save_automatic_backup()
+
+    assert first_path != second_path
+    assert first_path.exists()
+    assert second_path.exists()
+    assert first_path.stat().st_size > 0
+    assert second_path.stat().st_size > 0
+
+    safety_backups = sorted(backup_utils.BACKUPS_DIR.glob("pred-obnovou-*.zip"))
+
+    assert len(safety_backups) == 2
