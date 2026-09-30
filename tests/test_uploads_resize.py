@@ -56,6 +56,18 @@ def test_unexpected_programming_error_is_not_swallowed(monkeypatch):
         _resize_and_reencode_photo(_png_bytes(), "PNG")
 
 
+def test_resize_failure_is_logged_with_traceback(caplog):
+    """logger.exception() musí do logu dostať aj traceback, nielen text."""
+
+    broken = _png_bytes()[:40]
+
+    with caplog.at_level("ERROR", logger="uploads_utils"):
+        _resize_and_reencode_photo(broken, "PNG")
+
+    assert len(caplog.records) == 1
+    assert caplog.records[0].exc_info is not None
+
+
 def test_job_photo_path_rejects_dot_names_and_directories():
 
     for name in ["..", ".", "...", ".hidden", "../x"]:

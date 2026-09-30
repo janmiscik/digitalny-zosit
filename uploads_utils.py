@@ -394,13 +394,15 @@ def _resize_and_reencode_photo(contents: bytes, pillow_format: str) -> bytes:
         # skrátených súborov, ValueError, SyntaxError pri poškodenom
         # PNG, DecompressionBombError). Iné (programátorské) chyby sa
         # zámerne NEZACHYTIA - inak by ich tento "ticho vráť pôvodný
-        # obsah" fallback skryl. Zlyhanie sa zaloguje, aby nebolo
-        # úplne nemé.
-        logger.warning(
-            "Zmena veľkosti fotky zlyhala (%s: %s) - ukladá sa pôvodný "
-            "obsah.",
-            type(exc).__name__,
-            exc
+        # obsah" fallback skryl.
+        #
+        # logger.exception() namiesto .warning() - zaloguje aj celý
+        # traceback (kde presne v Pillow to spadlo), nielen typ a text
+        # výnimky. Bez neho by sa pri nezvyčajnom/vzácnom formáte fotky
+        # ťažko hľadalo, čo presne sa deje.
+        logger.exception(
+            "Zmena veľkosti fotky zlyhala (%s) - ukladá sa pôvodný obsah.",
+            type(exc).__name__
         )
 
         return contents
