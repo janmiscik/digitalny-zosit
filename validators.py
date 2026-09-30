@@ -264,6 +264,16 @@ def normalize_ic_dph(value: str | None) -> str | None:
 # sa predtým vyskytovala v appke ako testovacia/príkladová hodnota.
 # =========================================
 
+# DÔLEŽITÉ: tento zoznam obsahuje len AKTUÁLNE PLATNÉ kódy. Kód, ktorý
+# OpenPeppol z číselníka odstránil (napr. "9901" - DK:CPR, odstránené
+# 30.11.2023), sem NEPATRÍ, aj keby appka predtým fungovala aj s ním -
+# inak by táto tabuľka tvrdila, že je platný, zatiaľ čo
+# peppol_validation.py (BR-CL-25) by ho správne odmietal - presne
+# taký rozpor tu predtým bol pri "9901". Odstránené kódy sú v
+# _REMOVED_EAS_SCHEMES nižšie - JEDNOM mieste, ktoré si delia
+# validate_peppol_scheme_id() aj peppol_validation.py, aby sa tento
+# rozpor nemohol znova vkradnúť tým, že niekto upraví len jeden z
+# dvoch nezávislých zoznamov.
 PEPPOL_EAS_SCHEMES: dict[str, tuple[str, str]] = {
     "9922": ("AD", "AD:VAT - Andorra VAT number"),
     "9923": ("AL", "AL:VAT - Albania VAT number"),
@@ -276,7 +286,6 @@ PEPPOL_EAS_SCHEMES: dict[str, tuple[str, str]] = {
     "9928": ("CY", "CY:VAT - Cyprus VAT number"),
     "9929": ("CZ", "CZ:VAT - Czech Republic VAT number"),
     "9930": ("DE", "DE:VAT - Germany VAT number"),
-    "9901": ("DK", "DK:CPR"),
     "9902": ("DK", "DK:CVR"),
     "9931": ("EE", "EE:VAT - Estonia VAT number"),
     "9920": ("ES", "ES:VAT - Agencia Española de Administración Tributaria"),
@@ -299,6 +308,26 @@ PEPPOL_EAS_SCHEMES: dict[str, tuple[str, str]] = {
     "0007": ("SE", "SE:ORG - Swedish organisationsnummer"),
     "9950": ("SK", "SK:VAT - Slovakia VAT number"),
 }
+
+
+# Kódy, ktoré OpenPeppol z EAS/ISO 6523 číselníka odstránil - overené
+# priamo v changelogu (https://docs.peppol.eu/edelivery/codelists/changelog.html).
+# Nie je to úplný zoznam všetkých historicky odstránených kódov, len
+# tie, ktoré appka predtým sama používala, ponúkala ako príklad, alebo
+# sú im (číselne) blízke, a preto by sa dali ľahko zameniť:
+#   0037 - FI:OVT (LY-tunnus)                - odstránené 31.12.2024
+#   9901 - DK:CPR (Danish Ministry of the
+#          Interior and Health)              - odstránené 30.11.2023
+#   9906 - IT:VAT (Ufficio responsabile
+#          gestione partite IVA)             - odstránené 31.7.2023
+#   9907 - IT (TAX Authority)                - odstránené spolu s 9906
+#   9958 - DE:LID (Peppol-Leitweg-ID)         - odstránené 31.7.2023
+#
+# Toto je JEDINÉ miesto, kde sa tento zoznam definuje - peppol_validation.py
+# ho importuje odtiaľto namiesto vlastnej kópie, nech sa PEPPOL_EAS_SCHEMES
+# (platné kódy) a tento zoznam (odstránené kódy) nemôžu opäť rozísť tak,
+# ako sa to stalo s "9901" (bola súčasne v oboch).
+REMOVED_EAS_SCHEMES = {"0037", "9901", "9906", "9907", "9958"}
 
 # Historicky odporúčaná (nesprávna) príkladová hodnota, s ktorou sa
 # appka predtým stretávala pri slovenských firmách - explicitne
@@ -333,6 +362,14 @@ def validate_peppol_scheme_id(
             f"Peppol schéma ID '{value}' by mala mať presne 4 znaky "
             "(číslice, príp. písmená pri novších schémach) - "
             "napr. 9950 pre slovenské IČ DPH."
+        )
+
+    if stripped in REMOVED_EAS_SCHEMES:
+
+        raise ValueError(
+            f"Peppol schéma ID '{stripped}' bola z oficiálneho EAS "
+            "číselníka odstránená a v Peppol sieti sa už nedá použiť - "
+            "over si u poskytovateľa aktuálny kód."
         )
 
     known = PEPPOL_EAS_SCHEMES.get(stripped)

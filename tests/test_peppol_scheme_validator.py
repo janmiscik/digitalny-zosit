@@ -35,3 +35,39 @@ def test_bad_format_rejected():
 
 def test_unknown_scheme_not_rejected_without_country_conflict():
     assert validate_peppol_scheme_id("0088") == "0088"
+
+
+def test_no_scheme_is_listed_as_both_valid_and_removed():
+    """
+    Regresný test na konkrétny nájdený nesúlad: "9901" bola vo
+    PEPPOL_EAS_SCHEMES uvedená ako platná (DK:CPR), zatiaľ čo mala byť
+    v REMOVED_EAS_SCHEMES (OpenPeppol ju odstránil 30.11.2023) - appka
+    teda dovolila zadať hodnotu, ktorú by vzápätí sama nahlásila ako
+    chybu. Oba zoznamy teraz žijú v jednom module (validators.py), ale
+    tento test by odhalil, keby sa niekedy v budúcnosti opäť rozišli.
+    """
+
+    from validators import PEPPOL_EAS_SCHEMES, REMOVED_EAS_SCHEMES
+
+    overlap = set(PEPPOL_EAS_SCHEMES) & REMOVED_EAS_SCHEMES
+
+    assert overlap == set(), (
+        f"Tieto schémy sú súčasne 'platné' aj 'odstránené': {overlap}"
+    )
+
+
+def test_9901_is_rejected_at_input_time_not_only_at_xml_export():
+    """
+    DK:CPR (9901) bola z EAS číselníka odstránená 30.11.2023 - appka ju
+    má odmietnuť hneď pri ukladaní formulára (validate_peppol_scheme_id),
+    nie až peppol_validation.py po vygenerovaní XML.
+    """
+
+    with pytest.raises(ValueError, match="odstránená"):
+        validate_peppol_scheme_id("9901", expected_country_code="DK")
+
+
+def test_removed_scheme_rejected_even_without_expected_country():
+
+    with pytest.raises(ValueError, match="odstránená"):
+        validate_peppol_scheme_id("0037")

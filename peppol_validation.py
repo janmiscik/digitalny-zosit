@@ -106,6 +106,8 @@ import re
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from xml.etree.ElementTree import ParseError, fromstring
 
+from validators import REMOVED_EAS_SCHEMES
+
 
 NS = {
     "": "urn:oasis:names:specification:ubl:schema:xsd:Invoice-2",
@@ -152,24 +154,22 @@ def _round2(value: Decimal) -> Decimal:
     return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
-# Kódy, ktoré boli z EAS/ISO 6523 číselníka odstránené vo verzii 3.0.21
-# (máj 2026, povinná od 17.8.2026) - overené webovým vyhľadávaním. Nie
-# je to úplný zoznam všetkých historicky odstránených kódov, len tie,
-# ktoré appka predtým sama používala alebo ponúkala ako príklad.
-_REMOVED_EAS_SCHEMES = {"0037", "9901", "9906"}
-
-
 def _is_plausible_eas_scheme(scheme_id: str) -> bool:
     """
     Len tvarová/hrubá kontrola (NIE plná zhoda s oficiálnym číselníkom,
     ten má rádovo stovky kódov a appka ho v celku neudržiava - pozri
     PEPPOL_EAS_SCHEMES vo validators.py pre výber, ktorý appka pozná
     podrobnejšie vrátane priradenia ku krajine).
+
+    Odstránené kódy (REMOVED_EAS_SCHEMES) sa importujú z validators.py -
+    JEDNO spoločné miesto namiesto dvoch nezávislých zoznamov, ktoré sa
+    už raz rozišli ("9901" bola vo validators.py súčasne "platná" ako
+    DK:CPR, hoci ju OpenPeppol odstránil 30.11.2023).
     """
 
     stripped = (scheme_id or "").strip().upper()
 
-    return bool(re.match(r"^[A-Z0-9]{4}$", stripped)) and stripped not in _REMOVED_EAS_SCHEMES
+    return bool(re.match(r"^[A-Z0-9]{4}$", stripped)) and stripped not in REMOVED_EAS_SCHEMES
 
 
 def validate_peppol_invoice_xml(xml_bytes: bytes) -> list[str]:

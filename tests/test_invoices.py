@@ -3879,3 +3879,23 @@ def test_create_invoice_with_non_numeric_job_id_is_rejected_cleanly():
     )
 
     assert response.status_code == 422
+
+
+def test_customer_form_rejects_removed_eas_scheme_at_input_time():
+    """
+    Regresný test: "9901" (DK:CPR) bola z EAS číselníka odstránená -
+    appka ju má odmietnuť hneď vo formulári, nie až pri Peppol exporte.
+    """
+
+    response = client.post(
+        "/customers",
+        data={
+            "name": "Dánsky zákazník s.r.o.",
+            "country_code": "DK",
+            "peppol_scheme_id": "9901",
+            "peppol_endpoint_id": "0101901234"
+        },
+        follow_redirects=False
+    )
+
+    assert response.status_code == 422
