@@ -13,9 +13,18 @@ from models import Company, Customer, Invoice, InvoiceItem, Job
 config = context.config
 
 
-# Nastavenie logovania
+# Nastavenie logovania.
+#
+# disable_existing_loggers=False je KRITICKÉ - migrácie teraz bežia aj
+# PROGRAMATICKY, vnútri bežiacej appky (tenancy.upgrade_account_database,
+# volané pri KAŽDEJ registrácii nového konta), nielen ako jednorazový
+# CLI príkaz. fileConfig() defaultne (disable_existing_loggers=True)
+# VYPNE každý logger, ktorý už existuje a nie je vymenovaný v
+# alembic.ini (napr. "uploads_utils", "main", "backup_utils") - takže
+# by appka po prvej registrácii potichu stratila vlastné logovanie na
+# zvyšok behu procesu.
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 
 # SQLAlchemy modely
@@ -27,8 +36,16 @@ def run_migrations_offline() -> None:
     Spustenie migrácií bez vytvorenia databázového spojenia.
     """
 
+    # config.get_main_option(...) MÁ PREDNOSŤ pred DATABASE_URL z
+    # database.py - tenancy.upgrade_account_database() nastavuje
+    # sqlalchemy.url programaticky (per-konto súbor), nie cez .env.
+    # Bez tejto priority by appka pri provisioningu nového konta vždy
+    # migrovala ten istý (pôvodný, globálny) DATABASE_URL namiesto
+    # súboru konkrétneho konta.
+    db_url = config.get_main_option("sqlalchemy.url") or DATABASE_URL
+
     context.configure(
-        url=DATABASE_URL,
+        url=db_url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={
@@ -52,7 +69,10 @@ def run_migrations_online() -> None:
         {}
     )
 
-    configuration["sqlalchemy.url"] = DATABASE_URL
+    # Rovnaká priorita ako v run_migrations_offline() vyššie.
+    configuration["sqlalchemy.url"] = (
+        config.get_main_option("sqlalchemy.url") or DATABASE_URL
+    )
 
     connectable = engine_from_config(
         configuration,

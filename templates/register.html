@@ -11,7 +11,7 @@
     >
 
     <title>
-        Prihlásenie - Digitálny zošit
+        Registrácia - Digitálny zošit
     </title>
 
     <link
@@ -58,11 +58,11 @@
         <div class="page-header">
 
             <h1>
-                Prihlásenie
+                Registrácia
             </h1>
 
             <p>
-                Zadajte prihlasovacie údaje.
+                Vytvor si vlastné konto. Tvoje faktúry, zákazníci aj zákazky budú oddelené od ostatných kont.
             </p>
 
         </div>
@@ -81,7 +81,7 @@
 
 
             <form
-                action="/login"
+                action="/register"
                 method="post"
             >
                 <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
@@ -95,19 +95,35 @@
                 <input
                     type="text"
                     name="username"
+                    minlength="3"
+                    maxlength="50"
                     required
                     autofocus
                 >
 
 
                 <label>
-                    Heslo
+                    Heslo <span style="font-weight: 400; color: var(--text-muted);">(aspoň 8 znakov)</span>
                 </label>
 
 
                 <input
                     type="password"
                     name="password"
+                    minlength="8"
+                    required
+                >
+
+
+                <label>
+                    Heslo znova
+                </label>
+
+
+                <input
+                    type="password"
+                    name="password_confirm"
+                    minlength="8"
                     required
                 >
 
@@ -119,7 +135,7 @@
                         type="submit"
                         class="save-button"
                     >
-                        Prihlásiť sa
+                        Vytvoriť konto
                     </button>
 
 
@@ -130,7 +146,7 @@
 
 
             <p style="margin-top: 16px; font-size: 14px;">
-                Nemáš ešte konto? <a href="/register">Zaregistruj sa</a>.
+                Už máš konto? <a href="/login">Prihlás sa</a>.
             </p>
 
 

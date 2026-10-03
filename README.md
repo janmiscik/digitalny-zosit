@@ -88,7 +88,8 @@ Aplikácia beží na `http://127.0.0.1:8000` a pri prvom vstupe ťa presmeruje n
 - **Kontrola integrity dát** (`/settings/integrity-check`, odkaz zo stránky Nastavenia) – porovná databázu (logo, podpis, fotky zákaziek) so súbormi v `uploads/`: nahlási chýbajúce súbory (DB odkazuje na niečo, čo na disku nie je) aj osirotené súbory (súbor na disku, na ktorý sa DB neodkazuje), s možnosťou osirotené súbory rovno zmazať.
 - **Validácia e-mailu, IBAN, IČO, DIČ a IČ DPH** (`validators.py`) – pri zadávaní zákazníka aj vo fakturačných údajoch firmy. E-mail sa overí formátom a normalizuje na malé písmená; IBAN sa overí kontrolným súčtom (mod-97, ISO 13616, funguje pre IBAN akejkoľvek krajiny) aj presnou dĺžkou pre bežné krajiny; slovenské IČO (8 číslic) sa overí kontrolnou číslicou (modulo 11); DIČ a IČ DPH sa overujú len formátom (počet číslic, resp. `SK` + 10 číslic), bez kontrolného súčtu, keďže pre slovenské DIČ žiadny verejne zdokumentovaný nie je. Hodnoty, ktoré nevyzerajú na slovenský formát (zahraniční zákazníci), appka neodmieta – validácia sa cez ne jednoducho preskočí. Rovnaké validátory (v "best-effort" režime, ktorý nikdy nezlyhá na historicky uložených dátach) sa používajú aj pri generovaní Peppol XML a QR platby.
 - **Validácia vygenerovaného Peppol XML** (`peppol_validation.py`) – po vygenerovaní skontroluje vybrané pravidlá EN16931/Peppol BIS Billing 3.0.21 (máj 2026, povinná od 17.8.2026): povinné polia (BR-01 až BR-11, BR-16, BR-21 až BR-26), aritmetickú konzistenciu súčtov (BR-CO-10/13/14/15/17), elektronickú adresu predávajúceho aj odberateľa (PEPPOL-EN16931-R010/R020, BR-62/BR-63, BR-CL-25) a osobitné pravidlá pre prenesenie daňovej povinnosti a nulovú sadzbu DPH (BR-AE-01/02/05/08/09/10, BR-Z-01/02/05/08/09/10). **Nie je to náhrada oficiálnej validácie** (plná Schematron/XSD sada ani úplný EAS číselník nie sú appke k dispozícii) – slúži hlavne ako regresná poistka v testoch a ako nezáväzné upozornenie (hlavička `X-Peppol-Validation-Issues`, záznam do audit logu, a zoznam nálezov priamo na detaile faktúry), export nikdy neblokuje.
-- **Robustnosť voči neočakávaným chybám** – niekoľko miest, kde by tichá alebo príliš široká chyba mohla spôsobiť stratu dát alebo zavádzajúci stav: číslovanie dokladov sa pri súbežnej kolízii čísla (`IntegrityError`) bezpečne opakuje a doklad sa nestratí; zmena veľkosti nahranej fotky rozlišuje poškodený obrázok (zaloguje sa s `logger.exception` a použije sa pôvodný súbor) od skutočnej programátorskej chyby (tá sa nezachytáva potichu); záloha aj obnova databázy overujú `PRAGMA integrity_check`; bezpečnostná záloha pred obnovou má názov odolný voči kolízii pri dvoch obnovách v tej istej sekunde.
+- **Robustnosť voči neočakávaným chybám** – niekoľko miest, kde by tichá alebo príliš široká chyba mohla spôsobiť stratu dát alebo zavádzajúci stav: číslovanie dokladov sa pri súbežnej kolízii čísla (`IntegrityError`) bezpečne opakuje a doklad sa nestratí; zmena veľkosti nahranej fotky rozlišuje poškodený obrázok (zaloguje sa s `logger.exception` a použije sa pôvodný súbor) od skutočnej programátorskej chyby (tá sa nezachytáva potichu); záloha aj obnova databázy overujú `PRAGMA integrity_check`; bezpečnostná záloha pred obnovou má názov odolný voči kolízii pri dvoch obnovách v tej istej sekunde; nahrávanie súboru (obrázky aj obnova zálohy) prekročenie veľkostného limitu zistí PRIEBEŽNE (`uploads_utils.read_upload_with_limit`), nie až po tom, čo appka celý (aj niekoľko-GB) súbor stiahne do pamäte.
+- **Logovanie a neošetrené (500) chyby** (`main.py`) – appka má nastavené štruktúrované logovanie (`logging.basicConfig`, úroveň nastaviteľná cez `LOG_LEVEL`) a globálny handler pre neošetrené výnimky: používateľovi sa ukáže všeobecná chybová stránka v štýle appky (nie holé "Internal Server Error" ani detail výnimky, ktorý by mohol prezradiť interné detaily), zatiaľ čo do logu ide plný text chyby aj traceback.
 
 ---
 
@@ -161,7 +162,7 @@ Pri vytváraní zákazníka appka vie podľa zadaného IČO automaticky doplniť
 python -m pytest tests/ -q
 ```
 
-Aktuálne **522 testov**, rozdelených podľa oblasti:
+Aktuálne **533 testov**, rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|
@@ -182,6 +183,8 @@ Aktuálne **522 testov**, rozdelených podľa oblasti:
 | `test_ico_lookup.py` | Auto-doplnenie podľa IČO (mockované externé API) |
 | `test_backup.py` | Záloha a obnova databázy (izolované na dočasnom súbore), ochrana proti zip bomb, audit log záznam o obnove, kolízia názvu bezpečnostnej zálohy |
 | `test_backup_integrity.py` | `PRAGMA integrity_check` pri tvorbe zálohy aj pri validácii obnovy – poškodená databáza sa odmietne |
+| `test_upload_limit.py` | `uploads_utils.read_upload_with_limit()` – priebežné (nie až na konci) presadzovanie veľkostného limitu pri nahrávaní súboru |
+| `test_error_handling.py` | Globálny handler neošetrených (500) chýb – používateľovi sa ukáže všeobecná hláška (nie detail výnimky), zaloguje sa traceback, JSON aj HTML vetva |
 
 Testy bežia proti oddelenej in-memory SQLite databáze (alebo izolovanému dočasnému súboru pri zálohe/obnove) a nikdy nezasahujú do reálnych dát appky. `tests/conftest.py` pre testy vynucuje `SESSION_HTTPS_ONLY=false` (testovací klient beží cez obyčajné `http://`, nie `https://`).
 

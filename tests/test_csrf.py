@@ -13,7 +13,6 @@ from pathlib import Path
 
 
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
-os.environ["ADMIN_USERNAME"] = "testadmin"
 
 sys.path.insert(
     0,
@@ -26,27 +25,51 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import accounts_db
+import auth
+import tenancy
+from accounts_models import Account
 from auth import hash_password
 from database import Base, get_db
 from main import app
 
 
+TEST_USERNAME = "testadmin"
 TEST_PASSWORD = "tajne-heslo-123"
+TEST_SLUG = "test-csrf-account"
 
-os.environ["ADMIN_PASSWORD_HASH"] = hash_password(TEST_PASSWORD)
+# Prihlásenie teraz ide proti accounts_db (nie proti ADMIN_USERNAME/
+# ADMIN_PASSWORD_HASH z .env) - rovnaký princíp ako v tests/test_auth.py.
+accounts_test_engine = create_engine(
+    "sqlite://",
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool
+)
 
-# auth.py aj routers/auth.py si ADMIN_PASSWORD_HASH/ADMIN_USERNAME
-# načítajú pri importe (rovnaký princíp ako v tests/test_auth.py) - po
-# nastavení env premenných ich preto musíme prepísať priamo v modules.
-import auth
+AccountsTestSessionLocal = sessionmaker(bind=accounts_test_engine)
 
-auth.ADMIN_USERNAME = "testadmin"
-auth.ADMIN_PASSWORD_HASH = os.environ["ADMIN_PASSWORD_HASH"]
+accounts_db.AccountsBase.metadata.create_all(bind=accounts_test_engine)
 
-import routers.auth as auth_router_module
 
-auth_router_module.ADMIN_USERNAME = "testadmin"
-auth_router_module.ADMIN_PASSWORD_HASH = os.environ["ADMIN_PASSWORD_HASH"]
+def override_get_accounts_db():
+
+    db = AccountsTestSessionLocal()
+
+    try:
+        yield db
+
+    finally:
+        db.close()
+
+
+_seed_db = AccountsTestSessionLocal()
+_seed_db.add(Account(
+    username=TEST_USERNAME,
+    slug=TEST_SLUG,
+    password_hash=hash_password(TEST_PASSWORD)
+))
+_seed_db.commit()
+_seed_db.close()
 
 
 # Login/logout teraz zapisujú do audit logu (audit_log.py), takže
@@ -80,7 +103,12 @@ def override_get_db():
 
 Base.metadata.create_all(bind=test_engine)
 
+# Audit log pri prihlásení/odhlásení sa zapisuje priamo cez
+# tenancy.get_account_engine(), nie cez get_db() override.
+tenancy._engine_cache[TEST_SLUG] = test_engine
+
 app.dependency_overrides[get_db] = override_get_db
+app.dependency_overrides[accounts_db.get_accounts_db] = override_get_accounts_db
 
 # Zámerne ŽIADNY app.dependency_overrides[verify_csrf] - to je presne to,
 # čo tento súbor testuje.
@@ -101,6 +129,9 @@ def _ensure_get_db_override():
     """
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[accounts_db.get_accounts_db] = override_get_accounts_db
+    tenancy._engine_cache[TEST_SLUG] = test_engine
+
     yield
 
 
@@ -134,7 +165,7 @@ def get_csrf_token(client: TestClient, path: str = "/login") -> str:
 
 def reset_login_rate_limit():
     auth._failed_login_attempts.clear()
-    auth._lockout_until = None
+    auth._lockout_until.clear()
 
 
 # =========================================

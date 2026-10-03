@@ -21,7 +21,6 @@ from pathlib import Path
 
 
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
-os.environ["ADMIN_USERNAME"] = "testadmin"
 
 sys.path.insert(
     0,
@@ -34,7 +33,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import accounts_db
 import auth
+import tenancy
+from accounts_models import Account
 from auth import hash_password
 from csrf import verify_csrf
 from database import Base, get_db
@@ -42,20 +44,43 @@ from main import app
 
 
 # =========================================
-# TESTOVACIE HESLO A DB (rovnaký princíp ako v test_auth.py)
+# TESTOVACIE KONTO A DB (rovnaký princíp ako v test_auth.py)
 # =========================================
 
+TEST_USERNAME = "testadmin"
 TEST_PASSWORD = "tajne-heslo-123"
+TEST_SLUG = "test-auth-security-account"
 
-os.environ["ADMIN_PASSWORD_HASH"] = hash_password(TEST_PASSWORD)
+accounts_test_engine = create_engine(
+    "sqlite://",
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool
+)
 
-auth.ADMIN_USERNAME = "testadmin"
-auth.ADMIN_PASSWORD_HASH = os.environ["ADMIN_PASSWORD_HASH"]
+AccountsTestSessionLocal = sessionmaker(bind=accounts_test_engine)
 
-import routers.auth as auth_router_module
+accounts_db.AccountsBase.metadata.create_all(bind=accounts_test_engine)
 
-auth_router_module.ADMIN_USERNAME = "testadmin"
-auth_router_module.ADMIN_PASSWORD_HASH = os.environ["ADMIN_PASSWORD_HASH"]
+
+def override_get_accounts_db():
+
+    db = AccountsTestSessionLocal()
+
+    try:
+        yield db
+
+    finally:
+        db.close()
+
+
+_seed_db = AccountsTestSessionLocal()
+_seed_db.add(Account(
+    username=TEST_USERNAME,
+    slug=TEST_SLUG,
+    password_hash=hash_password(TEST_PASSWORD)
+))
+_seed_db.commit()
+_seed_db.close()
 
 
 TEST_DATABASE_URL = "sqlite://"
@@ -86,7 +111,12 @@ def override_get_db():
 
 Base.metadata.create_all(bind=test_engine)
 
+# Rovnaký dôvod ako v test_auth.py - audit log pri prihlásení/odhlásení
+# sa zapisuje priamo cez tenancy.get_account_engine(), nie cez get_db().
+tenancy._engine_cache[TEST_SLUG] = test_engine
+
 app.dependency_overrides[get_db] = override_get_db
+app.dependency_overrides[accounts_db.get_accounts_db] = override_get_accounts_db
 
 # Tento súbor testuje session/prihlasovaciu bezpečnosť, nie CSRF (na to
 # je tests/test_csrf.py) - tu ho obídeme, aby napr.
@@ -110,8 +140,14 @@ def _ensure_dependency_overrides():
     """
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[accounts_db.get_accounts_db] = override_get_accounts_db
     app.dependency_overrides[verify_csrf] = lambda: None
+    tenancy._engine_cache[TEST_SLUG] = test_engine
+
     yield
+
+    auth._failed_login_attempts.clear()
+    auth._lockout_until.clear()
 
 
 def fresh_client() -> TestClient:

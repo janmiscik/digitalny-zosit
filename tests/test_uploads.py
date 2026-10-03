@@ -27,7 +27,8 @@ from csrf import verify_csrf
 from database import Base, get_db
 from main import app
 from models import Company
-from uploads_utils import UPLOADS_DIR, delete_image, image_path
+import uploads_utils
+from uploads_utils import delete_image, image_path
 
 
 TEST_DATABASE_URL = "sqlite://"
@@ -52,18 +53,15 @@ def make_png_bytes(color=(255, 0, 0), size=(40, 20)) -> bytes:
 
 
 @pytest.fixture(autouse=True)
-def setup_test_database(tmp_path, monkeypatch):
+def setup_test_database(tmp_path, monkeypatch, patch_tenant_paths):
 
     Base.metadata.drop_all(bind=test_engine)
     Base.metadata.create_all(bind=test_engine)
 
-    # Fotky zákaziek sa počas testov ukladajú do dočasného priečinka,
-    # nie do skutočného uploads/job_photos (rovnaký princíp ako v
-    # tests/test_jobs_extras.py) - nech testy nezanechávajú súbory na
-    # disku a nekolidujú medzi sebou cez opakujúce sa job_id.
-    import uploads_utils
-
-    monkeypatch.setattr(uploads_utils, "JOB_PHOTOS_DIR", tmp_path / "job_photos")
+    # Logo/podpis aj fotky zákaziek sa počas testov ukladajú do
+    # dočasného priečinka, nie do skutočného priečinka konta - nech
+    # testy nezanechávajú súbory na disku a nekolidujú medzi sebou.
+    patch_tenant_paths(uploads=tmp_path / "uploads")
 
     def override_get_db():
 
@@ -306,7 +304,7 @@ def test_settings_replace_logo_removes_old_extension():
         files={"logo": ("logo.png", png_bytes, "image/png")}
     )
 
-    assert (UPLOADS_DIR / "logo.png").exists()
+    assert (uploads_utils.uploads_dir() / "logo.png").exists()
 
 
     buffer = io.BytesIO()
@@ -319,8 +317,8 @@ def test_settings_replace_logo_removes_old_extension():
         files={"logo": ("logo.jpg", jpg_bytes, "image/jpeg")}
     )
 
-    assert not (UPLOADS_DIR / "logo.png").exists()
-    assert (UPLOADS_DIR / "logo.jpg").exists()
+    assert not (uploads_utils.uploads_dir() / "logo.png").exists()
+    assert (uploads_utils.uploads_dir() / "logo.jpg").exists()
 
 
 def test_settings_form_without_files_keeps_existing_logo():
@@ -518,20 +516,17 @@ def test_finalize_staged_image_keeps_old_file_if_replace_fails(monkeypatch):
     """
 
     from uploads_utils import (
-        UPLOADS_DIR,
         ensure_uploads_dir,
         finalize_staged_image,
     )
 
     ensure_uploads_dir()
 
-    old_path = UPLOADS_DIR / "logo.png"
+    old_path = uploads_utils.uploads_dir() / "logo.png"
     old_path.write_bytes(make_png_bytes())
 
-    temp_path = UPLOADS_DIR / ".tmp-test-logo.jpg"
+    temp_path = uploads_utils.uploads_dir() / ".tmp-test-logo.jpg"
     temp_path.write_bytes(b"fake-jpeg-bytes-pre-test")
-
-    import uploads_utils
 
     original_replace = os.replace
 
@@ -586,9 +581,8 @@ def test_failed_job_photo_commit_removes_orphan_file(monkeypatch):
             files={"photo": ("photo.png", make_png_bytes(), "image/png")}
         )
 
-    from uploads_utils import JOB_PHOTOS_DIR
-
-    remaining_files = list(JOB_PHOTOS_DIR.glob(f"job{job_id}-*")) if JOB_PHOTOS_DIR.exists() else []
+    
+    remaining_files = list(uploads_utils.job_photos_dir().glob(f"job{job_id}-*")) if uploads_utils.job_photos_dir().exists() else []
 
     assert remaining_files == []
 

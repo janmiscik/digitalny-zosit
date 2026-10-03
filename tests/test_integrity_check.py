@@ -50,7 +50,7 @@ TestingSessionLocal = sessionmaker(
 
 
 @pytest.fixture(autouse=True)
-def setup_test_env(tmp_path, monkeypatch):
+def setup_test_env(tmp_path, monkeypatch, patch_tenant_paths):
 
     Base.metadata.drop_all(bind=test_engine)
     Base.metadata.create_all(bind=test_engine)
@@ -60,12 +60,10 @@ def setup_test_env(tmp_path, monkeypatch):
     uploads_dir.mkdir()
     job_photos_dir.mkdir()
 
-    # integrity_check.py si UPLOADS_DIR/JOB_PHOTOS_DIR/ALLOWED_EXTENSIONS
-    # naimportoval priamo (`from uploads_utils import ...`) - patchuje sa
-    # preto na integrity_check module, nie na uploads_utils (rovnaký
-    # princíp ako pri iných moduloch v tomto projekte).
-    monkeypatch.setattr(integrity_check, "UPLOADS_DIR", uploads_dir)
-    monkeypatch.setattr(integrity_check, "JOB_PHOTOS_DIR", job_photos_dir)
+    # integrity_check.py si uploads_dir()/job_photos_dir() volá cez
+    # uploads_utils, ktorý cestu zisťuje cez tenancy.py (pozri
+    # tests/conftest.py - patch_tenant_paths).
+    patch_tenant_paths(uploads=uploads_dir)
 
     def override_get_db():
 

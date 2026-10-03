@@ -8,10 +8,19 @@ from pathlib import Path
 from fastapi import HTTPException, UploadFile
 from PIL import Image, ImageOps, UnidentifiedImageError
 
+import tenancy
+
 logger = logging.getLogger(__name__)
 
 
-UPLOADS_DIR = Path(__file__).parent / "uploads"
+def uploads_dir() -> Path:
+    """
+    Priečinok s nahranými súbormi (logo, podpis, fotky zákaziek)
+    AKTUÁLNE obsluhovaného konta (tenancy.py) - každé konto má svoj
+    vlastný, oddelený priečinok.
+    """
+
+    return tenancy.account_uploads_dir(tenancy.get_current_tenant())
 
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg"}
 
@@ -45,7 +54,7 @@ MAX_IMAGE_PIXELS = 40_000_000
 
 def ensure_uploads_dir() -> None:
 
-    UPLOADS_DIR.mkdir(
+    uploads_dir().mkdir(
         parents=True,
         exist_ok=True
     )
@@ -149,6 +158,45 @@ def _verify_real_image_type(contents: bytes, extension: str) -> None:
         )
 
 
+async def read_upload_with_limit(
+    upload,
+    max_bytes: int,
+    too_large_detail: str,
+    chunk_size: int = 1024 * 1024
+) -> bytes:
+    """
+    Načíta súbor (UploadFile alebo objekt s rovnakým `async .read(n)`
+    rozhraním, napr. z `await request.form()`) PO ČASTIACH a PRERUŠÍ
+    čítanie hneď, ako obsah prekročí `max_bytes`.
+
+    Bežné `await upload.read()` by najprv načítalo CELÝ súbor do
+    pamäte (aj keby mal niekoľko GB) a limit veľkosti by sa overil až
+    POTOM, na už hotovom `bytes` objekte - veľkostný limit by teda v
+    skutočnosti vôbec nechránil pred tým, aby appka najprv celý taký
+    súbor nevcucla do RAM. Táto funkcia limit presadzuje priebežne.
+    """
+
+    chunks = bytearray()
+
+    while True:
+
+        chunk = await upload.read(chunk_size)
+
+        if not chunk:
+            break
+
+        chunks.extend(chunk)
+
+        if len(chunks) > max_bytes:
+
+            raise HTTPException(
+                status_code=422,
+                detail=too_large_detail
+            )
+
+    return bytes(chunks)
+
+
 async def _read_and_validate_image(upload: UploadFile) -> tuple[bytes, str]:
     """
     Zdieľaná validácia pre všetky obrázkové uploady v appke (logo/podpis
@@ -168,14 +216,11 @@ async def _read_and_validate_image(upload: UploadFile) -> tuple[bytes, str]:
             )
         )
 
-    contents = await upload.read()
-
-    if len(contents) > MAX_UPLOAD_SIZE_BYTES:
-
-        raise HTTPException(
-            status_code=422,
-            detail="Obrázok je príliš veľký (max. 2 MB)"
-        )
+    contents = await read_upload_with_limit(
+        upload,
+        max_bytes=MAX_UPLOAD_SIZE_BYTES,
+        too_large_detail="Obrázok je príliš veľký (max. 2 MB)"
+    )
 
     if len(contents) == 0:
 
@@ -213,7 +258,7 @@ async def save_image_upload(upload: UploadFile, base_name: str) -> str:
 
     filename = f"{base_name}{extension}"
 
-    file_path = UPLOADS_DIR / filename
+    file_path = uploads_dir() / filename
 
     with open(file_path, "wb") as f:
         f.write(contents)
@@ -243,7 +288,7 @@ async def stage_image_upload(upload: UploadFile, base_name: str) -> tuple[Path, 
 
     temp_filename = f".tmp-{uuid.uuid4().hex[:12]}-{final_filename}"
 
-    temp_path = UPLOADS_DIR / temp_filename
+    temp_path = uploads_dir() / temp_filename
 
     with open(temp_path, "wb") as f:
         f.write(contents)
@@ -269,7 +314,7 @@ def finalize_staged_image(temp_path: Path, final_filename: str, base_name: str) 
     (replace ešte neprebehol), alebo už nový (replace prebehol).
     """
 
-    final_path = UPLOADS_DIR / final_filename
+    final_path = uploads_dir() / final_filename
 
     os.replace(temp_path, final_path)
 
@@ -279,7 +324,7 @@ def finalize_staged_image(temp_path: Path, final_filename: str, base_name: str) 
     # kontrolovaných prípon.
     for extension in ALLOWED_EXTENSIONS:
 
-        candidate = UPLOADS_DIR / f"{base_name}{extension}"
+        candidate = uploads_dir() / f"{base_name}{extension}"
 
         if candidate != final_path and candidate.exists():
             os.remove(candidate)
@@ -304,7 +349,10 @@ def discard_staged_image(temp_path: Path) -> None:
 # podpriečinka, nech sa nemiešajú s logom/podpisom.
 # =========================================
 
-JOB_PHOTOS_DIR = UPLOADS_DIR / "job_photos"
+def job_photos_dir() -> Path:
+    """Rovnaký princíp ako uploads_dir(), pre fotky zákaziek konkrétneho konta."""
+
+    return uploads_dir() / "job_photos"
 
 # Fotky zákaziek bývajú z mobilu často zbytočne veľké (aj v rámci
 # 2 MB limitu) - pre zobrazenie v appke aj v PDF plne stačí dlhšia
@@ -315,7 +363,7 @@ JPEG_QUALITY = 85
 
 def ensure_job_photos_dir() -> None:
 
-    JOB_PHOTOS_DIR.mkdir(
+    job_photos_dir().mkdir(
         parents=True,
         exist_ok=True
     )
@@ -429,7 +477,7 @@ async def save_job_photo_upload(upload: UploadFile, job_id: int) -> str:
 
     filename = f"job{job_id}-{unique_id}{extension}"
 
-    file_path = JOB_PHOTOS_DIR / filename
+    file_path = job_photos_dir() / filename
 
     with open(file_path, "wb") as f:
         f.write(contents)
@@ -447,9 +495,9 @@ def delete_job_photo(filename: str) -> None:
     if not re.fullmatch(r"[A-Za-z0-9_.-]+", filename):
         return
 
-    path = JOB_PHOTOS_DIR / filename
+    path = job_photos_dir() / filename
 
-    if path.exists() and path.parent == JOB_PHOTOS_DIR:
+    if path.exists() and path.parent == job_photos_dir():
         os.remove(path)
 
 
@@ -463,10 +511,10 @@ def job_photo_path(filename: str) -> Path | None:
     if filename.startswith("."):
         return None
 
-    path = JOB_PHOTOS_DIR / filename
+    path = job_photos_dir() / filename
 
     # is_file() namiesto exists() - musí to byť skutočný súbor.
-    if not path.is_file() or path.parent != JOB_PHOTOS_DIR:
+    if not path.is_file() or path.parent != job_photos_dir():
         return None
 
     return path
@@ -478,12 +526,12 @@ def delete_image(base_name: str) -> None:
     (bez ohľadu na príponu).
     """
 
-    if not UPLOADS_DIR.exists():
+    if not uploads_dir().exists():
         return
 
     for extension in ALLOWED_EXTENSIONS:
 
-        candidate = UPLOADS_DIR / f"{base_name}{extension}"
+        candidate = uploads_dir() / f"{base_name}{extension}"
 
         if candidate.exists():
 
@@ -495,7 +543,7 @@ def image_path(filename: str | None) -> Path | None:
     if not filename:
         return None
 
-    path = UPLOADS_DIR / filename
+    path = uploads_dir() / filename
 
     if not path.exists():
         return None

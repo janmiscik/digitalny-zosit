@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from sqlalchemy.orm import Session
 
 from models import Company, JobPhoto
-from uploads_utils import ALLOWED_EXTENSIONS, JOB_PHOTOS_DIR, UPLOADS_DIR
+from uploads_utils import ALLOWED_EXTENSIONS, job_photos_dir, uploads_dir
 
 
 @dataclass
@@ -82,7 +82,7 @@ def check_integrity(db: Session) -> IntegrityReport:
 
             referenced_top_level.add(filename)
 
-            if not (UPLOADS_DIR / filename).exists():
+            if not (uploads_dir() / filename).exists():
 
                 report.missing_files.append(
                     MissingFileIssue(
@@ -96,7 +96,7 @@ def check_integrity(db: Session) -> IntegrityReport:
 
         referenced_job_photos.add(photo.filename)
 
-        if not (JOB_PHOTOS_DIR / photo.filename).exists():
+        if not (job_photos_dir() / photo.filename).exists():
 
             report.missing_files.append(
                 MissingFileIssue(
@@ -106,9 +106,9 @@ def check_integrity(db: Session) -> IntegrityReport:
             )
 
     # --- Osirotené súbory: uploads/ (logo/podpis), mimo job_photos/ ---
-    if UPLOADS_DIR.exists():
+    if uploads_dir().exists():
 
-        for path in UPLOADS_DIR.iterdir():
+        for path in uploads_dir().iterdir():
 
             if path.is_dir():
                 continue
@@ -123,9 +123,9 @@ def check_integrity(db: Session) -> IntegrityReport:
                 )
 
     # --- Osirotené fotky zákaziek ---
-    if JOB_PHOTOS_DIR.exists():
+    if job_photos_dir().exists():
 
-        for path in JOB_PHOTOS_DIR.iterdir():
+        for path in job_photos_dir().iterdir():
 
             if path.is_dir():
                 continue
@@ -160,7 +160,7 @@ def cleanup_orphan_files(db: Session) -> list[str]:
 
     for issue in report.orphan_files:
 
-        path = UPLOADS_DIR / issue.relative_path
+        path = uploads_dir() / issue.relative_path
 
         try:
             os.remove(path)

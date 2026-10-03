@@ -23,7 +23,6 @@ kopírovanie by mohlo zachytiť nekonzistentný stav.
 
 import io
 import os
-import re
 import shutil
 import sqlite3
 import tempfile
@@ -33,7 +32,8 @@ from pathlib import Path
 
 from fastapi import HTTPException
 
-from database import DATABASE_URL, engine
+import tenancy
+from uploads_utils import uploads_dir
 
 
 # Tabuľky, ktoré musí mať KAŽDÁ platná záloha tejto appky - slúžia na
@@ -48,9 +48,15 @@ REQUIRED_TABLES = {
     "alembic_version",
 }
 
-BACKUPS_DIR = Path(__file__).parent / "backups"
 
-UPLOADS_DIR = Path(__file__).parent / "uploads"
+def backups_dir() -> Path:
+    """
+    Priečinok so zálohami AKTUÁLNE obsluhovaného konta (tenancy.py) -
+    každé konto má svoje vlastné zálohy, oddelené od ostatných kont.
+    """
+
+    return tenancy.account_backups_dir(tenancy.get_current_tenant())
+
 
 MAX_UPLOAD_SIZE_BYTES = 200 * 1024 * 1024  # 200 MB - záloha teraz obsahuje aj fotky
 
@@ -69,31 +75,16 @@ MAX_BACKUP_UNCOMPRESSED_TOTAL_BYTES = 2 * 1024 * 1024 * 1024  # 2 GB spolu
 
 def _sqlite_file_path() -> Path:
     """
-    Vytiahne cestu k súboru zo SQLAlchemy DATABASE_URL
-    (napr. "sqlite:///./digitalny-zosit.db" -> "./digitalny-zosit.db").
-
-    Vyhodí HTTPException, ak appka nebeží nad SQLite (záloha/obnova v
-    tejto podobe dáva zmysel len pre jednosúborovú SQLite databázu).
+    Cesta k súboru business databázy AKTUÁLNE obsluhovaného konta
+    (tenancy.py) - každé konto má vlastný súbor.
     """
 
-    match = re.match(r"^sqlite:///(.+)$", DATABASE_URL)
-
-    if not match:
-
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Záloha/obnova je podporovaná len pre SQLite databázu. "
-                f"Aktuálna DATABASE_URL: {DATABASE_URL}"
-            )
-        )
-
-    return Path(match.group(1)).resolve()
+    return tenancy.account_database_path(tenancy.get_current_tenant()).resolve()
 
 
 def ensure_backups_dir() -> None:
 
-    BACKUPS_DIR.mkdir(
+    backups_dir().mkdir(
         parents=True,
         exist_ok=True
     )
@@ -189,14 +180,14 @@ def create_backup_bytes() -> bytes:
 
         zf.writestr("database.db", db_bytes)
 
-        if UPLOADS_DIR.exists():
+        if uploads_dir().exists():
 
-            for file_path in UPLOADS_DIR.rglob("*"):
+            for file_path in uploads_dir().rglob("*"):
 
                 if file_path.is_file():
 
                     arcname = "uploads/" + str(
-                        file_path.relative_to(UPLOADS_DIR)
+                        file_path.relative_to(uploads_dir())
                     ).replace("\\", "/")
 
                     zf.write(file_path, arcname)
@@ -241,7 +232,7 @@ def save_automatic_backup() -> Path:
             if suffix == 1
             else f"pred-obnovou-{timestamp}-{suffix}.zip"
         )
-        backup_path = BACKUPS_DIR / name
+        backup_path = backups_dir() / name
 
         try:
 
@@ -445,7 +436,7 @@ def restore_from_upload(file_bytes: bytes) -> Path:
     Postup:
     1. Overí, že nahraný súbor je platná záloha tejto appky.
     2. Uloží AUTOMATICKÚ kompletnú zálohu súčasného stavu (pre prípad chyby).
-    3. Zavrie všetky pooled SQLAlchemy spojenia (engine.dispose()) - inak
+    3. Zavrie všetky pooled SQLAlchemy spojenia (tenancy.discard_account_engine(tenancy.get_current_tenant())) - inak
        by appka mohla po obnove pracovať so zastaraným spojením/cache.
     4. Nahraný obsah databázy skopíruje do živého DB súboru cez SQLite
        backup API.
@@ -468,7 +459,7 @@ def restore_from_upload(file_bytes: bytes) -> Path:
         # appka si pri ďalšom použití vytvorí nové spojenia nad (už
         # obnoveným) súborom. Bez tohto kroku by mohlo staré poolované
         # spojenie držať zastaraný stav alebo zámok na pôvodnom súbore.
-        engine.dispose()
+        tenancy.discard_account_engine(tenancy.get_current_tenant())
 
         db_path = _sqlite_file_path()
 
@@ -495,11 +486,11 @@ def restore_from_upload(file_bytes: bytes) -> Path:
 
         # Nahradenie uploads/ - appka sa má po obnove nachádzať PRESNE v
         # stave, ktorý záloha zachytáva (nie zlúčenie starého a nového).
-        if UPLOADS_DIR.exists():
+        if uploads_dir().exists():
 
-            shutil.rmtree(UPLOADS_DIR)
+            shutil.rmtree(uploads_dir())
 
-        UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        uploads_dir().mkdir(parents=True, exist_ok=True)
 
         for member in zf.namelist():
 
@@ -508,11 +499,11 @@ def restore_from_upload(file_bytes: bytes) -> Path:
 
             relative_path = member[len("uploads/"):]
 
-            target_path = UPLOADS_DIR / relative_path
+            target_path = uploads_dir() / relative_path
 
             # Obrana proti path traversal v mene súboru v ZIP archíve -
-            # nikdy nezapisovať mimo UPLOADS_DIR.
-            if UPLOADS_DIR not in target_path.resolve().parents:
+            # nikdy nezapisovať mimo uploads_dir().
+            if uploads_dir() not in target_path.resolve().parents:
                 continue
 
             target_path.parent.mkdir(parents=True, exist_ok=True)
@@ -527,7 +518,7 @@ def restore_from_upload(file_bytes: bytes) -> Path:
     # keďže obnova celý obsah audit_log tabuľky (spolu so zvyškom
     # databázy) prepíše obsahom zo zálohy. Robí sa to surovým SQL cez
     # čerstvé sqlite3 spojenie (nie cez SQLAlchemy session) - spojenia
-    # z poolu boli práve zatvorené vyššie (engine.dispose()) a appka si
+    # z poolu boli práve zatvorené vyššie (tenancy.discard_account_engine(tenancy.get_current_tenant())) a appka si
     # nové vytvorí až pri ďalšej požiadavke. Ak by obnovovaná záloha
     # bola zo staršej verzie appky ešte bez audit_log tabuľky, zápis sa
     # ticho preskočí - chýbajúci log záznam nesmie zablokovať inak

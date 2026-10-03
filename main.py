@@ -1,3 +1,4 @@
+import logging
 import os
 from contextlib import asynccontextmanager
 from datetime import date
@@ -11,8 +12,30 @@ from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy import func, inspect
 from sqlalchemy.orm import Session, joinedload
 
+
+# =========================================
+# LOGOVANIE
+#
+# Bez tohto by `logger.exception(...)` volania v appke (napr. pri
+# zlyhaní zmeny veľkosti fotky) síce niečo vypísali - Python má pre
+# nenakonfigurovaný root logger "posledná záchrana" handler, ktorý
+# WARNING a vyššie vypíše na stderr - ale bez času, mena modulu ani
+# konzistentného formátu, takže by sa to v produkčnom logu ťažko
+# hľadalo. LOG_LEVEL je nastaviteľný cez premennú prostredia, keby
+# bolo treba dočasne zvýšiť podrobnosť (napr. na DEBUG) bez zásahu
+# do kódu.
+# =========================================
+
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+)
+
+logger = logging.getLogger(__name__)
+
+from accounts_db import accounts_engine
 from auth import require_login_page
-from database import Base, engine, get_db
+from database import Base, get_db
 from invoice_utils import CLOSED_INVOICE_STATUSES, calculate_invoice_totals, is_invoice_overdue, signed_invoice_total
 
 from models import Customer, Invoice, Job, Quote
@@ -44,17 +67,24 @@ from templates_config import templates
 # len skontroluje, že migrácie boli spustené, a ak nie, zlyhá s jasnou
 # hláškou - radšej hneď pri štarte, než neskôr nezrozumiteľnou SQL
 # chybou "no such table" pri prvej požiadavke.
+#
+# Appka má DVE oddelené databázy (viď accounts_db.py a tenancy.py):
+# jednu MASTER databázu kont (accounts.db) a pre KAŽDÉ konto vlastný
+# súbor s business dátami. Pri štarte appky vieme skontrolovať len tú
+# prvú - business databázy jednotlivých kont vznikajú až pri ich
+# registrácii (tenancy.provision_account), appka pri štarte ešte
+# nevie, koľko ich bude.
 # =========================================
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
 
-    if not inspect(engine).has_table("alembic_version"):
+    if not inspect(accounts_engine).has_table("alembic_version"):
 
         raise RuntimeError(
-            "Databázová schéma nie je inicializovaná (chýba tabuľka "
-            "alembic_version). Pred spustením appky spusti databázové "
-            "migrácie:\n\n    alembic upgrade head\n"
+            "Databáza kont nie je inicializovaná (chýba tabuľka "
+            "alembic_version). Pred spustením appky spusti migrácie:\n\n"
+            "    alembic -c alembic_accounts.ini upgrade head\n"
         )
 
     yield
@@ -155,15 +185,81 @@ async def html_aware_exception_handler(request: Request, exc: HTTPException):
     )
 
 
+# =========================================
+# NEOŠETRENÉ CHYBY (500) - programátorské chyby, nie HTTPException
+#
+# Bez tohto handlera by neošetrená výnimka (skutočná chyba v kóde, nie
+# HTTPException, ktorú appka vyhadzuje zámerne) skončila ako holá
+# "Internal Server Error" stránka bez štýlu appky A BEZ ZÁPISU DO LOGU
+# - v produkcii by sa tak appka dala potichu "rozbiť" a nikto by sa
+# o tom nedozvedel, kým by sa na to niekto náhodou nesťažoval.
+#
+# Registrácia handlera na `Exception` (základnú triedu) je oficiálny
+# spôsob, ako v Starlette/FastAPI zachytiť AJ tieto neošetrené chyby -
+# HTTPException má vlastný, špecifickejší handler vyššie a sem
+# nepríde (Starlette si vyberie presnejšie sedliaci handler).
+#
+# Používateľovi sa detail výnimky NEUKAZUJE (mohol by obsahovať
+# interné detaily, napr. časť SQL dotazu) - len všeobecná hláška.
+# Skutočný text a traceback ide len do logu.
+# =========================================
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+
+    logger.exception(
+        "Neošetrená chyba pri %s %s",
+        request.method,
+        request.url.path
+    )
+
+    wants_html = "text/html" in request.headers.get("accept", "")
+
+    if not wants_html:
+
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Nastala neočakávaná chyba. Skús to prosím znova."}
+        )
+
+
+    referer = request.headers.get("referer", "/")
+
+
+    return templates.TemplateResponse(
+
+        request=request,
+
+        name="error.html",
+
+        status_code=500,
+
+        context={
+
+            "status_code": 500,
+
+            "detail": "Nastala neočakávaná chyba. Skús to prosím znova.",
+
+            "back_url": referer
+
+        }
+
+    )
+
+
 app.mount(
     "/static",
     StaticFiles(directory="static"),
     name="static"
 )
 
-from uploads_utils import ensure_uploads_dir, UPLOADS_DIR
+from uploads_utils import uploads_dir
 
-ensure_uploads_dir()
+# POZNÁMKA: tu už NIE JE volanie ensure_uploads_dir() - v appke s
+# jedným spoločným priečinkom to dávalo zmysel pri štarte appky, teraz
+# má každé konto vlastný priečinok, ktorý vznikne až pri jeho
+# registrácii (tenancy.provision_account) - appka pri štarte ešte
+# nevie, koľko kont bude.
 
 # POZNÁMKA: /uploads (logo, podpis/pečiatka) sa NEpripája cez StaticFiles,
 # pretože ten by bol dostupný bez prihlásenia. Namiesto toho ho obsluhuje
@@ -508,11 +604,11 @@ def serve_upload(
         )
 
 
-    candidate_path = (UPLOADS_DIR / filename).resolve()
+    candidate_path = (uploads_dir() / filename).resolve()
 
     # Aj napriek kontrole vyššie si ešte overíme, že výsledná cesta
     # naozaj leží vnútri uploads/ priečinka (obrana do hĺbky).
-    if UPLOADS_DIR.resolve() not in candidate_path.parents:
+    if uploads_dir().resolve() not in candidate_path.parents:
 
         raise HTTPException(
             status_code=404,

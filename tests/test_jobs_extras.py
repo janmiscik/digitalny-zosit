@@ -49,17 +49,15 @@ TestingSessionLocal = sessionmaker(bind=test_engine)
 
 
 @pytest.fixture(autouse=True)
-def setup_test_database(tmp_path, monkeypatch):
+def setup_test_database(tmp_path, monkeypatch, patch_tenant_paths):
 
     Base.metadata.drop_all(bind=test_engine)
     Base.metadata.create_all(bind=test_engine)
 
     # Fotky sa počas testov ukladajú do dočasného priečinka, nie do
-    # skutočného uploads/job_photos - nech testy nezanechávajú súbory
+    # skutočného priečinka konta - nech testy nezanechávajú súbory
     # na disku a nekolidujú medzi sebou.
-    import uploads_utils
-
-    monkeypatch.setattr(uploads_utils, "JOB_PHOTOS_DIR", tmp_path / "job_photos")
+    patch_tenant_paths(uploads=tmp_path / "uploads")
 
     db = TestingSessionLocal()
 

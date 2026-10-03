@@ -1,11 +1,11 @@
 """
 Testy pre zálohu a obnovu CELEJ appky (databáza + uploads/) ako ZIP.
 
-KRITICKY DÔLEŽITÉ: backup_utils.py pracuje PRIAMO so súborom podľa
-DATABASE_URL a s priečinkom UPLOADS_DIR (obchádza SQLAlchemy session),
-takže tieto testy vždy monkeypatchujú backup_utils.DATABASE_URL aj
-backup_utils.UPLOADS_DIR na dočasné umiestnenia - inak by hrozilo, že
-testy prepíšu/zálohujú skutočné dáta appky.
+KRITICKY DÔLEŽITÉ: backup_utils.py pracuje PRIAMO so súborom databázy
+a s priečinkom uploads AKTUÁLNEHO konta (tenancy.py, obchádza
+SQLAlchemy session), takže tieto testy vždy cez patch_tenant_paths
+(tests/conftest.py) nasmerujú tenancy na dočasné umiestnenia - inak by
+hrozilo, že testy prepíšu/zálohujú skutočné dáta appky.
 """
 
 import io
@@ -38,11 +38,12 @@ from main import app
 
 
 @pytest.fixture
-def temp_env(tmp_path, monkeypatch):
+def temp_env(tmp_path, monkeypatch, patch_tenant_paths):
     """
     Vytvorí dočasný SQLite súbor s plnou schémou appky + dočasný
-    uploads/ priečinok, a nasmeruje na ne backup_utils - žiadny test v
-    tomto súbore sa nikdy nedotkne skutočných dát appky.
+    uploads/ priečinok, a nasmeruje naň backup_utils (cez tenancy.py -
+    patch_tenant_paths, viď tests/conftest.py) - žiadny test v tomto
+    súbore sa nikdy nedotkne skutočných dát appky.
     """
 
     db_path = tmp_path / "live.db"
@@ -63,16 +64,20 @@ def temp_env(tmp_path, monkeypatch):
     uploads_dir = tmp_path / "uploads"
     uploads_dir.mkdir()
 
-    monkeypatch.setattr(backup_utils, "DATABASE_URL", f"sqlite:///{db_path}")
-    monkeypatch.setattr(backup_utils, "UPLOADS_DIR", uploads_dir)
-    monkeypatch.setattr(backup_utils, "BACKUPS_DIR", tmp_path / "backups")
+    backups_dir = tmp_path / "backups"
 
-    # backup_utils.restore_from_upload() volá engine.dispose() na
-    # SKUTOČNOM (produkčnom) engine importovanom z database.py - to je
-    # neškodné aj v testoch (len zavrie pool nesúvisiaceho engine), takže
-    # ho nemusíme mockovať.
+    patch_tenant_paths(
+        db_path=db_path,
+        uploads=uploads_dir,
+        backups=backups_dir
+    )
 
-    return {"db_path": db_path, "uploads_dir": uploads_dir}
+    # tenancy.discard_account_engine() (volá ho backup_utils pri obnove
+    # namiesto pôvodného engine.dispose()) pracuje nad PRÁZDNOU cache -
+    # žiadny skutočný engine pre "test-tenant" slug v nej nie je, takže
+    # je to v testoch neškodné.
+
+    return {"db_path": db_path, "uploads_dir": uploads_dir, "backups_dir": backups_dir}
 
 
 def override_login():
@@ -131,14 +136,14 @@ def test_backup_zip_contains_uploaded_files(temp_env):
         assert zf.read("uploads/logo.png") == b"fake-logo-bytes"
 
 
-def test_backup_zip_works_without_uploads_dir(temp_env, monkeypatch):
+def test_backup_zip_works_without_uploads_dir(temp_env, monkeypatch, patch_tenant_paths):
     """Ak uploads/ ešte vôbec neexistuje (čerstvá inštalácia appky bez
     nahraných súborov), záloha sa má stále vytvoriť bez chyby."""
 
-    monkeypatch.setattr(
-        backup_utils,
-        "UPLOADS_DIR",
-        temp_env["uploads_dir"] / "does-not-exist"
+    patch_tenant_paths(
+        db_path=temp_env["db_path"],
+        uploads=temp_env["uploads_dir"] / "does-not-exist",
+        backups=temp_env["backups_dir"]
     )
 
     result = backup_utils.create_backup_bytes()
@@ -147,12 +152,12 @@ def test_backup_zip_works_without_uploads_dir(temp_env, monkeypatch):
         assert "database.db" in zf.namelist()
 
 
-def test_create_backup_missing_db_file_raises_404(temp_env, monkeypatch):
+def test_create_backup_missing_db_file_raises_404(temp_env, monkeypatch, patch_tenant_paths):
 
-    monkeypatch.setattr(
-        backup_utils,
-        "DATABASE_URL",
-        f"sqlite:///{temp_env['db_path'].parent / 'does-not-exist.db'}"
+    patch_tenant_paths(
+        db_path=temp_env["db_path"].parent / "does-not-exist.db",
+        uploads=temp_env["uploads_dir"],
+        backups=temp_env["backups_dir"]
     )
 
     with pytest.raises(Exception) as exc_info:
@@ -402,9 +407,9 @@ def test_restore_creates_safety_backup_before_overwriting(temp_env):
 
     backup_utils.restore_from_upload(valid_backup)
 
-    assert backup_utils.BACKUPS_DIR.exists()
+    assert backup_utils.backups_dir().exists()
 
-    safety_backups = list(backup_utils.BACKUPS_DIR.glob("pred-obnovou-*.zip"))
+    safety_backups = list(backup_utils.backups_dir().glob("pred-obnovou-*.zip"))
 
     assert len(safety_backups) == 1
 
@@ -635,6 +640,6 @@ def test_save_automatic_backup_does_not_overwrite_on_same_second_collision(
     assert first_path.stat().st_size > 0
     assert second_path.stat().st_size > 0
 
-    safety_backups = sorted(backup_utils.BACKUPS_DIR.glob("pred-obnovou-*.zip"))
+    safety_backups = sorted(backup_utils.backups_dir().glob("pred-obnovou-*.zip"))
 
     assert len(safety_backups) == 2

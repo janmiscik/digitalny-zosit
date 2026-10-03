@@ -1556,18 +1556,20 @@ def test_vat_category_code():
 # PDF S LOGOM A PODPISOM
 # =========================================
 
-def test_pdf_with_logo_and_signature():
+def test_pdf_with_logo_and_signature(tmp_path, patch_tenant_paths):
 
     import io
     from PIL import Image as PILImage
-    from uploads_utils import UPLOADS_DIR, delete_image, ensure_uploads_dir
+    from uploads_utils import delete_image, ensure_uploads_dir, uploads_dir
+
+    patch_tenant_paths(uploads=tmp_path / "uploads")
 
     ensure_uploads_dir()
 
     buffer = io.BytesIO()
     PILImage.new("RGB", (200, 80), (10, 20, 30)).save(buffer, format="PNG")
 
-    logo_path = UPLOADS_DIR / "logo.png"
+    logo_path = uploads_dir() / "logo.png"
 
     with open(logo_path, "wb") as f:
         f.write(buffer.getvalue())
@@ -1576,7 +1578,7 @@ def test_pdf_with_logo_and_signature():
     buffer2 = io.BytesIO()
     PILImage.new("RGB", (150, 60), (200, 200, 200)).save(buffer2, format="PNG")
 
-    signature_path = UPLOADS_DIR / "signature.png"
+    signature_path = uploads_dir() / "signature.png"
 
     with open(signature_path, "wb") as f:
         f.write(buffer2.getvalue())

@@ -4,7 +4,6 @@ from pathlib import Path
 
 
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
-os.environ["ADMIN_USERNAME"] = "testadmin"
 
 
 sys.path.insert(
@@ -19,6 +18,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import accounts_db
+import auth
+import tenancy
+from accounts_models import Account
 from auth import hash_password, verify_password
 from csrf import verify_csrf
 from database import Base, get_db
@@ -26,29 +29,51 @@ from main import app
 
 
 # =========================================
-# TESTOVACIE HESLO
+# TESTOVACIE KONTO
+#
+# Prihlásenie teraz ide proti accounts_db (nie proti ADMIN_USERNAME/
+# ADMIN_PASSWORD_HASH z .env) - vytvoríme preto skutočný riadok Account
+# v izolovanej (in-memory) accounts databáze pre tento testovací súbor.
 # =========================================
 
+TEST_USERNAME = "testadmin"
 TEST_PASSWORD = "tajne-heslo-123"
+TEST_SLUG = "test-auth-account"
 
-os.environ["ADMIN_PASSWORD_HASH"] = hash_password(TEST_PASSWORD)
+accounts_test_engine = create_engine(
+    "sqlite://",
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool
+)
+
+AccountsTestSessionLocal = sessionmaker(bind=accounts_test_engine)
+
+accounts_db.AccountsBase.metadata.create_all(bind=accounts_test_engine)
 
 
-# Modul auth.py si ADMIN_PASSWORD_HASH načíta pri importe, takže ho
-# po nastavení env premennej ešte musíme prepísať priamo v module.
-import auth
+def override_get_accounts_db():
 
-auth.ADMIN_USERNAME = "testadmin"
-auth.ADMIN_PASSWORD_HASH = os.environ["ADMIN_PASSWORD_HASH"]
+    db = AccountsTestSessionLocal()
 
-import routers.auth as auth_router_module
+    try:
+        yield db
 
-auth_router_module.ADMIN_USERNAME = "testadmin"
-auth_router_module.ADMIN_PASSWORD_HASH = os.environ["ADMIN_PASSWORD_HASH"]
+    finally:
+        db.close()
+
+
+_seed_db = AccountsTestSessionLocal()
+_seed_db.add(Account(
+    username=TEST_USERNAME,
+    slug=TEST_SLUG,
+    password_hash=hash_password(TEST_PASSWORD)
+))
+_seed_db.commit()
+_seed_db.close()
 
 
 # =========================================
-# TEST DATABASE (aby appka pri štarte mala kam zapisovať)
+# TEST DATABASE (business dáta tohto jedného testovacieho konta)
 # =========================================
 
 TEST_DATABASE_URL = "sqlite://"
@@ -79,7 +104,16 @@ def override_get_db():
 
 Base.metadata.create_all(bind=test_engine)
 
+# routers/auth.py pri prihlásení/odhlásení zapisuje do audit logu PRIAMO
+# cez tenancy.get_account_engine(account.slug) (nie cez get_db()
+# override nižšie - v okamihu prihlásenia appka ešte nevie, čí
+# get_db() by sa mal použiť). Predvyplnením cache zabezpečíme, že tento
+# zápis skutočne skončí v TOM ISTOM in-memory engine, ktorý test ďalej
+# číta cez get_db() override.
+tenancy._engine_cache[TEST_SLUG] = test_engine
+
 app.dependency_overrides[get_db] = override_get_db
+app.dependency_overrides[accounts_db.get_accounts_db] = override_get_accounts_db
 
 # Tento súbor testuje prihlásenie/odhlásenie/rate limiting, nie CSRF
 # (na to je tests/test_csrf.py) - tu ho obídeme.
@@ -100,8 +134,17 @@ def _ensure_dependency_overrides():
     """
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[accounts_db.get_accounts_db] = override_get_accounts_db
     app.dependency_overrides[verify_csrf] = lambda: None
+    tenancy._engine_cache[TEST_SLUG] = test_engine
+
     yield
+
+    # Rate limiting je kľúčovaný podľa IP adresy (auth._rate_limit_key) -
+    # TestClient vždy posiela rovnakú (fiktívnu) IP, takže bez vyčistenia
+    # by si testy naprieč súbormi mohli navzájom ovplyvňovať stav.
+    auth._failed_login_attempts.clear()
+    auth._lockout_until.clear()
 
 
 client = TestClient(app)
@@ -147,8 +190,23 @@ def test_login_wrong_password():
     response = client.post(
         "/login",
         data={
-            "username": "testadmin",
+            "username": TEST_USERNAME,
             "password": "zle-heslo"
+        }
+    )
+
+    assert response.status_code == 401
+
+
+def test_login_unknown_username():
+    """Neexistujúce meno sa má správať rovnako ako zlé heslo (žiadne
+    rozlíšenie, ktoré meno v appke existuje)."""
+
+    response = client.post(
+        "/login",
+        data={
+            "username": "neexistuje-vobec",
+            "password": "čokoľvek"
         }
     )
 
@@ -160,7 +218,7 @@ def test_login_success_and_access():
     response = client.post(
         "/login",
         data={
-            "username": "testadmin",
+            "username": TEST_USERNAME,
             "password": TEST_PASSWORD
         },
         follow_redirects=False
@@ -180,7 +238,7 @@ def test_logout():
     client.post(
         "/login",
         data={
-            "username": "testadmin",
+            "username": TEST_USERNAME,
             "password": TEST_PASSWORD
         }
     )
@@ -203,14 +261,14 @@ def test_login_locked_after_too_many_wrong_attempts():
 
     # vyčistíme stav limitera, nech test nezávisí od poradia iných testov
     auth._failed_login_attempts.clear()
-    auth._lockout_until = None
+    auth._lockout_until.clear()
 
     for _ in range(auth.MAX_LOGIN_ATTEMPTS):
 
         response = client.post(
             "/login",
             data={
-                "username": "testadmin",
+                "username": TEST_USERNAME,
                 "password": "zle-heslo"
             }
         )
@@ -221,7 +279,7 @@ def test_login_locked_after_too_many_wrong_attempts():
     response = client.post(
         "/login",
         data={
-            "username": "testadmin",
+            "username": TEST_USERNAME,
             "password": TEST_PASSWORD
         }
     )
@@ -234,20 +292,20 @@ def test_login_locked_after_too_many_wrong_attempts():
     assert client.get("/", follow_redirects=False).status_code == 303
 
     auth._failed_login_attempts.clear()
-    auth._lockout_until = None
+    auth._lockout_until.clear()
 
 
 def test_successful_login_resets_lockout_counter():
 
     auth._failed_login_attempts.clear()
-    auth._lockout_until = None
+    auth._lockout_until.clear()
 
     for _ in range(auth.MAX_LOGIN_ATTEMPTS - 1):
 
         client.post(
             "/login",
             data={
-                "username": "testadmin",
+                "username": TEST_USERNAME,
                 "password": "zle-heslo"
             }
         )
@@ -255,7 +313,7 @@ def test_successful_login_resets_lockout_counter():
     response = client.post(
         "/login",
         data={
-            "username": "testadmin",
+            "username": TEST_USERNAME,
             "password": TEST_PASSWORD
         },
         follow_redirects=False
@@ -265,4 +323,4 @@ def test_successful_login_resets_lockout_counter():
     assert len(auth._failed_login_attempts) == 0
 
     auth._failed_login_attempts.clear()
-    auth._lockout_until = None
+    auth._lockout_until.clear()

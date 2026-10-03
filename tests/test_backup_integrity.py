@@ -56,14 +56,16 @@ def test_healthy_database_passes_integrity_check(tmp_path):
     conn.close()
 
 
-def test_backup_creation_refuses_corrupted_database(tmp_path, monkeypatch):
+def test_backup_creation_refuses_corrupted_database(tmp_path, patch_tenant_paths):
 
     db_path = tmp_path / "live.db"
     _make_db(db_path)
     _corrupt_middle(db_path)
 
-    monkeypatch.setattr(
-        backup_utils, "DATABASE_URL", f"sqlite:///{db_path}"
+    patch_tenant_paths(
+        db_path=db_path,
+        uploads=tmp_path / "uploads",
+        backups=tmp_path / "backups"
     )
 
     with pytest.raises(Exception) as exc_info:

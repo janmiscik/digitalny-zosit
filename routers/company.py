@@ -10,7 +10,7 @@ from audit_log import log_action
 from auth import require_login_page
 from database import get_db
 from integrity_check import check_integrity, cleanup_orphan_files
-from backup_utils import create_backup_bytes, restore_from_upload
+from backup_utils import MAX_UPLOAD_SIZE_BYTES, create_backup_bytes, restore_from_upload
 from invoice_utils import NON_VAT_PAYER_NOTICE
 from models import AuditLog, Company
 from templates_config import templates
@@ -27,6 +27,7 @@ from uploads_utils import (
     delete_image,
     discard_staged_image,
     finalize_staged_image,
+    read_upload_with_limit,
     stage_image_upload,
 )
 
@@ -363,7 +364,17 @@ async def upload_restore(
             detail="Nebol vybraný žiadny súbor na obnovu."
         )
 
-    file_bytes = await upload.read()
+    # Čítanie PO ČASTIACH s priebežným limitom - `await upload.read()`
+    # by celý súbor (aj keby mal niekoľko GB) najprv načítalo do
+    # pamäte a MAX_UPLOAD_SIZE_BYTES by sa overilo až POTOM, na
+    # hotovom bytes objekte (backup_utils._validate_backup_file to
+    # tak doteraz robilo) - to pred veľkým/útočným súborom v
+    # skutočnosti nechránilo vôbec.
+    file_bytes = await read_upload_with_limit(
+        upload,
+        max_bytes=MAX_UPLOAD_SIZE_BYTES,
+        too_large_detail="Nahraný súbor je príliš veľký."
+    )
 
     restore_from_upload(file_bytes)
 
