@@ -9,7 +9,7 @@ from fastapi.exceptions import HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
-from sqlalchemy import func, inspect
+from sqlalchemy import func, inspect, text
 from sqlalchemy.orm import Session, joinedload
 
 
@@ -294,6 +294,35 @@ app.include_router(
 app.include_router(
     company_router
 )
+
+
+# =========================================
+# HEALTH CHECK
+#
+# Verejný (bez prihlásenia) endpoint pre Railway healthcheck
+# (railway.json -> healthcheckPath). Overí, že appka beží A že vie
+# čítať master databázu kont (t. j. že je pripojený disk/volume).
+# Nevracia žiadne dáta o kontách ani o konfigurácii.
+# =========================================
+
+@app.get("/health", include_in_schema=False)
+def health():
+
+    try:
+
+        with accounts_engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+
+    except Exception:
+
+        logger.exception("Health check: databáza kont nie je dostupná")
+
+        return JSONResponse(
+            {"status": "error"},
+            status_code=503
+        )
+
+    return {"status": "ok"}
 
 
 # =========================================

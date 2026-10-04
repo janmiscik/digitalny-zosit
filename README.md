@@ -2,7 +2,7 @@
 
 Webová aplikácia na fakturáciu, cenové ponuky a evidenciu zákazníkov/zákaziek pre remeselníkov a živnostníkov.
 
-Aplikácia je vytvorená v Pythone pomocou FastAPI, SQLAlchemy, Jinja2 a SQLite. Je zámerne **jednopoužívateľská** (jeden živnostník/remeselník na inštanciu appky) - to sa premieta do viacerých architektonických rozhodnutí (napr. globálny rate limiter na prihlásenie namiesto per-IP, jedna sada fakturačných údajov firmy).
+Aplikácia je vytvorená v Pythone pomocou FastAPI, SQLAlchemy, Jinja2 a SQLite. Je **multi-tenant**: každý živnostník/remeselník si cez `/register` vytvorí vlastné konto a má vlastnú, fyzicky oddelenú databázu a súbory (jedna sada fakturačných údajov firmy na konto).
 
 ---
 
@@ -36,33 +36,35 @@ copy .env.example .env
 
 Potom v `.env` nastav:
 
-- **`DATABASE_URL`** – cesta k SQLite súboru (predvolené `sqlite:///./digitalny-zosit.db`). Ak paralelne testuješ viacero verzií appky s rôznymi DB súbormi, **vždy si over tento riadok pred spúšťaním migrácií** - ľahko sa stane, že appka beží nad iným súborom, než si myslíš.
-
-- **`SECRET_KEY`** – náhodný reťazec pre šifrovanie prihlasovacej session:
+- **`SECRET_KEY`** – náhodný reťazec pre podpis prihlasovacej session (povinné, appka bez neho nenaštartuje):
 
   ```powershell
   python -c "import secrets; print(secrets.token_hex(32))"
   ```
 
-- **`ADMIN_USERNAME`** – prihlasovacie meno (predvolené `admin`)
-
-- **`ADMIN_PASSWORD_HASH`** – hash prihlasovacieho hesla, nie samotné heslo:
-
-  ```powershell
-  python -c "from auth import hash_password; print(hash_password('tvoje-heslo'))"
-  ```
-
-  Výstup (celý reťazec `salt$hash`) skopíruj do `.env`.
-
 - **`SESSION_HTTPS_ONLY`** – či sa prihlasovacia cookie posiela iba cez HTTPS (predvolené `true`). Nechaj `true` v produkcii (Railway a pod.). Iba ak appku spúšťaš lokálne cez obyčajné `http://localhost`, nastav na `false` - inak sa neprihlásiš (prehliadač cookie s príznakom `Secure` cez obyčajné http vôbec neuloží).
+
+- **`ACCOUNTS_DATABASE_URL`** – master databáza kont (predvolené `sqlite:///./data/accounts.db`).
+
+- **`ACCOUNTS_DATA_DIR`** – priečinok s dátami jednotlivých kont (predvolené `./data/accounts`).
+
+Appka už **nepoužíva** `ADMIN_USERNAME` ani `ADMIN_PASSWORD_HASH` - používatelia sa registrujú cez `/register` a ich prihlasovacie údaje sú v `accounts.db`.
 
 ### 3. Spusti databázové migrácie
 
+Appka má dva oddelené reťazce migrácií:
+
 ```powershell
-alembic upgrade head
+# 1. master databáza kont (accounts.db) - povinné pred prvým spustením
+alembic -c alembic_accounts.ini upgrade head
+
+# 2. business databázy VŠETKÝCH existujúcich kont (po každej aktualizácii appky)
+python manage_accounts.py --upgrade-all
 ```
 
-Appka **nespúšťa `create_all()` automaticky** - schéma sa spravuje výhradne cez Alembic. Ak migrácie nie sú spustené, appka pri štarte zlyhá s jasnou hláškou (nie tichou nekonzistenciou schémy).
+Nové konto dostane všetky business migrácie automaticky pri registrácii (`tenancy.provision_account`). **Existujúce kontá však novú migráciu pri novej verzii appky automaticky nedostanú** - preto sa `manage_accounts.py --upgrade-all` musí spustiť po každom nasadení s novou migráciou v `alembic/versions/` (v Dockeri/Railway to robí `start.sh` pri každom štarte, viď nižšie). Príkaz je bezpečné púšťať opakovane. `python manage_accounts.py --list` vypíše registrované kontá.
+
+Appka **nespúšťa `create_all()` automaticky** - schéma sa spravuje výhradne cez Alembic. Ak databáza kont nie je zmigrovaná, appka pri štarte zlyhá s jasnou hláškou.
 
 ### 4. Spusti aplikáciu
 
@@ -70,21 +72,43 @@ Appka **nespúšťa `create_all()` automaticky** - schéma sa spravuje výhradne
 uvicorn main:app --reload
 ```
 
-Aplikácia beží na `http://127.0.0.1:8000` a pri prvom vstupe ťa presmeruje na `/login`.
+Aplikácia beží na `http://127.0.0.1:8000`, pri prvom vstupe ťa presmeruje na `/login`. Prvé konto vytvoríš na `/register`.
+
+---
+
+## 🚂 Nasadenie na Railway
+
+Appka sa nasadzuje cez `Dockerfile` (`railway.json` ho vyberie a nastaví healthcheck).
+
+1. **Premenné služby (Variables):** `SECRET_KEY` (povinné) a `SESSION_HTTPS_ONLY=true`. `ACCOUNTS_DATABASE_URL` a `ACCOUNTS_DATA_DIR` sú v Dockerfile už nastavené na `/app/data/...`, netreba ich meniť.
+2. **Volume:** v službe pridaj Volume s **Mount path `/app/data`**. Appka tam ukladá všetko trvalé:
+
+   ```text
+   /app/data/accounts.db                      master databáza kont
+   /app/data/accounts/<konto>/database.db     business dáta konta
+   /app/data/accounts/<konto>/uploads/        logo, podpis, fotky zákaziek
+   /app/data/accounts/<konto>/backups/        zálohy
+   ```
+
+   Bez pripojeného Volume sa **všetky dáta stratia pri každom redeployi**. (Instrukcia `VOLUME` v Dockerfile sa zámerne nepoužíva - Railway ju nepodporuje.)
+3. **Port:** Railway nastavuje premennú `PORT` a appka počúva práve na nej (`start.sh` -> `uvicorn ... --port "${PORT:-8000}"`). Port nezadávaj ručne.
+4. **Štart kontajnera** (`start.sh`) pri každom nasadení: migrácia `accounts.db` -> `manage_accounts.py --upgrade-all` (migrácia všetkých existujúcich kont) -> spustenie appky. Ak zlyhá migrácia, appka sa nespustí a Railway ponechá predošlú verziu.
+5. **Healthcheck:** `GET /health` (bez prihlásenia) vráti `200 {"status":"ok"}`, ak appka beží a číta databázu kont; inak `503`. Nastavený v `railway.json`.
+6. **Jedna replika:** SQLite súbory na Volume nepodporujú viac súbežných inštancií - nechaj 1 repliku.
 
 ---
 
 ## 🔐 Prihlásenie a bezpečnosť
 
-- Jednoduché prihlásenie s jedným admin účtom (session-based, cookie), heslo hashované cez PBKDF2.
+- **Kontá a registrácia** (`/register`, `/login`) – každý používateľ má vlastné konto (`Account` v `accounts.db`: meno, hash hesla, `slug` priečinka), heslo min. 8 znakov hashované cez PBKDF2, session-based prihlásenie (cookie). Dáta kont sú fyzicky oddelené – appka pri obsluhe jedného konta nikdy neotvorí súbor iného (viď `tenancy.py`).
 - HTML stránky vyžadujú prihlásenie – neprihláseného používateľa presmerujú na `/login`. JSON API endpointy vrátia `401 Unauthorized`.
-- **Rate limiting** na `/login` – po 5 zlých pokusoch v priebehu 5 minút sa prihlásenie zamkne na 5 minút (globálne pre appku, keďže appka má vždy len jedného legitímneho používateľa).
+- **Rate limiting** na `/login` – po 5 zlých pokusoch v priebehu 5 minút sa prihlásenie zamkne na 5 minút (kľúčované podľa IP adresy klienta, aby útočník na jedno konto nezamkol všetkým ostatným).
 - Session cookie je kryptograficky podpísaná (`itsdangerous`) – akákoľvek manipulácia s cookie sa odmietne. Cookie sa navyše posiela iba cez HTTPS (`https_only`, konfigurovateľné cez `SESSION_HTTPS_ONLY` - viď sekcia `.env` vyššie).
 - **CSRF ochrana** – všetky formuláre (POST/PUT/PATCH/DELETE) nesú skrytý token naviazaný na session (double-submit pattern); požiadavka bez platného tokenu sa odmietne s `403`.
 - Nahrávané obrázky (logo, podpis, fotky zákaziek) sa overujú podľa **skutočného obsahu súboru** (cez Pillow), nielen podľa prípony – zabraňuje to nahratiu skrytého škodlivého súboru pod príponou `.png`. Zároveň sa kontroluje aj rozlíšenie (max. 40 megapixelov) ako ochrana proti "decompression bomb" útoku (malý súbor, ktorý sa pri dekódovaní rozvinie do enormnej veľkosti v pamäti).
 - Obnova zo zálohy má rovnakú ochranu na úrovni ZIP archívu – pred rozbalením sa overí počet položiek aj ich nekomprimovaná veľkosť (jednotlivo aj spolu), nielen veľkosť nahraného súboru.
 - SQLite má explicitne zapnuté vynucovanie `FOREIGN KEY` obmedzení (`PRAGMA foreign_keys=ON`) – bez tejto pragmy by ich SQLite defaultne ignoroval.
-- **Audit log** (`/audit-log`, odkaz zo stránky Nastavenia) – zaznamenáva dôležité udalosti: vytvorenie/zmazanie/zmenu stavu faktúry a cenovej ponuky, dobropis, konverziu ponuky na faktúru, zmenu fakturačných údajov firmy, obnovu zo zálohy a prihlásenie/odhlásenie. Appka je jednopoužívateľská, takže záznam nesleduje "kto", len "čo a kedy" – pre spätnú dohľadateľnosť.
+- **Audit log** (`/audit-log`, odkaz zo stránky Nastavenia) – zaznamenáva dôležité udalosti: vytvorenie/zmazanie/zmenu stavu faktúry a cenovej ponuky, dobropis, konverziu ponuky na faktúru, zmenu fakturačných údajov firmy, obnovu zo zálohy a prihlásenie/odhlásenie. Audit log je súčasťou databázy každého konta, takže záznam nesleduje "kto", len "čo a kedy" – pre spätnú dohľadateľnosť.
 - **Kontrola integrity dát** (`/settings/integrity-check`, odkaz zo stránky Nastavenia) – porovná databázu (logo, podpis, fotky zákaziek) so súbormi v `uploads/`: nahlási chýbajúce súbory (DB odkazuje na niečo, čo na disku nie je) aj osirotené súbory (súbor na disku, na ktorý sa DB neodkazuje), s možnosťou osirotené súbory rovno zmazať.
 - **Validácia e-mailu, IBAN, IČO, DIČ a IČ DPH** (`validators.py`) – pri zadávaní zákazníka aj vo fakturačných údajoch firmy. E-mail sa overí formátom a normalizuje na malé písmená; IBAN sa overí kontrolným súčtom (mod-97, ISO 13616, funguje pre IBAN akejkoľvek krajiny) aj presnou dĺžkou pre bežné krajiny; slovenské IČO (8 číslic) sa overí kontrolnou číslicou (modulo 11); DIČ a IČ DPH sa overujú len formátom (počet číslic, resp. `SK` + 10 číslic), bez kontrolného súčtu, keďže pre slovenské DIČ žiadny verejne zdokumentovaný nie je. Hodnoty, ktoré nevyzerajú na slovenský formát (zahraniční zákazníci), appka neodmieta – validácia sa cez ne jednoducho preskočí. Rovnaké validátory (v "best-effort" režime, ktorý nikdy nezlyhá na historicky uložených dátach) sa používajú aj pri generovaní Peppol XML a QR platby.
 - **Validácia vygenerovaného Peppol XML** (`peppol_validation.py`) – po vygenerovaní skontroluje vybrané pravidlá EN16931/Peppol BIS Billing 3.0.21 (máj 2026, povinná od 17.8.2026): povinné polia (BR-01 až BR-11, BR-16, BR-21 až BR-26), aritmetickú konzistenciu súčtov (BR-CO-10/13/14/15/17), elektronickú adresu predávajúceho aj odberateľa (PEPPOL-EN16931-R010/R020, BR-62/BR-63, BR-CL-25) a osobitné pravidlá pre prenesenie daňovej povinnosti a nulovú sadzbu DPH (BR-AE-01/02/05/08/09/10, BR-Z-01/02/05/08/09/10). **Nie je to náhrada oficiálnej validácie** (plná Schematron/XSD sada ani úplný EAS číselník nie sú appke k dispozícii) – slúži hlavne ako regresná poistka v testoch a ako nezáväzné upozornenie (hlavička `X-Peppol-Validation-Issues`, záznam do audit logu, a zoznam nálezov priamo na detaile faktúry), export nikdy neblokuje.
@@ -104,6 +128,8 @@ Aplikácia beží na `http://127.0.0.1:8000` a pri prvom vstupe ťa presmeruje n
 | `/faktury` | Zoznam faktúr (vyhľadávanie, filter podľa stavu a obdobia) |
 | `/ponuky` | Zoznam cenových ponúk |
 | `/settings` | Fakturačné údaje firmy, DPH režim, logo/podpis, záloha/obnova databázy |
+| `/register` | Registrácia nového konta |
+| `/health` | Healthcheck pre Railway (verejný, bez prihlásenia) |
 
 ---
 
@@ -162,7 +188,7 @@ Pri vytváraní zákazníka appka vie podľa zadaného IČO automaticky doplniť
 python -m pytest tests/ -q
 ```
 
-Aktuálne **533 testov**, rozdelených podľa oblasti:
+Aktuálne **552 testov**, rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|
@@ -184,6 +210,7 @@ Aktuálne **533 testov**, rozdelených podľa oblasti:
 | `test_backup.py` | Záloha a obnova databázy (izolované na dočasnom súbore), ochrana proti zip bomb, audit log záznam o obnove, kolízia názvu bezpečnostnej zálohy |
 | `test_backup_integrity.py` | `PRAGMA integrity_check` pri tvorbe zálohy aj pri validácii obnovy – poškodená databáza sa odmietne |
 | `test_upload_limit.py` | `uploads_utils.read_upload_with_limit()` – priebežné (nie až na konci) presadzovanie veľkostného limitu pri nahrávaní súboru |
+| `test_deploy.py` | `/health` (OK aj 503), štart na `$PORT`, poradie migrácií v `start.sh`, Dockerfile bez `VOLUME` s dátami v `/app/data`, `manage_accounts --upgrade-all` na existujúcom konte |
 | `test_error_handling.py` | Globálny handler neošetrených (500) chýb – používateľovi sa ukáže všeobecná hláška (nie detail výnimky), zaloguje sa traceback, JSON aj HTML vetva |
 
 Testy bežia proti oddelenej in-memory SQLite databáze (alebo izolovanému dočasnému súboru pri zálohe/obnove) a nikdy nezasahujú do reálnych dát appky. `tests/conftest.py` pre testy vynucuje `SESSION_HTTPS_ONLY=false` (testovací klient beží cez obyčajné `http://`, nie `https://`).
@@ -218,8 +245,9 @@ digitalny-zosit/
 ├── tests/                # pytest, viď sekcia Testy vyššie
 │   └── conftest.py       # SESSION_HTTPS_ONLY=false pre testy (viď sekcia Testy)
 │
-├── uploads/              # logo, podpis, fotky zákaziek (negituje sa)
-├── backups/              # automatické zálohy pred obnovou (negituje sa)
+├── alembic_accounts/     # migrácie master databázy kont (accounts.db)
+│
+├── data/                 # accounts.db + dáta kont (uploads, backups) - negituje sa; na Railway = Volume
 │
 ├── auth.py                 # hashovanie hesla, session, rate limiting
 ├── audit_log.py             # zápis do audit logu (história zmien)
@@ -245,7 +273,15 @@ digitalny-zosit/
 │
 ├── .env.example
 ├── .gitignore
+├── accounts_db.py          # master databáza kont
+├── accounts_models.py      # model Account
+├── manage_accounts.py      # --upgrade-all (migrácia všetkých kont), --list
+├── tenancy.py              # cesty, provisioning a engine jednotlivých kont
+├── start.sh                # štart kontajnera: migrácie + uvicorn na $PORT
+├── Dockerfile
+├── railway.json            # Railway: Dockerfile + healthcheck /health
 ├── alembic.ini
+├── alembic_accounts.ini
 ├── requirements.txt
 └── README.md
 ```
