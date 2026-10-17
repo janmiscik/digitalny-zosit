@@ -2939,3 +2939,230 @@ body::after {
     }
 
 }
+
+/* =========================================
+   MOBIL - OVLÁDANIE PRSTAMI (<= 700 px)
+   ========================================= */
+
+@media (max-width: 700px) {
+
+    /* iOS približuje stránku pri focuse na pole s písmom < 16 px */
+    input,
+    textarea,
+    select {
+        font-size: 16px;
+    }
+
+    /* horná lišta: logo hore, menu pod ním ako posuvný rad;
+       min-width: 0 dovolí radu posúvať sa vo vnútri lišty namiesto
+       toho, aby roztiahol celú stránku do šírky */
+    .topbar {
+        flex-wrap: wrap;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        row-gap: 8px;
+    }
+
+    .topbar-actions {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .topbar:has(.logout-button) .topbar-actions {
+        flex: 1 0 100%;
+
+        padding-bottom: 2px;
+
+        -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+        mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    }
+
+    /* menu s viacerými odkazmi nie je prilepené - zaberalo by dva riadky */
+    .topbar:has(.logout-button) {
+        position: static;
+    }
+
+    .topbar-actions .logout-button,
+    .topbar-actions .back-button {
+        min-height: 40px;
+
+        display: inline-flex;
+        align-items: center;
+    }
+
+    /* väčšie plochy na ťuknutie */
+    .job-filter-chip,
+    .invoice-filter-chip {
+        min-height: 44px;
+
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .save-button,
+    .cancel-button {
+        min-height: 44px;
+    }
+
+    /* mriežky formulárov do jedného stĺpca (dátumové polia majú vlastnú
+       minimálnu šírku a inak pretečú) */
+    form .invoice-form-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    /* tabuľka položiek faktúry/ponuky/dobropisu -> kartička na položku */
+    table.invoice-items-table,
+    table.invoice-items-table tbody {
+        display: block;
+        width: 100%;
+    }
+
+    table.invoice-items-table thead {
+        display: none;
+    }
+
+    table.invoice-items-table tr.invoice-item-row {
+        position: relative;
+
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+
+        margin-bottom: 14px;
+        padding: 14px;
+
+        border: 1px solid var(--border);
+        border-radius: 12px;
+
+        background: var(--surface-secondary);
+    }
+
+    table.invoice-items-table td {
+        display: block;
+
+        min-width: 0;
+        padding: 0;
+    }
+
+    table.invoice-items-table td[data-label]::before {
+        content: attr(data-label);
+
+        display: block;
+
+        margin-bottom: 4px;
+
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-muted);
+    }
+
+    table.invoice-items-table td.invoice-item-description {
+        grid-column: 1 / -1;
+
+        min-width: 0;
+        padding-right: 36px;
+    }
+
+    table.invoice-items-table td:nth-child(5) {
+        grid-column: 1 / -1;
+    }
+
+    table.invoice-items-table td:last-child {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+    }
+
+    table.invoice-items-table td input,
+    table.invoice-items-table td select {
+        min-height: 44px;
+    }
+
+    table.invoice-items-table .invoice-item-remove {
+        min-width: 44px;
+        min-height: 44px;
+
+        font-size: 22px;
+    }
+
+    .add-item-button {
+        min-height: 48px;
+    }
+
+    /* detail faktúry/ponuky (len na čítanie): položka ako kartička */
+    table.invoice-view-table,
+    table.invoice-view-table tbody {
+        display: block;
+        width: 100%;
+    }
+
+    table.invoice-view-table thead {
+        display: none;
+    }
+
+    table.invoice-view-table tr {
+        display: block;
+
+        padding: 10px 0;
+
+        border-bottom: 1px solid var(--border);
+    }
+
+    table.invoice-view-table td,
+    table.invoice-view-table td:not(:first-child) {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+
+        padding: 3px 0;
+
+        border-bottom: none;
+
+        text-align: right;
+    }
+
+    table.invoice-view-table td:first-child {
+        display: block;
+
+        font-weight: 600;
+        text-align: left;
+    }
+
+    table.invoice-view-table td[data-label]:not(:first-child)::before {
+        content: attr(data-label);
+
+        font-size: 12px;
+        color: var(--text-muted);
+        text-align: left;
+    }
+
+    .invoice-meta-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+}
+
+@media (max-width: 700px) {
+
+    /* karty rýchleho prístupu pod sebou, nie dve vedľa seba (pretekali) */
+    .quick-links-section {
+        grid-template-columns: minmax(0, 1fr);
+
+        gap: 12px;
+    }
+
+    .quick-link-info {
+        min-width: 0;
+    }
+
+}
+
+@media (max-width: 700px) {
+
+    /* výberové polia vo formulároch (napr. Spôsob úhrady) na celú šírku */
+    .edit-customer-card select {
+        width: 100%;
+        min-height: 44px;
+    }
+
+}

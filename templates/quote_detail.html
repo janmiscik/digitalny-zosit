@@ -344,12 +344,12 @@
 
                         <tr>
 
-                            <td>{{ item.description }}</td>
-                            <td>{{ item.quantity }}</td>
-                            <td>{{ item.unit }}</td>
-                            <td>{{ "%.2f"|format(item.unit_price) }} €</td>
-                            <td>{{ item.vat_rate }} %</td>
-                            <td>{{ "%.2f"|format(item.quantity * item.unit_price) }} €</td>
+                            <td data-label="Popis">{{ item.description }}</td>
+                            <td data-label="Množ.">{{ item.quantity }}</td>
+                            <td data-label="MJ">{{ item.unit }}</td>
+                            <td data-label="Cena/MJ">{{ "%.2f"|format(item.unit_price) }} €</td>
+                            <td data-label="DPH">{{ item.vat_rate }} %</td>
+                            <td data-label="Spolu">{{ "%.2f"|format(item.quantity * item.unit_price) }} €</td>
 
                         </tr>
 

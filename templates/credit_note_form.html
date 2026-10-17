@@ -185,23 +185,23 @@
 
                             <tr class="invoice-item-row">
 
-                                <td class="invoice-item-description">
+                                <td class="invoice-item-description" data-label="Popis">
                                     <input type="text" name="description" value="{{ item.description }}" required>
                                 </td>
 
-                                <td>
+                                <td data-label="Množ.">
                                     <input type="number" name="quantity" value="{{ item.quantity }}" step="0.01" min="0.01" required>
                                 </td>
 
-                                <td>
+                                <td data-label="MJ">
                                     <input type="text" name="unit" value="{{ item.unit }}">
                                 </td>
 
-                                <td>
+                                <td data-label="Cena/MJ (€)">
                                     <input type="number" name="unit_price" value="{{ item.unit_price }}" step="0.01" min="0" required>
                                 </td>
 
-                                <td>
+                                <td data-label="DPH">
                                     <select name="vat_rate">
                                         <option value="23" {% if item.vat_rate == 23 %}selected{% endif %}>23 %</option>
                                         <option value="19" {% if item.vat_rate == 19 %}selected{% endif %}>19 %</option>
@@ -254,23 +254,23 @@
 
     <tr class="invoice-item-row">
 
-        <td class="invoice-item-description">
+        <td class="invoice-item-description" data-label="Popis">
             <input type="text" name="description" placeholder="Popis položky" required>
         </td>
 
-        <td>
+        <td data-label="Množ.">
             <input type="number" name="quantity" value="1" step="0.01" min="0.01" required>
         </td>
 
-        <td>
+        <td data-label="MJ">
             <input type="text" name="unit" value="ks">
         </td>
 
-        <td>
+        <td data-label="Cena/MJ (€)">
             <input type="number" name="unit_price" value="0" step="0.01" min="0" required>
         </td>
 
-        <td>
+        <td data-label="DPH">
             <select name="vat_rate">
                 <option value="23" selected>23 %</option>
                 <option value="19">19 %</option>

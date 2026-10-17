@@ -125,6 +125,19 @@ Zoznamy faktúr a zákaziek sa dajú zúžiť na jedného zákazníka cez `?cust
 
 ---
 
+## 📱 Mobil
+
+Appka je určená aj na prácu priamo u zákazníka z telefónu (overené na šírkach 390 a 360 px, žiadna stránka nepresahuje do šírky):
+
+- **Horná lišta** na dashboarde: logo hore, menu pod ním ako posuvný rad (s náznakom pokračovania na okraji).
+- **Položky faktúry, ponuky a dobropisu** sa na mobile zobrazujú ako **kartička na položku** (popis, množstvo, MJ, cena, DPH) namiesto širokej tabuľky; tlačidlo `×` aj polia majú plochu aspoň 44 px. Rovnako sa v detaile faktúry/ponuky zobrazujú položky len na čítanie.
+- **Formuláre** majú polia pod sebou na celú šírku; písmo polí je 16 px, aby iOS pri písaní nezväčšoval stránku.
+- **Filtre a tlačidlá** majú dostatočne veľkú plochu na ťuknutie.
+
+Mobilné pravidlá sú na konci `static/style.css` (sekcia „MOBIL - OVLÁDANIE PRSTAMI“). Bunky tabuliek položiek preto nesú atribút `data-label` - ak pridáš nový stĺpec, doplň ho aj tam.
+
+---
+
 ## 🧭 Navigácia
 
 | Cesta | Popis |
@@ -196,7 +209,7 @@ Pri vytváraní zákazníka appka vie podľa zadaného IČO automaticky doplniť
 python -m pytest tests/ -q
 ```
 
-Aktuálne **580 testov**, rozdelených podľa oblasti:
+Aktuálne **588 testov**, rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|
@@ -220,6 +233,7 @@ Aktuálne **580 testov**, rozdelených podľa oblasti:
 | `test_upload_limit.py` | `uploads_utils.read_upload_with_limit()` – priebežné (nie až na konci) presadzovanie veľkostného limitu pri nahrávaní súboru |
 | `test_dashboard.py` | Dashboard – graf tržieb po mesiacoch (okno 6 mesiacov, prelom roka, dobropisy), zoznam faktúr po splatnosti, pás „Vyžaduje pozornosť“ |
 | `test_search.py` | Vyhľadávanie bez ohľadu na diakritiku a veľkosť písmen (faktúry, zákazky, zákazníci), viac slov naraz, filter podľa zákazníka, správne zakódované odkazy filtrov |
+| `test_mobile.py` | Mobilné zobrazenie - viewport meta v každej stránke, popisky buniek tabuliek položiek (pre kartičkové rozloženie), kľúčové mobilné CSS pravidlá |
 | `test_deploy.py` | `/health` (OK aj 503), štart na `$PORT`, poradie migrácií v `start.sh`, Dockerfile bez `VOLUME` s dátami v `/app/data`, `manage_accounts --upgrade-all` na existujúcom konte |
 | `test_error_handling.py` | Globálny handler neošetrených (500) chýb – používateľovi sa ukáže všeobecná hláška (nie detail výnimky), zaloguje sa traceback, JSON aj HTML vetva |
 
