@@ -20,6 +20,9 @@ from pathlib import Path
 
 os.environ.setdefault("SESSION_HTTPS_ONLY", "false")
 
+# automatické zálohy na pozadí sa v testoch nespúšťajú
+os.environ.setdefault("BACKUP_ENABLED", "false")
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import pytest

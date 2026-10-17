@@ -34,6 +34,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 from accounts_db import accounts_engine
+from auto_backup import start_scheduler, stop_scheduler
 from auth import require_login_page
 from dashboard_utils import (
     first_day_of_month_back,
@@ -93,7 +94,17 @@ async def lifespan(app: FastAPI):
             "    alembic -c alembic_accounts.ini upgrade head\n"
         )
 
-    yield
+    # Automatické zálohy kont na pozadí (viď auto_backup.py). Vypnuté v
+    # testoch cez BACKUP_ENABLED=false (tests/conftest.py).
+    start_scheduler()
+
+    try:
+
+        yield
+
+    finally:
+
+        stop_scheduler()
 
 
 # =========================================

@@ -195,6 +195,31 @@ V Nastaveniach (`/settings`):
 - **Stiahnutie zálohy** – konzistentná kópia databázy cez natívne SQLite backup API (bezpečné aj počas behu appky); pred zabalením sa databáza overí cez `PRAGMA integrity_check` – poškodená databáza sa nezálohuje.
 - **Obnova zo zálohy** – validuje sa, že nahraný súbor je skutočne platná záloha tejto appky, vrátane `PRAGMA integrity_check` nad `database.db` v zálohe. Pred obnovou appka automaticky uloží bezpečnostnú kópiu aktuálneho stavu do `backups/` (negituje sa) – názov súboru (`pred-obnovou-RRRRMMDD-HHMMSS.zip`) je odolný voči kolízii: ak by v tej istej sekunde prebehli dve obnovy, druhá bezpečnostná záloha dostane príponu (`-2`, `-3`...) namiesto toho, aby ticho prepísala prvú.
 
+### Automatické zálohy a test obnovy
+
+Appka zálohuje **sama** (vlákno na pozadí, `auto_backup.py`) – každé konto približne raz za 24 hodín. Záloha je ZIP s `database.db` + `uploads/` v `data/accounts/<konto>/backups/`. Každá záloha sa **hneď overí testom obnovy**: rozbalí sa do dočasného priečinka a skontroluje sa CRC všetkých súborov, `PRAGMA integrity_check`, počty záznamov (zákazníci, faktúry, zákazky...) voči stavu pri zálohovaní, prítomnosť všetkých súborov, na ktoré odkazuje databáza (logo, podpis, fotky), a či z nej appka vie čítať cez svoje modely. Záloha, ktorá testom neprejde, sa zmaže a chyba sa ukáže v Nastaveniach.
+
+Druhy záloh a koľko posledných sa drží: `auto` (7), `rucne` (10), `pred-aktualizaciou` (3), `pred-obnovou` (5). Pri zlyhaní sa pokus zopakuje najskôr o hodinu. Pred zápisom sa kontroluje voľné miesto na disku.
+
+Pri každom štarte (`start.sh`) sa kontám, ktorým čaká migrácia schémy, spraví **poistná záloha** `pred-aktualizaciou-*` ešte pred migráciou (zlyhanie zálohy štart nezastaví, len vypíše varovanie).
+
+| Premenná | Predvolene | Význam |
+|---|---|---|
+| `BACKUP_ENABLED` | `true` | `false` vypne automatické zálohy |
+| `BACKUP_INTERVAL_HOURS` | `24` | ako často zálohovať |
+| `BACKUP_KEEP` | `7` | koľko automatických záloh držať |
+| `BACKUP_CHECK_MINUTES` | `30` | ako často plánovač kontroluje, či je záloha na rade |
+| `BACKUP_MIN_FREE_MB` | `200` | minimálna rezerva voľného miesta |
+
+CLI (Railway shell alebo lokálne):
+
+```bash
+python manage_accounts.py --backup-all                 # záloha všetkých kont
+python manage_accounts.py --verify-all                 # test obnovy najnovšej zálohy každého konta
+```
+
+> ⚠️ **Zálohy na tom istom Volume nechránia pred stratou celého Volume.** Chránia pred chybou v appke, omylom zmazanými dátami a pokazenou migráciou. Preto si občas stiahni zálohu aj mimo Railway (Nastavenia → Stiahnuť) a ak to tvoj plán ponúka, zapni aj Railway Volume Backups.
+
 ---
 
 ## 🏢 Registre a auto-doplnenie
@@ -209,7 +234,7 @@ Pri vytváraní zákazníka appka vie podľa zadaného IČO automaticky doplniť
 python -m pytest tests/ -q
 ```
 
-Aktuálne **588 testov**, rozdelených podľa oblasti:
+Aktuálne **622 testov**, rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|
@@ -233,6 +258,7 @@ Aktuálne **588 testov**, rozdelených podľa oblasti:
 | `test_upload_limit.py` | `uploads_utils.read_upload_with_limit()` – priebežné (nie až na konci) presadzovanie veľkostného limitu pri nahrávaní súboru |
 | `test_dashboard.py` | Dashboard – graf tržieb po mesiacoch (okno 6 mesiacov, prelom roka, dobropisy), zoznam faktúr po splatnosti, pás „Vyžaduje pozornosť“ |
 | `test_search.py` | Vyhľadávanie bez ohľadu na diakritiku a veľkosť písmen (faktúry, zákazky, zákazníci), viac slov naraz, filter podľa zákazníka, správne zakódované odkazy filtrov |
+| `test_auto_backup.py` | Automatické zálohy: vytvorenie + test obnovy (poškodený ZIP, chýbajúci súbor, nesedí počet záznamov), retencia, bezpečné názvy a stiahnutie, plánovač, kontrola miesta, poistná záloha pred migráciou, trasy v Nastaveniach |
 | `test_mobile.py` | Mobilné zobrazenie - viewport meta v každej stránke, popisky buniek tabuliek položiek (pre kartičkové rozloženie), kľúčové mobilné CSS pravidlá |
 | `test_deploy.py` | `/health` (OK aj 503), štart na `$PORT`, poradie migrácií v `start.sh`, Dockerfile bez `VOLUME` s dátami v `/app/data`, `manage_accounts --upgrade-all` na existujúcom konte |
 | `test_error_handling.py` | Globálny handler neošetrených (500) chýb – používateľovi sa ukáže všeobecná hláška (nie detail výnimky), zaloguje sa traceback, JSON aj HTML vetva |
@@ -276,6 +302,7 @@ digitalny-zosit/
 ├── auth.py                 # hashovanie hesla, session, rate limiting
 ├── audit_log.py             # zápis do audit logu (história zmien)
 ├── backup_utils.py         # záloha/obnova cez SQLite backup API
+├── auto_backup.py          # automatické zálohy, test obnovy, retencia, plánovač
 ├── csrf.py                  # CSRF ochrana (double-submit token)
 ├── dashboard_utils.py       # graf tržieb po mesiacoch, faktúry po splatnosti pre dashboard
 ├── database.py

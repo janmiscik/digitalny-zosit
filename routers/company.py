@@ -1,7 +1,8 @@
+import logging
 from datetime import date
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -10,9 +11,11 @@ from audit_log import log_action
 from auth import require_login_page
 from database import get_db
 from integrity_check import check_integrity, cleanup_orphan_files
+from auto_backup import backup_file_path, backup_overview, run_backup, verify_existing_backup
 from backup_utils import MAX_UPLOAD_SIZE_BYTES, create_backup_bytes, restore_from_upload
 from invoice_utils import NON_VAT_PAYER_NOTICE
 from models import AuditLog, Company
+import tenancy
 from templates_config import templates
 from validators import (
     validate_dic_format,
@@ -31,6 +34,8 @@ from uploads_utils import (
     stage_image_upload,
 )
 
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(dependencies=[Depends(verify_csrf)])
 
@@ -85,6 +90,21 @@ def get_or_create_company(db: Session) -> Company:
     return company
 
 
+def _backup_overview_or_none(slug: str) -> dict | None:
+    """Prehľad záloh pre Nastavenia. Ak sa nedá zistiť (chyba disku),
+    Nastavenia sa aj tak zobrazia - len bez tejto sekcie."""
+
+    try:
+
+        return backup_overview(slug)
+
+    except Exception:   # noqa: BLE001
+
+        logger.exception("Prehľad záloh sa nepodarilo načítať")
+
+        return None
+
+
 # =========================================
 # NASTAVENIA - FORM
 # =========================================
@@ -113,7 +133,9 @@ def settings_form(
 
             "company": company,
 
-            "NON_VAT_PAYER_NOTICE": NON_VAT_PAYER_NOTICE
+            "NON_VAT_PAYER_NOTICE": NON_VAT_PAYER_NOTICE,
+
+            "backup": _backup_overview_or_none(user)
 
         }
 
@@ -341,6 +363,89 @@ def download_backup(
             "Content-Disposition": f'attachment; filename="{filename}"'
         }
 
+    )
+
+
+@router.get("/settings/backups/{name}")
+def download_stored_backup(
+
+    name: str,
+
+    user: str = Depends(require_login_page)
+
+):
+    """Stiahnutie jednej z uložených (automatických/ručných) záloh. Názov
+    musí presne zodpovedať vzoru zálohy - nedá sa tade čítať iné súbory."""
+
+    path = backup_file_path(user, name)
+
+    if path is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Záloha neexistuje."
+        )
+
+    return FileResponse(
+        path,
+        media_type="application/zip",
+        filename=name
+    )
+
+
+@router.post("/settings/backups/run")
+def run_backup_now(
+
+    db: Session = Depends(get_db),
+
+    user: str = Depends(require_login_page)
+
+):
+    """Okamžitá záloha (s overením obnovy) na požiadanie."""
+
+    result = run_backup(user, "manual")
+
+    log_action(
+        db,
+        "backup.created" if result.ok else "backup.failed",
+        entity_type="backup",
+        detail=result.file if result.ok else result.error
+    )
+
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/settings?backup={'ok' if result.ok else 'failed'}#zalohy",
+        status_code=303
+    )
+
+
+@router.post("/settings/backups/verify")
+def verify_backup_now(
+
+    name: str = Form(""),
+
+    db: Session = Depends(get_db),
+
+    user: str = Depends(require_login_page)
+
+):
+    """Test obnovy nad už existujúcou zálohou (predvolene najnovšou)."""
+
+    result = verify_existing_backup(user, name or None)
+
+    log_action(
+        db,
+        "backup.verified" if result.ok else "backup.verify_failed",
+        entity_type="backup",
+        detail=result.file if result.ok else result.error
+    )
+
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/settings?verify={'ok' if result.ok else 'failed'}#zalohy",
+        status_code=303
     )
 
 

@@ -176,7 +176,16 @@ def create_backup_bytes() -> bytes:
 
     zip_buffer = io.BytesIO()
 
-    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+    _write_backup_zip(zip_buffer, db_bytes)
+
+    return zip_buffer.getvalue()
+
+
+def _write_backup_zip(target, db_bytes: bytes) -> None:
+    """Zapíše obsah zálohy (database.db + uploads/) do ZIP-u `target`
+    (súbor alebo BytesIO). Spoločné pre stiahnutie aj automatické zálohy."""
+
+    with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as zf:
 
         zf.writestr("database.db", db_bytes)
 
@@ -192,7 +201,89 @@ def create_backup_bytes() -> bytes:
 
                     zf.write(file_path, arcname)
 
-    return zip_buffer.getvalue()
+
+# Tabuľky, ktorých počty riadkov sa porovnávajú pri overení zálohy
+# (záloha vs. stav databázy v okamihu zálohovania).
+COUNTED_TABLES = ("customers", "jobs", "invoices", "invoice_items", "quotes", "job_photos")
+
+
+def table_counts_from_connection(conn: sqlite3.Connection) -> dict[str, int]:
+    """Počty riadkov vo vybraných tabuľkách (chýbajúce tabuľky sa preskočia)."""
+
+    existing = {
+        row[0]
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        )
+    }
+
+    return {
+        table: conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+        for table in COUNTED_TABLES
+        if table in existing
+    }
+
+
+def table_counts_from_db_bytes(db_bytes: bytes) -> dict[str, int]:
+    """Rovnaké ako table_counts_from_connection, nad SQLite súborom v pamäti."""
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+
+        tmp.write(db_bytes)
+        tmp_path = Path(tmp.name)
+
+    try:
+
+        conn = sqlite3.connect(str(tmp_path))
+
+        try:
+            return table_counts_from_connection(conn)
+
+        finally:
+            conn.close()
+
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
+def write_backup_to_file(destination: Path) -> dict[str, int]:
+    """
+    Vytvorí kompletnú zálohu AKTUÁLNEHO konta (databáza + uploads/)
+    priamo do súboru `destination` (bez držania celého ZIPu v pamäti)
+    a vráti počty riadkov z databázovej snímky - na neskoršie
+    porovnanie pri overení zálohy.
+
+    Zapisuje sa do dočasného súboru `.part` a až po úspešnom dokončení
+    sa premenuje - nedokončená záloha (pád, plný disk) tak nikdy
+    neskončí pod "platným" názvom.
+    """
+
+    db_path = _sqlite_file_path()
+
+    if not db_path.exists():
+
+        raise FileNotFoundError("Databázový súbor konta neexistuje.")
+
+    db_bytes = _create_db_snapshot_bytes(db_path)
+
+    counts = table_counts_from_db_bytes(db_bytes)
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+
+    partial = destination.with_name(destination.name + ".part")
+
+    try:
+
+        with open(partial, "wb") as target:
+            _write_backup_zip(target, db_bytes)
+
+        os.replace(partial, destination)
+
+    finally:
+
+        partial.unlink(missing_ok=True)
+
+    return counts
 
 
 def save_automatic_backup() -> Path:

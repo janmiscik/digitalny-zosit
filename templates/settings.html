@@ -362,6 +362,117 @@
 
 
         <!-- =====================================
+             AUTOMATICKÉ ZÁLOHY
+             ===================================== -->
+
+        {% if backup %}
+
+        <div class="edit-customer-card" id="zalohy">
+
+            <h2 style="margin-top: 0;">
+                Automatické zálohy
+            </h2>
+
+            {% if request.query_params.get('backup') == 'ok' %}
+                <div class="backup-notice backup-notice-ok">✅ Záloha bola vytvorená a overená.</div>
+            {% elif request.query_params.get('backup') == 'failed' %}
+                <div class="backup-notice backup-notice-bad">⚠️ Zálohu sa nepodarilo vytvoriť - pozri upozornenie nižšie.</div>
+            {% endif %}
+
+            {% if request.query_params.get('verify') == 'ok' %}
+                <div class="backup-notice backup-notice-ok">✅ Test obnovy prebehol v poriadku.</div>
+            {% elif request.query_params.get('verify') == 'failed' %}
+                <div class="backup-notice backup-notice-bad">⚠️ Test obnovy zlyhal - pozri podrobnosti nižšie.</div>
+            {% endif %}
+
+            {% for warning in backup.warnings %}
+                <div class="backup-notice backup-notice-bad">⚠️ {{ warning }}</div>
+            {% endfor %}
+
+            <p style="color: var(--text-muted); font-size: 0.9em;">
+                Appka vytvára zálohu automaticky približne každých
+                {{ backup.interval_hours }} h a drží posledných {{ backup.keep }}.
+                Každú zálohu hneď overí testom obnovy (rozbalí ju, skontroluje
+                databázu, počty záznamov a nahraté súbory).
+            </p>
+
+            <p style="font-size: 0.95em;">
+                <strong>Posledná záloha:</strong> {{ backup.last_success_at }}<br>
+
+                {% if backup.verification %}
+                    <strong>Test obnovy:</strong>
+                    {% if backup.verification.ok %}✅ v poriadku{% else %}❌ zlyhal{% endif %}
+                    ({{ backup.verification.at_display }}, {{ backup.verification.file }})
+                    <br>
+                    {% if backup.verification.counts %}
+                        <span style="color: var(--text-muted); font-size: 0.9em;">
+                            zákazníci {{ backup.verification.counts.get('customers', 0) }},
+                            zákazky {{ backup.verification.counts.get('jobs', 0) }},
+                            faktúry {{ backup.verification.counts.get('invoices', 0) }},
+                            ponuky {{ backup.verification.counts.get('quotes', 0) }},
+                            súbory v zálohe skontrolované: {{ backup.verification.files_checked }}
+                        </span>
+                    {% endif %}
+                {% endif %}
+            </p>
+
+            <div class="backup-actions">
+
+                <form action="/settings/backups/run" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                    <button type="submit" class="save-button">💾 Zálohovať teraz</button>
+                </form>
+
+                <form action="/settings/backups/verify" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                    <button type="submit" class="cancel-button">🧪 Otestovať najnovšiu zálohu</button>
+                </form>
+
+            </div>
+
+            {% if backup.backups %}
+
+                <div class="backup-list">
+
+                    {% for item in backup.backups %}
+
+                        <div class="backup-row">
+
+                            <div class="backup-row-main">
+                                <strong>{{ item.created_display }}</strong>
+                                <span class="backup-row-meta">{{ item.label }} · {{ item.size_mb }} MB</span>
+                            </div>
+
+                            <a href="/settings/backups/{{ item.name }}" class="cancel-button backup-row-download">
+                                Stiahnuť
+                            </a>
+
+                        </div>
+
+                    {% endfor %}
+
+                </div>
+
+                <p style="color: var(--text-muted); font-size: 0.85em;">
+                    Zálohy spolu zaberajú {{ backup.total_size_mb }} MB
+                    {% if backup.free_mb is not none %}(na disku zostáva {{ backup.free_mb }} MB){% endif %}.
+                </p>
+
+            {% endif %}
+
+            <p style="color: var(--text-muted); font-size: 0.85em;">
+                ⚠️ Tieto zálohy sú na tom istom disku ako dáta - chránia pred
+                chybou, zmazaním či zlou aktualizáciou, ale nie pred stratou
+                celého disku. Čas od času si preto stiahni zálohu aj mimo
+                Railway (tlačidlo nižšie alebo „Stiahnuť“ pri zálohe).
+            </p>
+
+        </div>
+
+        {% endif %}
+
+
+        <!-- =====================================
              ZÁLOHA / OBNOVA DATABÁZY
              ===================================== -->
 

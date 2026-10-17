@@ -8,6 +8,12 @@ set -e
 # 1. Master databáza kont (accounts.db)
 alembic -c alembic_accounts.ini upgrade head
 
+# 1b. Poistná záloha kont, ktorým čaká migrácia schémy (ak by migrácia
+#     pokazila dáta, je z čoho obnoviť). Zlyhanie zálohy nezastaví štart -
+#     varovanie je v logu (a appka zálohuje aj sama, viď auto_backup.py).
+python manage_accounts.py --backup-all --kind pre-upgrade --only-if-migration-pending \
+    || echo "VAROVANIE: poistná záloha pred migráciou zlyhala - pozri výpis vyššie."
+
 # 2. Business databázy VŠETKÝCH existujúcich kont. Nové konto dostane
 #    migrácie automaticky pri registrácii, ale pri novej verzii appky by
 #    existujúce kontá novú migráciu nedostali - tento krok to rieši.

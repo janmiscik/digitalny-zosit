@@ -21,6 +21,7 @@ Priečinková štruktúra (ACCOUNTS_DATA_DIR, predvolene ./data/accounts):
 """
 
 import re
+from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
 from threading import Lock
@@ -228,6 +229,59 @@ def get_current_tenant() -> str:
         )
 
     return slug
+
+
+@contextmanager
+def tenant_context(slug: str):
+    """
+    Dočasne nastaví aktuálne konto (mimo HTTP požiadavky) - používa sa
+    pri práci na pozadí (automatické zálohy) a v CLI skriptoch, kde
+    neexistuje prihlásený používateľ, ktorý by konto nastavil.
+    Po skončení vráti pôvodný stav.
+    """
+
+    token = _current_tenant.set(slug)
+
+    try:
+        yield
+
+    finally:
+        _current_tenant.reset(token)
+
+
+def account_needs_migration(slug: str) -> bool:
+    """
+    True, ak databáza konta nie je na poslednej business migrácii
+    (alebo ešte nemá tabuľku alembic_version). Slúži na rozhodnutie,
+    či treba pred `upgrade_account_database` spraviť poistnú zálohu.
+    Neexistujúci súbor databázy sa nepovažuje za "potrebuje migráciu"
+    (nie je čo zálohovať).
+    """
+
+    from alembic.runtime.migration import MigrationContext
+    from alembic.script import ScriptDirectory
+
+    db_path = account_database_path(slug)
+
+    if not db_path.exists():
+        return False
+
+    cfg = Config(str(PROJECT_ROOT / "alembic.ini"))
+    cfg.set_main_option("script_location", str(PROJECT_ROOT / "alembic"))
+
+    head = ScriptDirectory.from_config(cfg).get_current_head()
+
+    engine = create_engine(account_database_url(slug))
+
+    try:
+
+        with engine.connect() as connection:
+            current = MigrationContext.configure(connection).get_current_revision()
+
+    finally:
+        engine.dispose()
+
+    return current != head
 
 
 def discard_account_engine(slug: str) -> None:

@@ -3166,3 +3166,76 @@ body::after {
     }
 
 }
+
+/* =========================================
+   AUTOMATICKÉ ZÁLOHY (Nastavenia)
+   ========================================= */
+
+.backup-notice {
+    margin-bottom: 12px;
+    padding: 10px 14px;
+
+    border-radius: 8px;
+    border: 1px solid var(--border);
+
+    font-size: 14px;
+}
+
+.backup-notice-ok {
+    border-color: #66bb6a;
+    background: rgba(102, 187, 106, 0.12);
+}
+
+.backup-notice-bad {
+    border-color: var(--danger);
+    background: rgba(166, 58, 46, 0.08);
+}
+
+.backup-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+
+    margin: 14px 0 18px;
+}
+
+.backup-actions form {
+    margin: 0;
+}
+
+.backup-list {
+    margin: 8px 0 12px;
+}
+
+.backup-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+
+    padding: 10px 0;
+
+    border-top: 1px solid var(--border);
+}
+
+.backup-row-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    font-size: 14px;
+}
+
+.backup-row-meta {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.backup-row-download {
+    flex-shrink: 0;
+
+    display: inline-flex;
+    align-items: center;
+
+    text-decoration: none;
+}
