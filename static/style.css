@@ -2867,3 +2867,75 @@ body::after {
     }
 
 }
+
+/* =========================================
+   FORMULÁR VYHĽADÁVANIA V ZOZNAMOCH (faktúry, zákazky)
+   ========================================= */
+
+.list-filter-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: flex-end;
+
+    margin-bottom: 16px;
+}
+
+.list-filter-field {
+    flex: 1 1 140px;
+    min-width: 0;
+}
+
+.list-filter-field-wide {
+    flex: 3 1 240px;
+}
+
+.list-filter-field label {
+    display: block;
+
+    margin-bottom: 4px;
+
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.list-filter-field input {
+    width: 100%;
+    height: 44px;
+
+    padding: 0 14px;
+
+    border: 1px solid var(--border);
+    border-radius: 10px;
+
+    background: var(--surface);
+    color: var(--text);
+
+    font-size: 15px;
+    font-family: inherit;
+
+    box-shadow: var(--shadow-sm);
+}
+
+.list-filter-field input:focus {
+    outline: none;
+
+    border-color: var(--text-secondary);
+}
+
+.list-filter-field input::placeholder {
+    color: var(--text-muted);
+}
+
+.list-filter-form .save-button,
+.list-filter-form .cancel-button {
+    height: 44px;
+}
+
+@media (max-width: 700px) {
+
+    .list-filter-field-wide {
+        flex-basis: 100%;
+    }
+
+}

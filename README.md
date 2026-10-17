@@ -117,15 +117,23 @@ Appka sa nasadzuje cez `Dockerfile` (`railway.json` ho vyberie a nastaví health
 
 ---
 
+## 🔎 Vyhľadávanie
+
+Hľadanie v zákazníkoch, zákazkách a faktúrach funguje **bez ohľadu na diakritiku a veľkosť písmen** (`simon` nájde `Šimon`) a hľadá sa **každé zadané slovo samostatne** (`novak kotol` nájde zákazníka Novák s položkou o kotle, poradie slov nezáleží). SQLite `LIKE` porovnáva bez ohľadu na veľkosť písmen len ASCII, preto sa hľadanie robí v Pythone (`search_utils.py`) nad záznamami už zúženými filtrom stavu/obdobia - pre objem dát jedného remeselníka je to dostatočne rýchle.
+
+Zoznamy faktúr a zákaziek sa dajú zúžiť na jedného zákazníka cez `?customer_id=<id>` a odkazy filtrov zachovávajú všetky ostatné aktívne filtre.
+
+---
+
 ## 🧭 Navigácia
 
 | Cesta | Popis |
 |---|---|
 | `/` | Dashboard – pás „Vyžaduje pozornosť“, financie (Na inkaso, Po splatnosti, tržby vs. minulý mesiac), graf príjmov za 6 mesiacov, faktúry po splatnosti, termíny, posledné zákazky |
-| `/zakaznici` | Zoznam zákazníkov (vyhľadávanie, pridanie, auto-doplnenie podľa IČO) |
-| `/zakazky` | Zoznam zákaziek (filter podľa stavu/termínu) |
+| `/zakaznici` | Zoznam zákazníkov (vyhľadávanie podľa mena, telefónu, e-mailu, mesta, IČO; pridanie, auto-doplnenie podľa IČO) |
+| `/zakazky` | Zoznam zákaziek (hľadanie podľa názvu, popisu, zákazníka; filter podľa stavu, termínu a zákazníka `?customer_id=`) |
 | `/kalendar` | Mesačný kalendár zákaziek podľa termínu realizácie |
-| `/faktury` | Zoznam faktúr (vyhľadávanie, filter podľa stavu a obdobia) |
+| `/faktury` | Zoznam faktúr (hľadanie podľa čísla, zákazníka, IČO, položky, poznámky; filter podľa stavu, obdobia a zákazníka `?customer_id=`) |
 | `/ponuky` | Zoznam cenových ponúk |
 | `/settings` | Fakturačné údaje firmy, DPH režim, logo/podpis, záloha/obnova databázy |
 | `/register` | Registrácia nového konta |
@@ -188,7 +196,7 @@ Pri vytváraní zákazníka appka vie podľa zadaného IČO automaticky doplniť
 python -m pytest tests/ -q
 ```
 
-Aktuálne **562 testov**, rozdelených podľa oblasti:
+Aktuálne **580 testov**, rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|
@@ -211,6 +219,7 @@ Aktuálne **562 testov**, rozdelených podľa oblasti:
 | `test_backup_integrity.py` | `PRAGMA integrity_check` pri tvorbe zálohy aj pri validácii obnovy – poškodená databáza sa odmietne |
 | `test_upload_limit.py` | `uploads_utils.read_upload_with_limit()` – priebežné (nie až na konci) presadzovanie veľkostného limitu pri nahrávaní súboru |
 | `test_dashboard.py` | Dashboard – graf tržieb po mesiacoch (okno 6 mesiacov, prelom roka, dobropisy), zoznam faktúr po splatnosti, pás „Vyžaduje pozornosť“ |
+| `test_search.py` | Vyhľadávanie bez ohľadu na diakritiku a veľkosť písmen (faktúry, zákazky, zákazníci), viac slov naraz, filter podľa zákazníka, správne zakódované odkazy filtrov |
 | `test_deploy.py` | `/health` (OK aj 503), štart na `$PORT`, poradie migrácií v `start.sh`, Dockerfile bez `VOLUME` s dátami v `/app/data`, `manage_accounts --upgrade-all` na existujúcom konte |
 | `test_error_handling.py` | Globálny handler neošetrených (500) chýb – používateľovi sa ukáže všeobecná hláška (nie detail výnimky), zaloguje sa traceback, JSON aj HTML vetva |
 
@@ -266,6 +275,7 @@ digitalny-zosit/
 ├── models.py                # SQLAlchemy modely
 ├── peppol_xml.py            # export do Peppol BIS 3.0.21 XML formátu
 ├── peppol_validation.py      # kontrola vygenerovaného Peppol XML (BR-01.., BR-CO-10.., BR-AE-.., BR-Z-..)
+├── search_utils.py          # hľadanie bez diakritiky a veľkosti písmen (fold, matches_search)
 ├── qr_payment.py             # QR platobný kód (PAY by square)
 ├── quote_pdf.py               # generovanie PDF cenových ponúk
 ├── schemas.py                  # Pydantic modely (validácia)

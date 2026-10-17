@@ -96,7 +96,7 @@
             <input
                 type="search"
                 id="customerSearch"
-                placeholder="🔎  Hľadať zákazníka..."
+                placeholder="🔎  Hľadať: meno, telefón, e-mail, mesto, IČO..."
                 autocomplete="off"
             >
 
@@ -118,6 +118,9 @@
                         data-customer-phone="{{ customer.phone | default('', true) | lower }}"
                         data-customer-email="{{ customer.email | default('', true) | lower }}"
                         data-customer-address="{{ customer.address | default('', true) | lower }}"
+                        data-customer-city="{{ customer.city | default('', true) | lower }}"
+                        data-customer-ico="{{ customer.ico | default('', true) }}"
+                        data-customer-note="{{ customer.note | default('', true) | lower }}"
                     >
 
                         <div class="customer-icon">
@@ -685,16 +688,31 @@ const customerSearch =
     );
 
 
+function foldText(value) {
+
+    return (value || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .trim();
+
+}
+
+
 if (customerSearch) {
 
     customerSearch.addEventListener(
         "input",
         function() {
 
-            const searchText =
-                this.value
-                    .toLowerCase()
-                    .trim();
+            // Bez ohľadu na veľkosť písmen aj diakritiku ("simon" nájde
+            // "Šimon"); viac slov sa hľadá nezávisle (poradie nezáleží).
+            const searchText = foldText(this.value);
+
+            const searchWords =
+                searchText
+                    .split(/\s+/)
+                    .filter(Boolean);
 
 
             const customerCards =
@@ -731,19 +749,22 @@ if (customerSearch) {
                         card.dataset.customerAddress || "";
 
 
-                    const searchableText =
-                        name +
-                        " " +
-                        phone +
-                        " " +
-                        email +
-                        " " +
-                        address;
+                    const searchableText = foldText(
+                        name + " " +
+                        phone + " " +
+                        email + " " +
+                        address + " " +
+                        (card.dataset.customerCity || "") + " " +
+                        (card.dataset.customerIco || "") + " " +
+                        (card.dataset.customerNote || "")
+                    );
 
 
                     if (
-                        searchableText.includes(
-                            searchText
+                        searchWords.every(
+                            function(word) {
+                                return searchableText.includes(word);
+                            }
                         )
                     ) {
 

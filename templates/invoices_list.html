@@ -166,44 +166,57 @@
         <form
             method="get"
             action="/faktury"
-            style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 16px;"
+            class="list-filter-form"
         >
 
             {% if selected_status %}
                 <input type="hidden" name="status" value="{{ selected_status }}">
             {% endif %}
 
-            <div style="flex: 2; min-width: 200px;">
-                <label style="font-size: 12px; color: var(--text-muted);">Hľadať</label>
+            {% if customer_id is not none %}
+                <input type="hidden" name="customer_id" value="{{ customer_id }}">
+            {% endif %}
+
+            <div class="list-filter-field list-filter-field-wide">
+                <label>Hľadať</label>
                 <input
                     type="text"
                     name="q"
                     value="{{ search_query or '' }}"
-                    placeholder="Číslo faktúry, zákazník, poznámka..."
+                    placeholder="Číslo, zákazník, IČO, položka, poznámka..."
+                    enterkeyhint="search"
+                    autocomplete="off"
                 >
             </div>
 
-            <div style="min-width: 140px;">
-                <label style="font-size: 12px; color: var(--text-muted);">Od</label>
+            <div class="list-filter-field">
+                <label>Od</label>
                 <input type="date" name="date_from" value="{{ date_from }}">
             </div>
 
-            <div style="min-width: 140px;">
-                <label style="font-size: 12px; color: var(--text-muted);">Do</label>
+            <div class="list-filter-field">
+                <label>Do</label>
                 <input type="date" name="date_to" value="{{ date_to }}">
             </div>
 
-            <button type="submit" class="save-button" style="height: 42px;">
+            <button type="submit" class="save-button">
                 Filtrovať
             </button>
 
-            {% if search_query or date_from or date_to %}
-                <a href="/faktury{% if selected_status %}?status={{ selected_status }}{% endif %}" class="cancel-button" style="height: 42px; display: inline-flex; align-items: center;">
+            {% if has_active_filters %}
+                <a href="/faktury{% if selected_status %}?status={{ selected_status | urlencode }}{% endif %}" class="cancel-button" style="display: inline-flex; align-items: center;">
                     Zrušiť filter
                 </a>
             {% endif %}
 
         </form>
+
+        {% if filtered_customer %}
+            <p style="margin-bottom: 12px; font-size: 14px;">
+                Zákazník: <strong>{{ filtered_customer.name }}</strong>
+                <a href="/faktury" style="margin-left: 8px;">✕ zrušiť</a>
+            </p>
+        {% endif %}
 
 
         <!-- =====================================
@@ -213,7 +226,7 @@
         <div class="invoice-filter-row">
 
             <a
-                href="/faktury?{% if search_query %}q={{ search_query }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}"
+                href="{{ status_urls[''] }}"
                 class="invoice-filter-chip {% if not selected_status %}active{% endif %}"
             >
                 Všetky
@@ -222,7 +235,7 @@
             {% for status_option in statuses %}
 
                 <a
-                    href="/faktury?status={{ status_option.value }}{% if search_query %}&q={{ search_query }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}"
+                    href="{{ status_urls[status_option.value] }}"
                     class="invoice-filter-chip {% if selected_status == status_option.value %}active{% endif %}"
                 >
                     {{ status_option.value }}

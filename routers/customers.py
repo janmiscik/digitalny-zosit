@@ -4,7 +4,6 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from pydantic import ValidationError
-from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from csrf import verify_csrf
@@ -14,6 +13,7 @@ from ico_lookup import lookup_company_by_ico
 from invoice_utils import calculate_invoice_totals, signed_invoice_total
 from models import Customer
 from schemas import CustomerCreate, CustomerRead, CustomerUpdate, InvoiceStatus
+from search_utils import matches_search
 from templates_config import templates
 
 
@@ -476,22 +476,28 @@ def get_customers(
 
 ):
 
-    query = db.query(Customer)
+    customers = (
+        db
+        .query(Customer)
+        .order_by(Customer.name.asc())
+        .all()
+    )
 
 
+    # Bez ohľadu na diakritiku a veľkosť písmen (viď search_utils.py).
     if search is not None:
 
-        search_value = f"%{search}%"
-
-        query = query.filter(
-            or_(
-                Customer.name.ilike(search_value),
-                Customer.phone.ilike(search_value),
-                Customer.email.ilike(search_value)
+        customers = [
+            customer
+            for customer in customers
+            if matches_search(
+                search,
+                customer.name,
+                customer.phone,
+                customer.email,
+                customer.ico
             )
-        )
+        ]
 
 
-    return query.order_by(
-        Customer.name.asc()
-    ).all()
+    return customers

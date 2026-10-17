@@ -1,4 +1,5 @@
 from datetime import date
+from urllib.parse import urlencode
 from decimal import Decimal, InvalidOperation
 import calendar as calendar_module
 
@@ -13,6 +14,7 @@ from database import get_db
 from invoice_utils import CLOSED_INVOICE_STATUSES, calculate_invoice_totals, signed_invoice_total
 from models import Customer, Job, JobCost, JobPhoto
 from schemas import InvoiceStatus, JobCreate, JobRead, JobStatus, JobUpdate
+from search_utils import matches_search
 from templates_config import templates
 from uploads_utils import delete_job_photo, job_photo_path, save_job_photo_upload
 
@@ -59,6 +61,10 @@ def jobs_list_page(
 
     when: str | None = None,
 
+    q: str | None = None,
+
+    customer_id: int | None = None,
+
     db: Session = Depends(get_db),
 
     user: str = Depends(require_login_page)
@@ -100,10 +106,76 @@ def jobs_list_page(
         )
 
 
+    if customer_id is not None:
+
+        query = query.filter(
+            Job.customer_id == customer_id
+        )
+
+
     jobs = query.order_by(
         Job.due_date.is_(None),
         Job.due_date.asc()
     ).all()
+
+
+    # Vyhľadávanie - názov, popis, zákazník (meno, IČO, telefón).
+    # Bez ohľadu na diakritiku a veľkosť písmen (viď search_utils.py).
+    search_term = " ".join((q or "").split())
+
+    if search_term:
+
+        jobs = [
+            job
+            for job in jobs
+            if matches_search(
+                search_term,
+                job.title,
+                job.description,
+                job.customer.name if job.customer else "",
+                job.customer.ico if job.customer else "",
+                job.customer.phone if job.customer else ""
+            )
+        ]
+
+
+    # Odkazy filtrov zachovávajú všetky ostatné filtre a sú správne
+    # URL-zakódované.
+    def list_url(**overrides):
+
+        params = {
+            "status": status,
+            "when": when,
+            "q": search_term or None,
+            "customer_id": customer_id,
+        }
+
+        params.update(overrides)
+
+        params = {
+            key: value
+            for key, value in params.items()
+            if value not in (None, "")
+        }
+
+        return "/zakazky" + ("?" + urlencode(params) if params else "")
+
+    status_urls = {
+        status_option.value: list_url(status=status_option.value)
+        for status_option in JobStatus
+    }
+
+    status_urls[""] = list_url(status=None)
+
+    when_urls = {
+        "": list_url(when=None),
+        "overdue": list_url(when="overdue"),
+        "no_date": list_url(when="no_date"),
+    }
+
+    filtered_customer = (
+        db.get(Customer, customer_id) if customer_id is not None else None
+    )
 
 
     return templates.TemplateResponse(
@@ -121,6 +193,20 @@ def jobs_list_page(
             "selected_status": status,
 
             "selected_when": when,
+
+            "search_query": search_term,
+
+            "customer_id": customer_id,
+
+            "filtered_customer": filtered_customer,
+
+            "status_urls": status_urls,
+
+            "when_urls": when_urls,
+
+            "has_active_filters": bool(
+                status or when or search_term or customer_id is not None
+            ),
 
             "today": today
 

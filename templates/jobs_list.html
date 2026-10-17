@@ -153,13 +153,67 @@
 
 
         <!-- =====================================
+             VYHĽADÁVANIE
+             ===================================== -->
+
+        <form
+            method="get"
+            action="/zakazky"
+            class="list-filter-form"
+        >
+
+            {% if selected_status %}
+                <input type="hidden" name="status" value="{{ selected_status }}">
+            {% endif %}
+
+            {% if selected_when %}
+                <input type="hidden" name="when" value="{{ selected_when }}">
+            {% endif %}
+
+            {% if customer_id is not none %}
+                <input type="hidden" name="customer_id" value="{{ customer_id }}">
+            {% endif %}
+
+            <div class="list-filter-field list-filter-field-wide">
+                <label>Hľadať</label>
+                <input
+                    type="search"
+                    name="q"
+                    value="{{ search_query or '' }}"
+                    placeholder="Názov, popis, zákazník, IČO..."
+                    enterkeyhint="search"
+                    autocomplete="off"
+                >
+            </div>
+
+            <button type="submit" class="save-button">
+                Hľadať
+            </button>
+
+            {% if has_active_filters %}
+                <a href="/zakazky" class="cancel-button" style="display: inline-flex; align-items: center;">
+                    Zrušiť filter
+                </a>
+            {% endif %}
+
+        </form>
+
+        {% if filtered_customer %}
+            <p style="margin-bottom: 12px; font-size: 14px;">
+                Zákazník: <strong>{{ filtered_customer.name }}</strong>
+                <a href="/zakazky" style="margin-left: 8px;">✕ zrušiť</a>
+            </p>
+        {% endif %}
+
+
+        <!-- =====================================
              FILTER PODĽA STAVU
              ===================================== -->
 
         <div class="job-filter-row">
 
             <a
-                href="/zakazky{{ '?when=' ~ selected_when if selected_when else '' }}"
+                href="{{ status_urls[''] }}"
                 class="job-filter-chip {% if not selected_status %}active{% endif %}"
             >
                 Všetky
@@ -168,7 +222,7 @@
             {% for status_option in statuses %}
 
                 <a
-                    href="/zakazky?status={{ status_option.value }}{{ '&when=' ~ selected_when if selected_when else '' }}"
+                    href="{{ status_urls[status_option.value] }}"
                     class="job-filter-chip {% if selected_status == status_option.value %}active{% endif %}"
                 >
                     {{ status_option.value }}
@@ -186,14 +240,14 @@
         <div class="job-filter-row">
 
             <a
-                href="/zakazky{{ '?status=' ~ selected_status if selected_status else '' }}"
+                href="{{ when_urls[''] }}"
                 class="job-filter-chip {% if not selected_when %}active{% endif %}"
             >
                 Všetky termíny
             </a>
 
             <a
-                href="/zakazky?when=overdue{{ '&status=' ~ selected_status if selected_status else '' }}"
+                href="{{ when_urls['overdue'] }}"
                 class="job-filter-chip {% if selected_when == 'overdue' %}active{% endif %}"
                 style="{% if selected_when == 'overdue' %}background: var(--danger); border-color: var(--danger); color: var(--surface);{% endif %}"
             >
@@ -201,7 +255,7 @@
             </a>
 
             <a
-                href="/zakazky?when=no_date{{ '&status=' ~ selected_status if selected_status else '' }}"
+                href="{{ when_urls['no_date'] }}"
                 class="job-filter-chip {% if selected_when == 'no_date' %}active{% endif %}"
             >
                 Bez termínu
@@ -289,7 +343,11 @@
 
                 <h2>
 
-                    {% if selected_status %}
+                    {% if search_query %}
+
+                        Nič sa nenašlo pre "{{ search_query }}"
+
+                    {% elif selected_status %}
 
                         Žiadne zákazky v stave "{{ selected_status }}"
 

@@ -1,8 +1,9 @@
 from datetime import date, timedelta
 
+from urllib.parse import urlencode
+
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse, Response
-from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from csrf import verify_csrf
@@ -34,6 +35,7 @@ from routers.company import get_or_create_company
 from peppol_xml import generate_peppol_xml
 from peppol_validation import validate_peppol_invoice_xml
 from schemas import InvoiceItemCreate, InvoiceRead, InvoiceStatus
+from search_utils import matches_search
 from templates_config import templates
 
 
@@ -93,6 +95,8 @@ def invoices_list_page(
 
     date_to: str | None = None,
 
+    customer_id: int | None = None,
+
     db: Session = Depends(get_db),
 
     user: str = Depends(require_login_page)
@@ -110,6 +114,12 @@ def invoices_list_page(
 
     )
 
+    if customer_id is not None:
+
+        query = query.filter(
+            Invoice.customer_id == customer_id
+        )
+
     if status is not None and status != InvoiceStatus.OVERDUE.value:
 
         query = query.filter(
@@ -117,21 +127,12 @@ def invoices_list_page(
         )
 
 
-    # Vyhľadávanie - číslo faktúry, meno zákazníka alebo poznámka.
-    # Jednoduché LIKE vyhľadávanie (nie fulltext) - appke stačí pre
-    # bežný objem faktúr jedného remeselníka/živnostníka.
-    search_term = (q or "").strip()
-
-    if search_term:
-
-        query = query.join(Invoice.customer).filter(
-            or_(
-                Invoice.invoice_number.ilike(f"%{search_term}%"),
-                Customer.name.ilike(f"%{search_term}%"),
-                Invoice.note.ilike(f"%{search_term}%")
-            )
-        )
-
+    # Vyhľadávanie - číslo faktúry, zákazník (meno, IČO, telefón, e-mail),
+    # poznámka alebo popis položky. Rieši sa v Pythone bez ohľadu na
+    # diakritiku a veľkosť písmen (viď search_utils.py) - SQLite LIKE by
+    # "šimon" nenašlo "Šimon". Slová sa hľadajú nezávisle (poradie
+    # nezáleží).
+    search_term = " ".join((q or "").split())
 
     parsed_date_from = parse_optional_date(date_from or "")
     parsed_date_to = parse_optional_date(date_to or "")
@@ -149,6 +150,23 @@ def invoices_list_page(
         Invoice.issue_date.desc(),
         Invoice.id.desc()
     ).all()
+
+    if search_term:
+
+        invoices = [
+            invoice
+            for invoice in invoices
+            if matches_search(
+                search_term,
+                invoice.invoice_number,
+                invoice.note,
+                invoice.customer.name if invoice.customer else "",
+                invoice.customer.ico if invoice.customer else "",
+                invoice.customer.phone if invoice.customer else "",
+                invoice.customer.email if invoice.customer else "",
+                *(item.description for item in invoice.items)
+            )
+        ]
 
 
     today = date.today()
@@ -183,6 +201,41 @@ def invoices_list_page(
     }
 
 
+    # Odkazy filtra podľa stavu zachovávajú ostatné filtre (hľadaný
+    # text, obdobie, zákazník) a hodnoty sú správne URL-zakódované
+    # (medzera, &, # v hľadanom texte by inak rozbili odkaz).
+    def status_url(status_value):
+
+        params = {}
+
+        if status_value:
+            params["status"] = status_value
+
+        if search_term:
+            params["q"] = search_term
+
+        if date_from:
+            params["date_from"] = date_from
+
+        if date_to:
+            params["date_to"] = date_to
+
+        if customer_id is not None:
+            params["customer_id"] = customer_id
+
+        return "/faktury" + ("?" + urlencode(params) if params else "")
+
+    status_urls = {
+        status_option.value: status_url(status_option.value)
+        for status_option in InvoiceStatus
+    }
+
+    status_urls[""] = status_url(None)
+
+    filtered_customer = (
+        db.get(Customer, customer_id) if customer_id is not None else None
+    )
+
     return templates.TemplateResponse(
 
         request=request,
@@ -206,6 +259,16 @@ def invoices_list_page(
             "date_from": date_from or "",
 
             "date_to": date_to or "",
+
+            "customer_id": customer_id,
+
+            "filtered_customer": filtered_customer,
+
+            "status_urls": status_urls,
+
+            "has_active_filters": bool(
+                search_term or date_from or date_to or customer_id is not None
+            ),
 
             "today": today
 
