@@ -492,7 +492,7 @@ select {
 .finance-cards {
     display: grid;
 
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
 
     gap: 16px;
 }
@@ -2649,6 +2649,221 @@ body::after {
 
     body::after {
         display: none;
+    }
+
+}
+
+/* =========================================
+   DASHBOARD - VYŽADUJE POZORNOSŤ, GRAF PRÍJMOV, FAKTÚRY PO SPLATNOSTI
+   ========================================= */
+
+.attention-section {
+    margin-bottom: 32px;
+}
+
+.attention-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.attention-item {
+    display: inline-block;
+
+    padding: 10px 16px;
+
+    border-radius: 999px;
+    border: 1.5px solid var(--border);
+    background: var(--surface);
+
+    color: var(--text);
+    text-decoration: none;
+    font-size: 14px;
+}
+
+.attention-item strong {
+    font-family: var(--font-mono);
+}
+
+.attention-danger {
+    border-color: var(--danger);
+}
+
+.attention-danger strong {
+    color: var(--danger);
+}
+
+.attention-warning {
+    border-color: var(--warning);
+}
+
+.attention-warning strong {
+    color: var(--warning);
+}
+
+.finance-hint {
+    margin-top: 6px;
+
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.revenue-chart-card,
+.overdue-table-card {
+    margin-top: 20px;
+    padding: 18px 20px;
+
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow-sm);
+}
+
+.revenue-chart-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+
+    margin-bottom: 14px;
+
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.revenue-chart-sum {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.revenue-chart {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 10px;
+
+    height: 170px;
+}
+
+.revenue-bar-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+
+    min-width: 0;
+}
+
+.revenue-bar-value {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.revenue-bar-track {
+    flex: 1;
+
+    display: flex;
+    align-items: flex-end;
+
+    width: 100%;
+    margin: 6px 0;
+}
+
+.revenue-bar {
+    width: 100%;
+
+    min-height: 2px;
+    border-radius: 6px 6px 0 0;
+
+    background: var(--text-muted);
+}
+
+.revenue-bar-current .revenue-bar {
+    background: var(--accent);
+}
+
+.revenue-bar-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.overdue-rows {
+    display: flex;
+    flex-direction: column;
+}
+
+.overdue-row {
+    display: grid;
+    grid-template-columns: 110px 1fr auto auto;
+    gap: 14px;
+    align-items: center;
+
+    padding: 10px 0;
+
+    border-top: 1px solid var(--border);
+
+    color: var(--text);
+    text-decoration: none;
+    font-size: 14px;
+}
+
+.overdue-number {
+    font-family: var(--font-mono);
+}
+
+.overdue-customer {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.overdue-days {
+    font-size: 12px;
+    color: var(--danger);
+}
+
+.overdue-amount {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    text-align: right;
+}
+
+.overdue-more {
+    display: inline-block;
+    margin-top: 10px;
+
+    font-size: 13px;
+    color: var(--accent);
+    text-decoration: none;
+}
+
+@media (max-width: 700px) {
+
+    .revenue-chart {
+        height: 140px;
+        gap: 6px;
+    }
+
+    .overdue-row {
+        grid-template-columns: 1fr auto;
+        gap: 4px 12px;
+    }
+
+    .overdue-number {
+        grid-column: 1;
+    }
+
+    .overdue-amount {
+        grid-column: 2;
+        grid-row: 1;
+    }
+
+    .overdue-customer {
+        grid-column: 1 / -1;
+    }
+
+    .overdue-days {
+        grid-column: 1 / -1;
     }
 
 }

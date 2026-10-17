@@ -171,6 +171,49 @@
 
 
     <!-- =====================================
+         VYŽADUJE POZORNOSŤ
+         ===================================== -->
+
+    {% if overdue_count or overdue_jobs_count or today_jobs %}
+
+    <section class="attention-section">
+
+        <h2 class="finance-heading">
+            Vyžaduje pozornosť
+        </h2>
+
+        <div class="attention-list">
+
+            {% if overdue_count %}
+            <a href="/faktury?status=Po splatnosti" class="attention-item attention-danger">
+                <strong>{{ overdue_count }}</strong>
+                {% if overdue_count == 1 %}faktúra po splatnosti{% else %}faktúr po splatnosti{% endif %}
+                · {{ "%.2f"|format(overdue_total) }} €
+            </a>
+            {% endif %}
+
+            {% if overdue_jobs_count %}
+            <a href="/zakazky" class="attention-item attention-danger">
+                <strong>{{ overdue_jobs_count }}</strong>
+                {% if overdue_jobs_count == 1 %}zákazka po termíne{% else %}zákaziek po termíne{% endif %}
+            </a>
+            {% endif %}
+
+            {% if today_jobs %}
+            <a href="/kalendar" class="attention-item attention-warning">
+                <strong>{{ today_jobs|length }}</strong>
+                {% if today_jobs|length == 1 %}zákazka s termínom dnes{% else %}zákaziek s termínom dnes{% endif %}
+            </a>
+            {% endif %}
+
+        </div>
+
+    </section>
+
+    {% endif %}
+
+
+    <!-- =====================================
          RÝCHLY PRÍSTUP
          ===================================== -->
 
@@ -355,6 +398,10 @@
                     Uhradené tento mesiac
                 </div>
 
+                <div class="finance-hint">
+                    Minulý mesiac: {{ "%.2f"|format(revenue_last_month) }} €
+                </div>
+
             </div>
 
 
@@ -386,8 +433,87 @@
         </div>
 
         <p class="finance-note">
-            Tržba = súčet uhradených faktúr podľa dátumu vystavenia.
+            Tržba = súčet uhradených faktúr podľa dátumu úhrady (dobropisy sa odčítajú).
         </p>
+
+
+        <div class="revenue-chart-card">
+
+            <div class="revenue-chart-title">
+                Príjmy za posledných 6 mesiacov
+                <span class="revenue-chart-sum">
+                    {{ "%.2f"|format(revenue_series_total) }} €
+                </span>
+            </div>
+
+            <div class="revenue-chart" role="img" aria-label="Graf príjmov po mesiacoch">
+
+                {% for item in revenue_series %}
+
+                <div class="revenue-bar-col {% if item.is_current %}revenue-bar-current{% endif %}">
+
+                    <div class="revenue-bar-value">
+                        {{ "%.0f"|format(item.total) }}
+                    </div>
+
+                    <div class="revenue-bar-track">
+                        <div class="revenue-bar" style="height: {{ item.percent }}%;"></div>
+                    </div>
+
+                    <div class="revenue-bar-label">
+                        {{ item.label }}
+                    </div>
+
+                </div>
+
+                {% endfor %}
+
+            </div>
+
+        </div>
+
+
+        {% if overdue_invoice_rows %}
+
+        <div class="overdue-table-card">
+
+            <div class="revenue-chart-title">
+                Faktúry po splatnosti
+            </div>
+
+            <div class="overdue-rows">
+
+                {% for row in overdue_invoice_rows %}
+
+                <a href="/invoices/{{ row.id }}" class="overdue-row">
+
+                    <span class="overdue-number">{{ row.number }}</span>
+
+                    <span class="overdue-customer">{{ row.customer_name }}</span>
+
+                    <span class="overdue-days">
+                        {{ row.days_overdue }}
+                        {% if row.days_overdue == 1 %}deň{% elif row.days_overdue < 5 %}dni{% else %}dní{% endif %}
+                        po termíne
+                    </span>
+
+                    <span class="overdue-amount">{{ "%.2f"|format(row.total) }} €</span>
+
+                </a>
+
+                {% endfor %}
+
+            </div>
+
+            {% if overdue_count > overdue_invoice_rows|length %}
+            <a href="/faktury?status=Po splatnosti" class="overdue-more">
+                Zobraziť všetkých {{ overdue_count }} →
+            </a>
+            {% endif %}
+
+        </div>
+
+        {% endif %}
 
     </section>
 

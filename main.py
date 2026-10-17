@@ -1,7 +1,7 @@
 import logging
 import os
 from contextlib import asynccontextmanager
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from fastapi import Depends, FastAPI, Request
@@ -35,6 +35,12 @@ logger = logging.getLogger(__name__)
 
 from accounts_db import accounts_engine
 from auth import require_login_page
+from dashboard_utils import (
+    first_day_of_month_back,
+    monthly_revenue_series,
+    overdue_invoice_rows,
+    revenue_paid_date,
+)
 from database import Base, get_db
 from invoice_utils import CLOSED_INVOICE_STATUSES, calculate_invoice_totals, is_invoice_overdue, signed_invoice_total
 
@@ -402,7 +408,7 @@ def home(
     collection_invoices = (
         db
         .query(Invoice)
-        .options(joinedload(Invoice.items))
+        .options(joinedload(Invoice.items), joinedload(Invoice.customer))
         .filter(
             Invoice.status == InvoiceStatus.SENT.value,
             Invoice.is_proforma.is_(False)
@@ -437,54 +443,63 @@ def home(
 
     month_start = today.replace(day=1)
 
+    year_start = today.replace(month=1, day=1)
+
+    last_month_start = first_day_of_month_back(today, 1)
+
     # Tržby sa počítajú podľa DÁTUMU ÚHRADY, nie podľa dátumu vystavenia -
     # presnejšie odráža, kedy peniaze reálne prišli. Ako poistku pre
     # prípad, že by paid_date z nejakého dôvodu chýbal (nemalo by nastať,
-    # ale radšej nespadnúť), sa použije dátum vystavenia ako náhrada.
+    # ale radšej nespadnúť), sa použije dátum vystavenia ako náhrada
+    # (viď dashboard_utils.revenue_paid_date).
+    #
+    # Jeden dotaz pokrýva všetko, čo dashboard potrebuje (tento mesiac,
+    # minulý mesiac, tento rok aj graf za 6 mesiacov): od začiatku
+    # roka, resp. od začiatku 6-mesačného okna, podľa toho, čo je skôr.
     paid_date_expr = func.coalesce(Invoice.paid_date, Invoice.issue_date)
 
-    paid_this_month = (
+    revenue_range_start = min(
+        year_start,
+        first_day_of_month_back(today, 5)
+    )
+
+    paid_invoices = (
         db
         .query(Invoice)
         .options(joinedload(Invoice.items))
         .filter(
             Invoice.status == "Uhradená",
-            paid_date_expr >= month_start,
+            paid_date_expr >= revenue_range_start,
             paid_date_expr <= today,
             Invoice.is_proforma.is_(False)
         )
         .all()
     )
 
-    revenue_this_month = sum(
-        (
-            signed_invoice_total(invoice)
-            for invoice in paid_this_month
-        ),
-        Decimal("0")
-    )
+    def revenue_between(start, end):
 
-
-    year_start = today.replace(month=1, day=1)
-
-    paid_this_year = (
-        db
-        .query(Invoice)
-        .options(joinedload(Invoice.items))
-        .filter(
-            Invoice.status == "Uhradená",
-            paid_date_expr >= year_start,
-            paid_date_expr <= today,
-            Invoice.is_proforma.is_(False)
+        return sum(
+            (
+                signed_invoice_total(invoice)
+                for invoice in paid_invoices
+                if start <= revenue_paid_date(invoice) <= end
+            ),
+            Decimal("0")
         )
-        .all()
+
+    revenue_this_month = revenue_between(month_start, today)
+
+    revenue_last_month = revenue_between(
+        last_month_start,
+        month_start - timedelta(days=1)
     )
 
-    revenue_this_year = sum(
-        (
-            signed_invoice_total(invoice)
-            for invoice in paid_this_year
-        ),
+    revenue_this_year = revenue_between(year_start, today)
+
+    revenue_series = monthly_revenue_series(paid_invoices, today, months=6)
+
+    revenue_series_total = sum(
+        (item["total"] for item in revenue_series),
         Decimal("0")
     )
 
@@ -587,6 +602,17 @@ def home(
             "revenue_this_month": revenue_this_month,
 
             "revenue_this_year": revenue_this_year,
+
+            "revenue_last_month": revenue_last_month,
+
+            "revenue_series": revenue_series,
+
+            "revenue_series_total": revenue_series_total,
+
+            "overdue_invoice_rows": overdue_invoice_rows(
+                overdue_collection_invoices,
+                today
+            ),
 
             "overdue_jobs_count": overdue_jobs_count,
 

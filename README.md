@@ -121,7 +121,7 @@ Appka sa nasadzuje cez `Dockerfile` (`railway.json` ho vyberie a nastaví health
 
 | Cesta | Popis |
 |---|---|
-| `/` | Dashboard – financie (Na inkaso, Po splatnosti, tržby), termíny, posledné zákazky |
+| `/` | Dashboard – pás „Vyžaduje pozornosť“, financie (Na inkaso, Po splatnosti, tržby vs. minulý mesiac), graf príjmov za 6 mesiacov, faktúry po splatnosti, termíny, posledné zákazky |
 | `/zakaznici` | Zoznam zákazníkov (vyhľadávanie, pridanie, auto-doplnenie podľa IČO) |
 | `/zakazky` | Zoznam zákaziek (filter podľa stavu/termínu) |
 | `/kalendar` | Mesačný kalendár zákaziek podľa termínu realizácie |
@@ -188,7 +188,7 @@ Pri vytváraní zákazníka appka vie podľa zadaného IČO automaticky doplniť
 python -m pytest tests/ -q
 ```
 
-Aktuálne **552 testov**, rozdelených podľa oblasti:
+Aktuálne **562 testov**, rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|
@@ -210,6 +210,7 @@ Aktuálne **552 testov**, rozdelených podľa oblasti:
 | `test_backup.py` | Záloha a obnova databázy (izolované na dočasnom súbore), ochrana proti zip bomb, audit log záznam o obnove, kolízia názvu bezpečnostnej zálohy |
 | `test_backup_integrity.py` | `PRAGMA integrity_check` pri tvorbe zálohy aj pri validácii obnovy – poškodená databáza sa odmietne |
 | `test_upload_limit.py` | `uploads_utils.read_upload_with_limit()` – priebežné (nie až na konci) presadzovanie veľkostného limitu pri nahrávaní súboru |
+| `test_dashboard.py` | Dashboard – graf tržieb po mesiacoch (okno 6 mesiacov, prelom roka, dobropisy), zoznam faktúr po splatnosti, pás „Vyžaduje pozornosť“ |
 | `test_deploy.py` | `/health` (OK aj 503), štart na `$PORT`, poradie migrácií v `start.sh`, Dockerfile bez `VOLUME` s dátami v `/app/data`, `manage_accounts --upgrade-all` na existujúcom konte |
 | `test_error_handling.py` | Globálny handler neošetrených (500) chýb – používateľovi sa ukáže všeobecná hláška (nie detail výnimky), zaloguje sa traceback, JSON aj HTML vetva |
 
@@ -253,6 +254,7 @@ digitalny-zosit/
 ├── audit_log.py             # zápis do audit logu (história zmien)
 ├── backup_utils.py         # záloha/obnova cez SQLite backup API
 ├── csrf.py                  # CSRF ochrana (double-submit token)
+├── dashboard_utils.py       # graf tržieb po mesiacoch, faktúry po splatnosti pre dashboard
 ├── database.py
 ├── delivery_note_pdf.py    # PDF dodacieho listu (z faktúry aj ponuky)
 ├── form_utils.py           # zdieľané parsovanie formulárov (faktúry aj ponuky) – vrátane job_id
