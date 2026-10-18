@@ -3737,3 +3737,84 @@ body::after {
     color: var(--text-primary);
     text-decoration-color: var(--border);
 }
+
+
+/* =========================================
+   EXPORT PRE ÚČTOVNÍKA
+   ========================================= */
+
+.export-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+    margin-bottom: 18px;
+}
+
+.export-field { min-width: 160px; }
+.export-field[hidden] { display: none; }
+
+.export-field select,
+.export-field input {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 16px;
+    min-height: 44px;
+}
+
+.export-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    font-size: 14px;
+}
+
+.export-submit { min-height: 44px; }
+
+.export-period {
+    margin: 22px 0 12px 0;
+    font-size: 18px;
+}
+
+.export-period span {
+    margin-left: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.export-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.export-downloads {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.export-downloads a {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+}
+
+.export-note {
+    font-size: 13px;
+    color: var(--text-secondary);
+    max-width: 70ch;
+}
+
+@media (max-width: 600px) {
+
+    .export-field,
+    .export-submit,
+    .export-downloads a { width: 100%; justify-content: center; }
+
+}

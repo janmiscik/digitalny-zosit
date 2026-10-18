@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="sk">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Export pre účtovníka - Digitálny zošit</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', path='style.css') }}"
+    >
+
+</head>
+
+<body>
+
+
+<header class="topbar">
+
+    <div class="logo">
+        <img src="/static/logo-icon.png" alt="" class="logo-icon"> Digitálny zošit
+    </div>
+
+    <div class="topbar-actions">
+
+        <button
+            type="button"
+            class="theme-button"
+            id="themeButton"
+            onclick="toggleTheme()"
+            title="Prepnúť tému"
+        >
+            🌙
+        </button>
+
+        <a href="/" class="back-button">
+            ← Prehľad
+        </a>
+
+    </div>
+
+</header>
+
+
+<main class="container">
+
+    <section class="customers-section">
+
+        <div class="section-heading">
+            <div>
+                <h2>Export pre účtovníka</h2>
+                <p>
+                    Vyber obdobie a stiahni prehľad vystavených faktúr, rekapituláciu DPH
+                    a náklady zo zákaziek – v Exceli alebo CSV.
+                </p>
+            </div>
+        </div>
+
+
+        <form method="get" action="/export" class="export-form" id="exportForm">
+
+            <div class="export-field">
+                <label for="exportPreset">Obdobie</label>
+                <select name="preset" id="exportPreset">
+                    {% for key, label in presets %}
+                        <option value="{{ key }}" {% if key == preset %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="export-field export-custom" {% if preset != "custom" %}hidden{% endif %}>
+                <label for="exportFrom">Od</label>
+                <input type="date" name="date_from" id="exportFrom" value="{{ date_from }}">
+            </div>
+
+            <div class="export-field export-custom" {% if preset != "custom" %}hidden{% endif %}>
+                <label for="exportTo">Do</label>
+                <input type="date" name="date_to" id="exportTo" value="{{ date_to }}">
+            </div>
+
+            <label class="export-check">
+                <input type="checkbox" name="proforma" value="1" {% if proforma %}checked{% endif %}>
+                vrátane zálohových faktúr
+            </label>
+
+            <button type="submit" class="save-button export-submit">Zobraziť</button>
+
+        </form>
+
+
+        {% if error %}
+
+            <div class="backup-notice backup-notice-bad">⚠️ {{ error }}</div>
+
+        {% endif %}
+
+
+        {% if preview %}
+
+            <h3 class="export-period">{{ preview.label }}
+                <span>{{ preview.start.strftime("%d.%m.%Y") }} – {{ preview.end.strftime("%d.%m.%Y") }}</span>
+            </h3>
+
+            {% if preview.totals.count == 0 and preview.costs_count == 0 %}
+
+                <div class="empty-state">
+                    <div class="empty-icon">📭</div>
+                    <h2>V tomto období nič nie je</h2>
+                    <p>Žiadne vystavené faktúry ani náklady. Skús iné obdobie.</p>
+                </div>
+
+            {% else %}
+
+                <div class="export-summary">
+
+                    <div class="customer-overview-item">
+                        <strong>{{ preview.totals.counted }}</strong>
+                        <span>dokladov{% if preview.cancelled %} (+ {{ preview.cancelled }} stornovaných){% endif %}</span>
+                    </div>
+
+                    <div class="customer-overview-item">
+                        <strong>{{ "%.2f"|format(preview.totals.base) }} €</strong>
+                        <span>základ dane</span>
+                    </div>
+
+                    <div class="customer-overview-item">
+                        <strong>{{ "%.2f"|format(preview.totals.vat) }} €</strong>
+                        <span>DPH</span>
+                    </div>
+
+                    <div class="customer-overview-item">
+                        <strong>{{ "%.2f"|format(preview.totals.gross) }} €</strong>
+                        <span>spolu s DPH{% if preview.totals.unpaid > 0 %} · neuhradené {{ "%.2f"|format(preview.totals.unpaid) }} €{% endif %}</span>
+                    </div>
+
+                    <div class="customer-overview-item">
+                        <strong>{{ "%.2f"|format(preview.costs_total) }} €</strong>
+                        <span>náklady zo zákaziek ({{ preview.costs_count }})</span>
+                    </div>
+
+                </div>
+
+
+                <div class="export-downloads">
+
+                    <a class="save-button" href="/export/uctovnik.xlsx?{{ preview.query }}">
+                        📊 Stiahnuť Excel (všetko v jednom)
+                    </a>
+
+                    <a class="edit-job-button" href="/export/faktury.csv?{{ preview.query }}">
+                        📄 Faktúry (CSV)
+                    </a>
+
+                    <a class="edit-job-button" href="/export/naklady.csv?{{ preview.query }}">
+                        📄 Náklady (CSV)
+                    </a>
+
+                    {% if preview.totals.count and not preview.pdf_too_many %}
+                        <a class="edit-job-button" href="/export/faktury-pdf.zip?{{ preview.query }}">
+                            🗂️ Faktúry ako PDF (ZIP)
+                        </a>
+                    {% endif %}
+
+                </div>
+
+                <p class="export-note">
+                    Faktúry sa vyberajú podľa dátumu vystavenia, návrhy sa nezahŕňajú. Dobropisy sú
+                    so záporným znamienkom, stornované doklady sa v zozname objavia, ale do súčtov a
+                    rekapitulácie DPH sa nepočítajú. Excel obsahuje listy Súhrn, Faktúry,
+                    Rekapitulácia DPH a Náklady. CSV je v kódovaní UTF-8 s bodkočiarkou
+                    (otvorí sa priamo v slovenskom Exceli).
+                    {% if preview.pdf_too_many %}
+                        ZIP s PDF je pri takom počte faktúr vypnutý – skráť obdobie.
+                    {% endif %}
+                </p>
+
+            {% endif %}
+
+        {% endif %}
+
+    </section>
+
+</main>
+
+
+<script>
+
+(function () {
+
+    const preset = document.getElementById("exportPreset");
+
+    preset.addEventListener("change", function () {
+
+        document.querySelectorAll(".export-custom").forEach(function (el) {
+            el.hidden = preset.value !== "custom";
+        });
+
+        if (preset.value !== "custom") {
+            document.getElementById("exportForm").submit();
+        }
+
+    });
+
+})();
+
+</script>
+
+
+<script>
+
+function applyTheme(theme) {
+
+    document.documentElement.setAttribute(
+        "data-theme",
+        theme
+    );
+
+    const button =
+        document.getElementById("themeButton");
+
+    if (theme === "dark") {
+
+        button.textContent = "☀️";
+
+    } else {
+
+        button.textContent = "🌙";
+
+    }
+
+}
+
+
+function toggleTheme() {
+
+    const currentTheme =
+        document.documentElement.getAttribute(
+            "data-theme"
+        );
+
+    const newTheme =
+        currentTheme === "dark"
+            ? "light"
+            : "dark";
+
+    localStorage.setItem(
+        "digitalnyZositTheme",
+        newTheme
+    );
+
+    applyTheme(newTheme);
+
+}
+
+
+const savedTheme =
+    localStorage.getItem(
+        "digitalnyZositTheme"
+    );
+
+
+if (savedTheme === "dark") {
+
+    applyTheme("dark");
+
+} else {
+
+    applyTheme("light");
+
+}
+
+</script>
+
+
+</body>
+
+</html>

@@ -197,6 +197,18 @@ Detail zákazníka (`/customers/<id>`) ukazuje všetko na jednej stránke:
 
 ---
 
+## 📤 Export pre účtovníka
+
+Stránka `/export` (odkaz na prehľade) pripraví podklady za zvolené obdobie – tento/minulý mesiac, štvrťrok, rok alebo vlastný rozsah:
+
+- **Excel pre účtovníka** (`.xlsx`): hárky *Súhrn*, *Faktúry*, *Rekapitulácia DPH* (po sadzbách) a *Náklady*; čísla a dátumy sú skutočné hodnoty, nie text.
+- **CSV faktúr / nákladov** pre slovenský Excel (UTF-8 s BOM, oddeľovač `;`, desatinná čiarka).
+- **ZIP s PDF** všetkých faktúr v období.
+- Zahŕňajú sa odoslané a uhradené faktúry podľa dátumu vystavenia; dobropisy sú záporné a odkazujú na pôvodnú faktúru, stornované sú v zozname, ale mimo súčtov. Zálohové faktúry sa dajú pridať prepínačom.
+- Texty začínajúce `=`, `+`, `-`, `@` sa neutralizujú (ochrana pred vložením vzorca do Excelu). Každé stiahnutie sa zapíše do histórie zmien.
+
+---
+
 ## 🔧 Zákazky
 
 - Fotodokumentácia (pred/po) – ľubovoľný počet fotiek na zákazku, overenie skutočného typu obrázka. Fotky sa pri nahraní automaticky zmenšia (max. 1600px dlhšej strany) a opraví sa ich otočenie podľa EXIF údajov z mobilu.
@@ -267,7 +279,7 @@ Pri vytváraní zákazníka appka vie podľa zadaného IČO automaticky doplniť
 python -m pytest tests/ -q
 ```
 
-Aktuálne **680 testov**, rozdelených podľa oblasti:
+Aktuálne **702 testov**, rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|
@@ -295,6 +307,7 @@ Aktuálne **680 testov**, rozdelených podľa oblasti:
 | `test_reminders.py` | Pripomienky platieb: výber faktúr, stupne podľa omeškania, text správy a `mailto`, evidencia pripomenutí, ochrana pred nesprávnym stavom faktúry |
 | `test_profit.py` | Zisk zo zákazky: tržba bez DPH, dobropis/zálohové/návrhy, náklady podľa druhu, hodiny × sadzba, marža a strata, validácia, zobrazenie na kartách |
 | `test_customer_history.py` | História zákazníka: súhrn (tržba bez DPH, zisk, doba platby), poznámky (pridanie, validácia, mazanie, izolácia, escapovanie), časová os, galéria fotiek |
+| `test_export.py` | Export: obdobia (hranice roka, priestupný rok), výber dokladov, CSV formát, štruktúra Excelu, DPH rekapitulácia, ochrana pred vzorcami, ZIP s PDF, validácia, audit |
 | `test_tenant_context.py` | Regresia: fotky zákaziek sa servujú po skutočnom prihlásení (aktuálne konto v kontexte požiadavky), cudzie konto ich nevidí |
 | `test_mobile.py` | Mobilné zobrazenie - viewport meta v každej stránke, popisky buniek tabuliek položiek (pre kartičkové rozloženie), kľúčové mobilné CSS pravidlá |
 | `test_deploy.py` | `/health` (OK aj 503), štart na `$PORT`, poradie migrácií v `start.sh`, Dockerfile bez `VOLUME` s dátami v `/app/data`, `manage_accounts --upgrade-all` na existujúcom konte |
@@ -339,6 +352,7 @@ digitalny-zosit/
 ├── auth.py                 # hashovanie hesla, session, rate limiting
 ├── audit_log.py             # zápis do audit logu (história zmien)
 ├── backup_utils.py         # záloha/obnova cez SQLite backup API
+├── export_utils.py         # export pre účtovníka: obdobia, CSV, Excel
 ├── customer_history.py     # história zákazníka: súhrn, časová os, galéria fotiek
 ├── profit_utils.py         # zisk zo zákazky: tržba, náklady podľa druhu, marža
 ├── reminder_utils.py       # pripomienky platieb: stupne, text správy, mailto
