@@ -723,3 +723,58 @@ def test_backups_are_isolated_between_accounts():
     client_b, slug_b = _logged_in_client("firmaB")
 
     assert client_b.get(f"/settings/backups/{name}").status_code == 404
+
+
+# =========================================
+# MIGRÁCIE PRI ŠTARTE APPKY
+# =========================================
+
+def _register_account(isolated, slug):
+
+    from accounts_models import Account
+
+    db = isolated()
+    db.add(Account(username=slug, slug=slug, password_hash="x"))
+    db.commit()
+    db.close()
+
+
+def test_startup_upgrades_outdated_account_with_backup_and_keeps_data(isolated, monkeypatch):
+
+    monkeypatch.setenv("AUTO_MIGRATE_ACCOUNTS", "true")
+
+    make_account("stare", with_files=False)
+    make_account("aktualne", with_files=False)
+    _register_account(isolated, "stare")
+    _register_account(isolated, "aktualne")
+    monkeypatch.setattr(auto_backup, "account_slugs", lambda: ["stare", "aktualne"])
+
+    conn = sqlite3.connect(str(tenancy.account_database_path("stare")))
+    conn.execute("UPDATE alembic_version SET version_num = 'b5d7f9a1c324'")
+    conn.execute("ALTER TABLE invoices DROP COLUMN reminder_count")
+    conn.execute("ALTER TABLE invoices DROP COLUMN last_reminded_at")
+    conn.commit()
+    conn.close()
+
+    assert auto_backup.upgrade_accounts_on_startup() == ["stare"]
+
+    assert tenancy.account_needs_migration("stare") is False
+
+    conn = sqlite3.connect(str(tenancy.account_database_path("stare")))
+    assert conn.execute("SELECT COUNT(*) FROM customers").fetchone()[0] == 2
+    assert conn.execute("SELECT reminder_count FROM invoices LIMIT 1").fetchall() == []
+    conn.close()
+
+    assert [b.kind for b in auto_backup.list_backups("stare")] == ["pre-upgrade"]
+    assert auto_backup.list_backups("aktualne") == []
+
+    # druhý štart už nič nerobí
+    assert auto_backup.upgrade_accounts_on_startup() == []
+
+
+def test_startup_upgrade_can_be_disabled(monkeypatch):
+
+    monkeypatch.setenv("AUTO_MIGRATE_ACCOUNTS", "false")
+    monkeypatch.setattr(auto_backup, "account_slugs", lambda: pytest.fail("nemalo sa volať"))
+
+    assert auto_backup.upgrade_accounts_on_startup() == []

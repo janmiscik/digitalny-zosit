@@ -34,7 +34,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 from accounts_db import accounts_engine
-from auto_backup import start_scheduler, stop_scheduler
+from auto_backup import start_scheduler, stop_scheduler, upgrade_accounts_on_startup
 from auth import require_login_page
 from dashboard_utils import (
     first_day_of_month_back,
@@ -94,6 +94,10 @@ async def lifespan(app: FastAPI):
             "alembic_version). Pred spustením appky spusti migrácie:\n\n"
             "    alembic -c alembic_accounts.ini upgrade head\n"
         )
+
+    # Kontám s čakajúcou migráciou schémy ju doplní (lokálny beh po
+    # aktualizácii kódu; na Railway to robí aj start.sh).
+    upgrade_accounts_on_startup()
 
     # Automatické zálohy kont na pozadí (viď auto_backup.py). Vypnuté v
     # testoch cez BACKUP_ENABLED=false (tests/conftest.py).

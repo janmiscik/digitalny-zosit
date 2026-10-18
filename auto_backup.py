@@ -880,3 +880,49 @@ def backup_overview(slug: str) -> dict:
         "total_size_mb": round(sum(item.size_bytes for item in backups) / (1024 * 1024), 2),
         "free_mb": None if free_bytes is None else free_bytes // (1024 * 1024),
     }
+
+
+# =========================================
+# MIGRÁCIE KONT PRI ŠTARTE APPKY
+# =========================================
+
+def upgrade_accounts_on_startup() -> list[str]:
+    """
+    Kontám, ktorým čaká migrácia schémy, ju pri štarte appky spraví
+    (s poistnou zálohou pred ňou). Na Railway to robí aj start.sh -
+    toto pokrýva lokálny beh (`uvicorn main:app`), kde po aktualizácii
+    kódu inak ostane databáza bez nových stĺpcov ("no such column").
+    Idempotentné; zlyhanie jedného konta nezastaví štart ani ostatné.
+    Vypnúť sa dá cez AUTO_MIGRATE_ACCOUNTS=false.
+    Vráti slugy kont, ktoré sa zmigrovali.
+    """
+
+    if os.getenv("AUTO_MIGRATE_ACCOUNTS", "true").strip().lower() in ("false", "0", "no"):
+        return []
+
+    upgraded = []
+
+    for slug in account_slugs():
+
+        try:
+
+            if not tenancy.account_needs_migration(slug):
+                continue
+
+            backup = run_backup(slug, "pre-upgrade")
+
+            if not backup.ok:
+                logger.warning("Poistná záloha konta %s pred migráciou zlyhala: %s", slug, backup.error)
+
+            tenancy.upgrade_account_database(slug)
+            tenancy.discard_account_engine(slug)
+
+            upgraded.append(slug)
+
+            logger.info("Konto %s zmigrované na najnovšiu schému.", slug)
+
+        except Exception:   # noqa: BLE001
+
+            logger.exception("Migrácia konta %s pri štarte zlyhala", slug)
+
+    return upgraded

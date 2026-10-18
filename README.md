@@ -218,6 +218,7 @@ Pri každom štarte (`start.sh`) sa kontám, ktorým čaká migrácia schémy, s
 | `BACKUP_KEEP` | `7` | koľko automatických záloh držať |
 | `BACKUP_CHECK_MINUTES` | `30` | ako často plánovač kontroluje, či je záloha na rade |
 | `BACKUP_MIN_FREE_MB` | `200` | minimálna rezerva voľného miesta |
+| `AUTO_MIGRATE_ACCOUNTS` | `true` | pri štarte appky doplní kontám chýbajúce migrácie schémy (s poistnou zálohou); `false` vypne |
 
 CLI (Railway shell alebo lokálne):
 
@@ -253,7 +254,7 @@ Pri vytváraní zákazníka appka vie podľa zadaného IČO automaticky doplniť
 python -m pytest tests/ -q
 ```
 
-Aktuálne **644 testov**, rozdelených podľa oblasti:
+Aktuálne **646 testov**, rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|
