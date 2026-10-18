@@ -5,6 +5,9 @@
 # než appka nad čiastočne zmigrovanými databázami.
 set -e
 
+# 0. Diagnostika úložiska (len výpis do logu, nič nemení)
+python diagnose_storage.py || true
+
 # 1. Master databáza kont (accounts.db)
 alembic -c alembic_accounts.ini upgrade head
 

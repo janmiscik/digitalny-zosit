@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="sk">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Pripomienky platieb - Digitálny zošit</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', path='style.css') }}"
+    >
+
+</head>
+
+<body>
+
+
+<header class="topbar">
+
+    <div class="logo">
+        <img src="/static/logo-icon.png" alt="" class="logo-icon"> Digitálny zošit
+    </div>
+
+    <div class="topbar-actions">
+
+        <button
+            type="button"
+            class="theme-button"
+            id="themeButton"
+            onclick="toggleTheme()"
+            title="Prepnúť tému"
+        >
+            🌙
+        </button>
+
+        <a
+            href="/"
+            class="back-button"
+        >
+            ← Prehľad
+        </a>
+
+    </div>
+
+</header>
+
+
+<main class="container">
+
+    <section class="customers-section">
+
+        <div class="section-heading">
+            <div>
+                <h2>Pripomienky platieb</h2>
+                <p>
+                    Neuhradené faktúry. Pripomienku si pripravíš jedným klikom a po
+                    odoslaní ju označíš - appka sama nič neposiela.
+                </p>
+            </div>
+        </div>
+
+        {% if request.query_params.get("oznacene") %}
+            <div class="backup-notice backup-notice-ok">✅ Pripomienka bola zaznamenaná.</div>
+        {% endif %}
+
+
+        <h3 class="reminder-heading">
+            Po splatnosti
+            {% if overdue %}
+                <span class="reminder-heading-sum">
+                    {{ overdue|length }} · {{ "%.2f"|format(overdue_total) }} €
+                </span>
+            {% endif %}
+        </h3>
+
+        {% for row in overdue %}
+
+            <div class="reminder-row reminder-{{ row.level.key }}">
+
+                <div class="reminder-main">
+
+                    <a href="/invoices/{{ row.id }}" class="reminder-title">
+                        Faktúra č. {{ row.number }}
+                    </a>
+
+                    <div class="reminder-meta">
+                        {{ row.customer_name }}
+                        · splatná {{ row.due_date.strftime("%d.%m.%Y") }}
+                        · <strong>{{ row.days }} {% if row.days == 1 %}deň{% elif row.days < 5 %}dni{% else %}dní{% endif %} po splatnosti</strong>
+                    </div>
+
+                    <div class="reminder-meta">
+                        {% if row.reminder_count %}
+                            Pripomenuté {{ row.reminder_count }}× · naposledy {{ row.last_reminded_at.strftime("%d.%m.%Y") }}
+                        {% else %}
+                            Zatiaľ nepripomenuté
+                        {% endif %}
+                        {% if not row.customer_email %}
+                            · <span class="reminder-noemail">zákazník nemá e-mail</span>
+                        {% endif %}
+                    </div>
+
+                </div>
+
+                <div class="reminder-side">
+
+                    <span class="reminder-badge">{{ row.level.label }}</span>
+
+                    <span class="reminder-amount">{{ "%.2f"|format(row.total) }} €</span>
+
+                    <a href="/invoices/{{ row.id }}/reminder" class="save-button reminder-button">
+                        ✉️ Pripraviť pripomienku
+                    </a>
+
+                </div>
+
+            </div>
+
+        {% else %}
+
+            <div class="empty-state">
+                <div class="empty-icon">✅</div>
+                <h2>Nič po splatnosti</h2>
+                <p>Všetky odoslané faktúry sú v termíne alebo uhradené.</p>
+            </div>
+
+        {% endfor %}
+
+
+        {% if upcoming %}
+
+            <h3 class="reminder-heading">
+                Čoskoro splatné
+                <span class="reminder-heading-sum">najbližšie 3 dni</span>
+            </h3>
+
+            {% for row in upcoming %}
+
+                <div class="reminder-row reminder-upcoming">
+
+                    <div class="reminder-main">
+
+                        <a href="/invoices/{{ row.id }}" class="reminder-title">
+                            Faktúra č. {{ row.number }}
+                        </a>
+
+                        <div class="reminder-meta">
+                            {{ row.customer_name }}
+                            · splatná {{ row.due_date.strftime("%d.%m.%Y") }}
+                            · <strong>{% if row.days == 0 %}dnes{% elif row.days == 1 %}zajtra{% else %}o {{ row.days }} dni{% endif %}</strong>
+                        </div>
+
+                    </div>
+
+                    <div class="reminder-side">
+
+                        <span class="reminder-amount">{{ "%.2f"|format(row.total) }} €</span>
+
+                        <a href="/invoices/{{ row.id }}/reminder" class="edit-job-button reminder-button">
+                            ✉️ Pripomenúť vopred
+                        </a>
+
+                    </div>
+
+                </div>
+
+            {% endfor %}
+
+        {% endif %}
+
+    </section>
+
+</main>
+
+
+<script>
+
+function applyTheme(theme) {
+
+    document.documentElement.setAttribute(
+        "data-theme",
+        theme
+    );
+
+    const button =
+        document.getElementById("themeButton");
+
+    if (theme === "dark") {
+
+        button.textContent = "☀️";
+
+    } else {
+
+        button.textContent = "🌙";
+
+    }
+
+}
+
+
+function toggleTheme() {
+
+    const currentTheme =
+        document.documentElement.getAttribute(
+            "data-theme"
+        );
+
+    const newTheme =
+        currentTheme === "dark"
+            ? "light"
+            : "dark";
+
+    localStorage.setItem(
+        "digitalnyZositTheme",
+        newTheme
+    );
+
+    applyTheme(newTheme);
+
+}
+
+
+const savedTheme =
+    localStorage.getItem(
+        "digitalnyZositTheme"
+    );
+
+
+if (savedTheme === "dark") {
+
+    applyTheme("dark");
+
+} else {
+
+    applyTheme("light");
+
+}
+
+</script>
+
+
+</body>
+
+</html>

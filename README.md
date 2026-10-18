@@ -179,6 +179,13 @@ Mobilné pravidlá sú na konci `static/style.css` (sekcia „MOBIL - OVLÁDANIE
 - Ponuka v detaile ukazuje faktúry, ktoré z nej vznikli, a faktúra odkazuje späť na svoju ponuku.
 - PDF export ponuky aj dodacieho listu.
 
+## 🔔 Pripomienky platieb
+
+- Stránka **`/pripomienky`** (odkaz z dashboardu v „Vyžaduje pozornosť“): odoslané neuhradené faktúry **po splatnosti** (najdlhšie omeškané hore) a **čoskoro splatné** (najbližšie 3 dni). Návrhy, zálohové faktúry a dobropisy sa nepripomínajú.
+- Stupeň podľa omeškania: **Pripomienka** (1–13 dní), **Druhá upomienka** (14–29), **Posledná výzva** (30+) – s tomu zodpovedajúcou tónou textu.
+- Jedným klikom sa pripraví hotový text (predmet, suma, IBAN, variabilný symbol, názov firmy) – dá sa upraviť, otvoriť v e-mailovej aplikácii (`mailto:`) alebo skopírovať (napr. na SMS). Appka sama **nič neodosiela**.
+- Po odoslaní klikneš „Označiť ako pripomenuté“ – eviduje sa počet pripomienok a dátum poslednej (aj v histórii zmien), vidno ich v zozname aj na faktúre.
+
 ---
 
 ## 🔧 Zákazky
@@ -221,6 +228,17 @@ python manage_accounts.py --verify-all                 # test obnovy najnovšej 
 
 > ⚠️ **Zálohy na tom istom Volume nechránia pred stratou celého Volume.** Chránia pred chybou v appke, omylom zmazanými dátami a pokazenou migráciou. Preto si občas stiahni zálohu aj mimo Railway (Nastavenia → Stiahnuť) a ak to tvoj plán ponúka, zapni aj Railway Volume Backups.
 
+### Obnova prístupu, keď zmizne zoznam kont
+
+Ak sa stratí alebo prepíše `data/accounts.db` (prihlásenie hlási zlé meno/heslo), dáta samotných kont v `data/accounts/<konto>/` ostávajú. Pripoj ich k novému menu a heslu:
+
+```bash
+python manage_accounts.py --list-orphans                       # ktoré priečinky nemajú konto
+python manage_accounts.py --reattach SLUG --username MENO      # opýta sa na nové heslo
+```
+
+> ⚠️ Priečinok `data/` a súbory `*.db` nikdy neprepisuj rozbalením ZIP-u cez projekt – patria k tvojim dátam, nie ku kódu.
+
 ---
 
 ## 🏢 Registre a auto-doplnenie
@@ -235,7 +253,7 @@ Pri vytváraní zákazníka appka vie podľa zadaného IČO automaticky doplniť
 python -m pytest tests/ -q
 ```
 
-Aktuálne **628 testov**, rozdelených podľa oblasti:
+Aktuálne **644 testov**, rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|
@@ -260,6 +278,7 @@ Aktuálne **628 testov**, rozdelených podľa oblasti:
 | `test_dashboard.py` | Dashboard – graf tržieb po mesiacoch (okno 6 mesiacov, prelom roka, dobropisy), zoznam faktúr po splatnosti, pás „Vyžaduje pozornosť“ |
 | `test_search.py` | Vyhľadávanie bez ohľadu na diakritiku a veľkosť písmen (faktúry, zákazky, zákazníci), viac slov naraz, filter podľa zákazníka, správne zakódované odkazy filtrov |
 | `test_auto_backup.py` | Automatické zálohy: vytvorenie + test obnovy (poškodený ZIP, chýbajúci súbor, nesedí počet záznamov), retencia, bezpečné názvy a stiahnutie, plánovač, kontrola miesta, poistná záloha pred migráciou, trasy v Nastaveniach |
+| `test_reminders.py` | Pripomienky platieb: výber faktúr, stupne podľa omeškania, text správy a `mailto`, evidencia pripomenutí, ochrana pred nesprávnym stavom faktúry |
 | `test_mobile.py` | Mobilné zobrazenie - viewport meta v každej stránke, popisky buniek tabuliek položiek (pre kartičkové rozloženie), kľúčové mobilné CSS pravidlá |
 | `test_deploy.py` | `/health` (OK aj 503), štart na `$PORT`, poradie migrácií v `start.sh`, Dockerfile bez `VOLUME` s dátami v `/app/data`, `manage_accounts --upgrade-all` na existujúcom konte |
 | `test_error_handling.py` | Globálny handler neošetrených (500) chýb – používateľovi sa ukáže všeobecná hláška (nie detail výnimky), zaloguje sa traceback, JSON aj HTML vetva |
@@ -303,6 +322,7 @@ digitalny-zosit/
 ├── auth.py                 # hashovanie hesla, session, rate limiting
 ├── audit_log.py             # zápis do audit logu (história zmien)
 ├── backup_utils.py         # záloha/obnova cez SQLite backup API
+├── reminder_utils.py       # pripomienky platieb: stupne, text správy, mailto
 ├── auto_backup.py          # automatické zálohy, test obnovy, retencia, plánovač
 ├── csrf.py                  # CSRF ochrana (double-submit token)
 ├── dashboard_utils.py       # graf tržieb po mesiacoch, faktúry po splatnosti pre dashboard

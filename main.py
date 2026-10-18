@@ -54,6 +54,7 @@ from routers.customers import router as customers_router
 from routers.invoices import router as invoices_router
 from routers.jobs import router as jobs_router
 from routers.quotes import router as quotes_router
+from routers.reminders import router as reminders_router
 
 from templates_config import templates
 
@@ -306,6 +307,10 @@ app.include_router(
 
 app.include_router(
     quotes_router
+)
+
+app.include_router(
+    reminders_router
 )
 
 app.include_router(

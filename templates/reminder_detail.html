@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="sk">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Pripomienka platby - Digitálny zošit</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', path='style.css') }}"
+    >
+
+</head>
+
+<body>
+
+
+<header class="topbar">
+
+    <div class="logo">
+        <img src="/static/logo-icon.png" alt="" class="logo-icon"> Digitálny zošit
+    </div>
+
+    <div class="topbar-actions">
+
+        <button
+            type="button"
+            class="theme-button"
+            id="themeButton"
+            onclick="toggleTheme()"
+            title="Prepnúť tému"
+        >
+            🌙
+        </button>
+
+        <a
+            href="/pripomienky"
+            class="back-button"
+        >
+            ← Pripomienky
+        </a>
+
+    </div>
+
+</header>
+
+
+<main class="container">
+
+    <section class="customers-section">
+
+        <div class="section-heading">
+            <div>
+                <h2>{{ message.level.label }} · faktúra č. {{ invoice.invoice_number }}</h2>
+                <p>
+                    {{ invoice.customer.name }}
+                    {% if message.days > 0 %}
+                        · {{ message.days }} dní po splatnosti
+                    {% else %}
+                        · ešte v termíne
+                    {% endif %}
+                    {% if invoice.reminder_count %}
+                        · už pripomenuté {{ invoice.reminder_count }}×
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+
+        <div class="reminder-compose">
+
+            <label for="reminderSubject">Predmet</label>
+            <input type="text" id="reminderSubject" value="{{ message.subject }}" readonly>
+
+            <label for="reminderBody">Text správy (môžeš upraviť)</label>
+            <textarea id="reminderBody" rows="16">{{ message.body }}</textarea>
+
+            <div class="reminder-actions">
+
+                {% if mailto %}
+                    <a href="{{ mailto }}" class="save-button" id="mailtoLink">
+                        📧 Otvoriť v e-mailovej aplikácii
+                    </a>
+                {% else %}
+                    <span class="reminder-noemail">
+                        Zákazník nemá vyplnený e-mail - text si skopíruj a pošli SMS-kou alebo inak.
+                    </span>
+                {% endif %}
+
+                <button type="button" class="edit-job-button" onclick="copyReminder()">
+                    📋 Kopírovať text
+                </button>
+
+                <a href="/invoices/{{ invoice.id }}/pdf" class="edit-job-button">
+                    📄 Stiahnuť PDF faktúry
+                </a>
+
+            </div>
+
+            <p class="reminder-hint" id="copyHint" hidden>Skopírované.</p>
+
+        </div>
+
+
+        <form action="/invoices/{{ invoice.id }}/reminder/mark" method="post" class="reminder-mark">
+
+            <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+
+            <p>
+                Až keď správu odošleš, zaznamenaj to - uvidíš, koľkokrát a kedy si
+                zákazníka už upomínal.
+            </p>
+
+            <button type="submit" class="save-button">
+                ✅ Označiť ako pripomenuté
+            </button>
+
+        </form>
+
+    </section>
+
+</main>
+
+
+<script>
+
+function copyReminder() {
+
+    const text =
+        document.getElementById("reminderSubject").value + "\n\n" +
+        document.getElementById("reminderBody").value;
+
+    const hint = document.getElementById("copyHint");
+
+    const done = () => { hint.hidden = false; setTimeout(() => { hint.hidden = true; }, 2000); };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+
+        navigator.clipboard.writeText(text).then(done);
+
+    } else {
+
+        const area = document.getElementById("reminderBody");
+        area.select();
+        document.execCommand("copy");
+        done();
+
+    }
+
+}
+
+// mailto odkaz sa pri úprave textu zostaví nanovo
+(function () {
+
+    const link = document.getElementById("mailtoLink");
+
+    if (!link) { return; }
+
+    const email = link.getAttribute("href").split("?")[0];
+
+    function rebuild() {
+
+        link.setAttribute(
+            "href",
+            email + "?subject=" + encodeURIComponent(document.getElementById("reminderSubject").value) +
+            "&body=" + encodeURIComponent(document.getElementById("reminderBody").value)
+        );
+
+    }
+
+    document.getElementById("reminderBody").addEventListener("input", rebuild);
+
+})();
+
+</script>
+
+<script>
+
+function applyTheme(theme) {
+
+    document.documentElement.setAttribute(
+        "data-theme",
+        theme
+    );
+
+    const button =
+        document.getElementById("themeButton");
+
+    if (theme === "dark") {
+
+        button.textContent = "☀️";
+
+    } else {
+
+        button.textContent = "🌙";
+
+    }
+
+}
+
+
+function toggleTheme() {
+
+    const currentTheme =
+        document.documentElement.getAttribute(
+            "data-theme"
+        );
+
+    const newTheme =
+        currentTheme === "dark"
+            ? "light"
+            : "dark";
+
+    localStorage.setItem(
+        "digitalnyZositTheme",
+        newTheme
+    );
+
+    applyTheme(newTheme);
+
+}
+
+
+const savedTheme =
+    localStorage.getItem(
+        "digitalnyZositTheme"
+    );
+
+
+if (savedTheme === "dark") {
+
+    applyTheme("dark");
+
+} else {
+
+    applyTheme("light");
+
+}
+
+</script>
+
+
+</body>
+
+</html>

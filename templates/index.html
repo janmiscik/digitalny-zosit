@@ -185,10 +185,10 @@
         <div class="attention-list">
 
             {% if overdue_count %}
-            <a href="/faktury?status=Po splatnosti" class="attention-item attention-danger">
+            <a href="/pripomienky" class="attention-item attention-danger">
                 <strong>{{ overdue_count }}</strong>
                 {% if overdue_count == 1 %}faktúra po splatnosti{% else %}faktúr po splatnosti{% endif %}
-                · {{ "%.2f"|format(overdue_total) }} €
+                · {{ "%.2f"|format(overdue_total) }} € · pripomenúť →
             </a>
             {% endif %}
 

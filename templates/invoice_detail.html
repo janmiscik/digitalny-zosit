@@ -201,6 +201,18 @@
                 </form>
 
 
+                {% if invoice.status == "Odoslaná" and not invoice.is_credit_note and not invoice.is_proforma %}
+
+                    <a
+                        href="/invoices/{{ invoice.id }}/reminder"
+                        class="edit-job-button"
+                        title="Pripraví text pripomienky platby pre zákazníka"
+                    >
+                        ✉️ Pripomienka platby{% if invoice.reminder_count %} ({{ invoice.reminder_count }}×){% endif %}
+                    </a>
+
+                {% endif %}
+
                 {% if not invoice.is_credit_note and invoice.status in ["Odoslaná", "Uhradená"] %}
 
                     <a

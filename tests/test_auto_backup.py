@@ -568,7 +568,7 @@ def test_account_needs_migration():
     assert tenancy.account_needs_migration(SLUG) is True
 
 
-def test_cli_backup_all_only_if_migration_pending(capsys, isolated):
+def test_cli_backup_all_only_if_migration_pending(capsys, isolated, monkeypatch):
 
     import manage_accounts
     from accounts_models import Account
@@ -589,10 +589,10 @@ def test_cli_backup_all_only_if_migration_pending(capsys, isolated):
     db.commit()
     db.close()
 
-    manage_accounts.list_accounts = lambda: [
+    monkeypatch.setattr(manage_accounts, "list_accounts", lambda: [
         type("A", (), {"slug": "stare", "username": "stare"})(),
         type("A", (), {"slug": "aktualne", "username": "aktualne"})(),
-    ]
+    ])
 
     manage_accounts.backup_all("pre-upgrade", only_if_migration_pending=True)
 

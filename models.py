@@ -544,6 +544,20 @@ class Invoice(Base):
         default=False
     )
 
+    # Pripomienky platby: koľkokrát sa už zákazníkovi pripomenula platba
+    # a kedy naposledy (len evidencia - appka sama nič neodosiela).
+    reminder_count = Column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0"
+    )
+
+    last_reminded_at = Column(
+        Date,
+        nullable=True
+    )
+
     # Ak faktúra vznikla jedným klikom z cenovej ponuky, appka si tu
     # drží odkaz na pôvodnú ponuku (len pre dohľadateľnosť, nič sa tým
     # nevynucuje).
