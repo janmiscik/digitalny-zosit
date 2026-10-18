@@ -191,7 +191,11 @@ Mobilné pravidlá sú na konci `static/style.css` (sekcia „MOBIL - OVLÁDANIE
 ## 🔧 Zákazky
 
 - Fotodokumentácia (pred/po) – ľubovoľný počet fotiek na zákazku, overenie skutočného typu obrázka. Fotky sa pri nahraní automaticky zmenšia (max. 1600px dlhšej strany) a opraví sa ich otočenie podľa EXIF údajov z mobilu.
-- Evidencia nákladov (materiál, subdodávky) a výpočet reálneho čistého zisku (fakturovaná suma − náklady).
+- **Zisk zo zákazky** (karta „Náklady a zisk“ v úprave zákazky aj riadok v zozname zákaziek):
+  - **Tržba bez DPH** z vystavených faktúr zákazky (odoslané a uhradené; návrhy, stornované a zálohové sa nepočítajú, dobropis tržbu znižuje). Zvlášť sa ukazuje, čo je ešte neuhradené.
+  - **Náklady podľa druhu:** materiál, práca, iné (doprava, subdodávka...). Pri práci zadáš **hodiny a sadzbu** – suma sa vypočíta; hodiny sa sčítavajú.
+  - **Zisk a marža** (% z tržby), rozdelenie nákladov v pruhu. Pri strate sa zvýrazní.
+  - Náklady zadávaj bez DPH. Staré náklady (zadané pred zavedením druhov) majú druh „Iné“.
 - Mesačný kalendár podľa termínu realizácie.
 
 ---
@@ -254,7 +258,7 @@ Pri vytváraní zákazníka appka vie podľa zadaného IČO automaticky doplniť
 python -m pytest tests/ -q
 ```
 
-Aktuálne **646 testov**, rozdelených podľa oblasti:
+Aktuálne **662 testov**, rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|
@@ -280,6 +284,7 @@ Aktuálne **646 testov**, rozdelených podľa oblasti:
 | `test_search.py` | Vyhľadávanie bez ohľadu na diakritiku a veľkosť písmen (faktúry, zákazky, zákazníci), viac slov naraz, filter podľa zákazníka, správne zakódované odkazy filtrov |
 | `test_auto_backup.py` | Automatické zálohy: vytvorenie + test obnovy (poškodený ZIP, chýbajúci súbor, nesedí počet záznamov), retencia, bezpečné názvy a stiahnutie, plánovač, kontrola miesta, poistná záloha pred migráciou, trasy v Nastaveniach |
 | `test_reminders.py` | Pripomienky platieb: výber faktúr, stupne podľa omeškania, text správy a `mailto`, evidencia pripomenutí, ochrana pred nesprávnym stavom faktúry |
+| `test_profit.py` | Zisk zo zákazky: tržba bez DPH, dobropis/zálohové/návrhy, náklady podľa druhu, hodiny × sadzba, marža a strata, validácia, zobrazenie na kartách |
 | `test_mobile.py` | Mobilné zobrazenie - viewport meta v každej stránke, popisky buniek tabuliek položiek (pre kartičkové rozloženie), kľúčové mobilné CSS pravidlá |
 | `test_deploy.py` | `/health` (OK aj 503), štart na `$PORT`, poradie migrácií v `start.sh`, Dockerfile bez `VOLUME` s dátami v `/app/data`, `manage_accounts --upgrade-all` na existujúcom konte |
 | `test_error_handling.py` | Globálny handler neošetrených (500) chýb – používateľovi sa ukáže všeobecná hláška (nie detail výnimky), zaloguje sa traceback, JSON aj HTML vetva |
@@ -323,6 +328,7 @@ digitalny-zosit/
 ├── auth.py                 # hashovanie hesla, session, rate limiting
 ├── audit_log.py             # zápis do audit logu (história zmien)
 ├── backup_utils.py         # záloha/obnova cez SQLite backup API
+├── profit_utils.py         # zisk zo zákazky: tržba, náklady podľa druhu, marža
 ├── reminder_utils.py       # pripomienky platieb: stupne, text správy, mailto
 ├── auto_backup.py          # automatické zálohy, test obnovy, retencia, plánovač
 ├── csrf.py                  # CSRF ochrana (double-submit token)

@@ -6,13 +6,14 @@ import calendar as calendar_module
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import ValidationError
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from csrf import verify_csrf
 from auth import require_login_api, require_login_page
 from database import get_db
 from invoice_utils import CLOSED_INVOICE_STATUSES, calculate_invoice_totals, signed_invoice_total
-from models import Customer, Job, JobCost, JobPhoto
+from models import Customer, Invoice, Job, JobCost, JobPhoto
+from profit_utils import CATEGORY_KEYS, CATEGORY_LABELS, COST_CATEGORIES, job_profit
 from schemas import InvoiceStatus, JobCreate, JobRead, JobStatus, JobUpdate
 from search_utils import matches_search
 from templates_config import templates
@@ -79,7 +80,9 @@ def jobs_list_page(
         db
         .query(Job)
         .options(
-            joinedload(Job.customer)
+            joinedload(Job.customer),
+            selectinload(Job.invoices).selectinload(Invoice.items),
+            selectinload(Job.costs)
         )
 
     )
@@ -187,6 +190,8 @@ def jobs_list_page(
         context={
 
             "jobs": jobs,
+
+            "job_profits": {job.id: job_profit(job) for job in jobs},
 
             "statuses": list(JobStatus),
 
@@ -336,30 +341,13 @@ def edit_job_form(
 
 
     # =====================================
-    # NÁKLADY A REÁLNY ZISK ZO ZÁKAZKY
+    # NÁKLADY A REÁLNY ZISK ZO ZÁKAZKY (viď profit_utils.py)
     #
-    # "Fakturovaná suma" počíta len faktúry, ktoré boli skutočne vystavené
-    # zákazníkovi a nie sú zrušené ani zálohové (Odoslaná/Uhradená) - Návrh
-    # ešte nemusí byť finálny a Stornovaná/proforma nie sú reálny príjem.
+    # Tržba = vystavené faktúry (Odoslaná/Uhradená, nie zálohové, dobropis
+    # odpočíta) BEZ DPH. Náklady podľa druhu: materiál / práca / iné.
     # =====================================
 
-    invoiced_statuses = (InvoiceStatus.SENT.value, InvoiceStatus.PAID.value)
-
-    invoiced_total = sum(
-        (
-            signed_invoice_total(invoice)
-            for invoice in job.invoices
-            if invoice.status in invoiced_statuses and not invoice.is_proforma
-        ),
-        Decimal("0")
-    )
-
-    total_costs = sum(
-        (cost.amount for cost in job.costs),
-        Decimal("0")
-    )
-
-    profit = invoiced_total - total_costs
+    profit_data = job_profit(job)
 
 
     return templates.TemplateResponse(
@@ -374,11 +362,17 @@ def edit_job_form(
 
             "today": date.today(),
 
-            "invoiced_total": invoiced_total,
+            "profit_data": profit_data,
 
-            "total_costs": total_costs,
+            "cost_categories": COST_CATEGORIES,
 
-            "profit": profit
+            "category_labels": CATEGORY_LABELS,
+
+            "invoiced_total": profit_data["revenue"],
+
+            "total_costs": profit_data["total_costs"],
+
+            "profit": profit_data["profit"]
 
         }
 
@@ -797,22 +791,59 @@ def serve_job_photo(
 # NÁKLADY NA ZÁKAZKU
 # =========================================
 
+def _parse_money_field(raw: str, label: str, maximum: Decimal = MAX_COST_AMOUNT) -> Decimal | None:
+    """Prázdne -> None. Neplatné/NaN/Infinity/záporné/príliš veľké -> 422."""
+
+    raw = (raw or "").strip().replace(",", ".")
+
+    if not raw:
+        return None
+
+    try:
+
+        value = Decimal(raw)
+
+    except InvalidOperation:
+
+        raise HTTPException(status_code=422, detail=f"Neplatná hodnota: {label}")
+
+    if not value.is_finite() or abs(value) > maximum:
+
+        raise HTTPException(status_code=422, detail=f"Neplatná hodnota: {label}")
+
+    if value < 0:
+
+        raise HTTPException(status_code=422, detail=f"{label} nemôže byť záporná")
+
+    return value
+
+
 @router.post("/jobs/{job_id}/costs")
 def add_job_cost(
 
     job_id: int,
 
-    description: str = Form(...),
+    description: str = Form(""),
 
-    amount: str = Form(...),
+    amount: str = Form(""),
 
     cost_date: str = Form(""),
+
+    category: str = Form("material"),
+
+    hours: str = Form(""),
+
+    hourly_rate: str = Form(""),
 
     db: Session = Depends(get_db),
 
     user: str = Depends(require_login_page)
 
 ):
+    """
+    Pridá náklad k zákazke. Pri práci stačí zadať hodiny a sadzbu -
+    suma sa vypočíta (hodiny x sadzba); inak sa zadáva priamo suma.
+    """
 
     job = db.query(Job).filter(Job.id == job_id).first()
 
@@ -823,34 +854,39 @@ def add_job_cost(
             detail="Zákazka neexistuje"
         )
 
+    if category not in CATEGORY_KEYS:
 
-    try:
+        raise HTTPException(status_code=422, detail="Neplatný druh nákladu")
 
-        amount_decimal = Decimal(amount)
+    amount_decimal = _parse_money_field(amount, "suma nákladu")
 
-    except InvalidOperation:
+    hours_decimal = None
+
+    if category == "praca":
+
+        hours_decimal = _parse_money_field(hours, "hodiny", Decimal("99999"))
+        rate_decimal = _parse_money_field(hourly_rate, "hodinová sadzba")
+
+        if hours_decimal is not None and rate_decimal is not None:
+
+            amount_decimal = (hours_decimal * rate_decimal).quantize(Decimal("0.01"))
+
+            if amount_decimal > MAX_COST_AMOUNT:
+
+                raise HTTPException(status_code=422, detail="Neplatná suma nákladu")
+
+    if amount_decimal is None:
 
         raise HTTPException(
             status_code=422,
-            detail="Neplatná suma nákladu"
+            detail="Zadaj sumu nákladu (pri práci hodiny a sadzbu)"
         )
 
-    # Decimal prijme aj "NaN", "Infinity" či "1e999999" - "NaN" by pri
-    # porovnaní nižšie spadlo s 500 a zvyšné dve hodnoty by sa uložili
-    # a pokazili súčty zákazky.
-    if not amount_decimal.is_finite() or abs(amount_decimal) > MAX_COST_AMOUNT:
+    clean_description = description.strip()
 
-        raise HTTPException(
-            status_code=422,
-            detail="Neplatná suma nákladu"
-        )
+    if not clean_description:
 
-    if amount_decimal < 0:
-
-        raise HTTPException(
-            status_code=422,
-            detail="Suma nákladu nemôže byť záporná"
-        )
+        clean_description = dict(COST_CATEGORIES)[category].split(" (")[0]
 
 
     parsed_cost_date = parse_due_date(cost_date) or date.today()
@@ -858,9 +894,11 @@ def add_job_cost(
 
     cost = JobCost(
         job_id=job_id,
-        description=description.strip(),
+        description=clean_description,
         amount=amount_decimal,
-        cost_date=parsed_cost_date
+        cost_date=parsed_cost_date,
+        category=category,
+        hours=hours_decimal
     )
 
     db.add(cost)

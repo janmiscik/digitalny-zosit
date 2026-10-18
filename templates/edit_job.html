@@ -222,47 +222,91 @@
              NÁKLADY A REÁLNY ZISK
              ===================================== -->
 
-        <div class="edit-customer-card">
+        <div class="edit-customer-card" id="zisk">
 
             <h2 style="margin-top: 0;">
                 Náklady a zisk
             </h2>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 20px;">
+            <div class="profit-grid">
 
                 <div class="finance-card" style="margin: 0;">
-                    <div class="finance-number">{{ "%.2f"|format(invoiced_total) }} €</div>
-                    <div class="finance-label">Fakturovaná suma</div>
+                    <div class="finance-number">{{ "%.2f"|format(profit_data.revenue) }} €</div>
+                    <div class="finance-label">Tržba (bez DPH)</div>
                 </div>
 
                 <div class="finance-card" style="margin: 0;">
-                    <div class="finance-number">{{ "%.2f"|format(total_costs) }} €</div>
+                    <div class="finance-number">{{ "%.2f"|format(profit_data.total_costs) }} €</div>
                     <div class="finance-label">Náklady spolu</div>
                 </div>
 
-                <div class="finance-card {% if profit < 0 %}finance-card-warning{% endif %}" style="margin: 0;">
-                    <div class="finance-number">{{ "%.2f"|format(profit) }} €</div>
-                    <div class="finance-label">Čistý zisk</div>
+                <div class="finance-card {% if profit_data.profit < 0 %}finance-card-warning{% endif %}" style="margin: 0;">
+                    <div class="finance-number">{{ "%.2f"|format(profit_data.profit) }} €</div>
+                    <div class="finance-label">Zisk</div>
+                </div>
+
+                <div class="finance-card {% if profit_data.margin is not none and profit_data.margin < 0 %}finance-card-warning{% endif %}" style="margin: 0;">
+                    <div class="finance-number">
+                        {% if profit_data.margin is none %}–{% else %}{{ profit_data.margin }} %{% endif %}
+                    </div>
+                    <div class="finance-label">Marža</div>
                 </div>
 
             </div>
 
-            <p style="font-size: 0.85em; color: var(--text-muted); margin: -12px 0 20px 0;">
-                Fakturovaná suma = súčet odoslaných/uhradených faktúr k tejto zákazke
-                (bez návrhov, stornovaných a zálohových). Zisk = fakturovaná suma − náklady.
+            <p class="profit-note">
+                Tržba = vystavené faktúry k zákazke (odoslané a uhradené, bez DPH; zálohové
+                sa nepočítajú, dobropis tržbu znižuje).
+                {% if profit_data.revenue_pending > 0 %}
+                    Z toho ešte neuhradené: <strong>{{ "%.2f"|format(profit_data.revenue_pending) }} €</strong>.
+                {% endif %}
+                Náklady zadávaj bez DPH.
             </p>
+
+
+            {% if profit_data.total_costs > 0 %}
+
+                <div class="profit-bar" role="img" aria-label="Rozdelenie nákladov">
+                    {% for key, label in cost_categories %}
+                        {% set amount = profit_data.costs_by_category[key] %}
+                        {% if amount > 0 %}
+                            <span
+                                class="profit-bar-part profit-bar-{{ key }}"
+                                style="width: {{ (amount / profit_data.total_costs * 100)|round(1) }}%;"
+                                title="{{ label }}: {{ '%.2f'|format(amount) }} €"
+                            ></span>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+
+                <div class="profit-legend">
+                    {% for key, label in cost_categories %}
+                        {% set amount = profit_data.costs_by_category[key] %}
+                        <div>
+                            <span class="profit-dot profit-bar-{{ key }}"></span>
+                            {{ label.split(" (")[0] }}:
+                            <strong>{{ "%.2f"|format(amount) }} €</strong>
+                            {% if key == "praca" and profit_data.hours > 0 %}
+                                ({{ profit_data.hours }} h)
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+
+            {% endif %}
 
 
             {% if job.costs %}
 
-                <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px;">
+                <table class="profit-costs-table">
 
                     <thead>
-                        <tr style="text-align: left; font-size: 12px; color: var(--text-muted);">
-                            <th style="padding: 6px;">Popis</th>
-                            <th style="padding: 6px;">Dátum</th>
-                            <th style="padding: 6px; text-align: right;">Suma</th>
-                            <th style="padding: 6px; width: 30px;"></th>
+                        <tr>
+                            <th>Popis</th>
+                            <th>Druh</th>
+                            <th>Dátum</th>
+                            <th class="num">Suma</th>
+                            <th style="width: 30px;"></th>
                         </tr>
                     </thead>
 
@@ -270,11 +314,15 @@
 
                         {% for cost in job.costs %}
 
-                            <tr style="border-top: 1px solid var(--border);">
-                                <td style="padding: 8px 6px;">{{ cost.description }}</td>
-                                <td style="padding: 8px 6px;">{{ cost.cost_date.strftime("%d.%m.%Y") }}</td>
-                                <td style="padding: 8px 6px; text-align: right;">{{ "%.2f"|format(cost.amount) }} €</td>
-                                <td style="padding: 8px 6px;">
+                            <tr>
+                                <td data-label="Popis">
+                                    {{ cost.description }}
+                                    {% if cost.hours %}<span class="profit-hours">· {{ cost.hours }} h</span>{% endif %}
+                                </td>
+                                <td data-label="Druh">{{ category_labels.get(cost.category, "Iné").split(" (")[0] }}</td>
+                                <td data-label="Dátum">{{ cost.cost_date.strftime("%d.%m.%Y") }}</td>
+                                <td data-label="Suma" class="num">{{ "%.2f"|format(cost.amount) }} €</td>
+                                <td>
                                     <form action="/jobs/{{ job.id }}/costs/{{ cost.id }}/delete" method="post" onsubmit="return confirm('Zmazať tento náklad?');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                                         <button type="submit" class="invoice-item-remove" title="Zmazať">×</button>
@@ -291,31 +339,90 @@
             {% endif %}
 
 
-            <form action="/jobs/{{ job.id }}/costs" method="post" style="display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap;">
+            <form action="/jobs/{{ job.id }}/costs" method="post" class="profit-form" id="costForm">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
 
-                <div style="flex: 2; min-width: 160px;">
-                    <label>Popis nákladu</label>
-                    <input type="text" name="description" placeholder="Napr. materiál, subdodávka" required>
+                <div class="profit-field">
+                    <label>Druh</label>
+                    <select name="category" id="costCategory">
+                        {% for key, label in cost_categories %}
+                            <option value="{{ key }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
 
-                <div style="flex: 1; min-width: 100px;">
-                    <label>Suma (€)</label>
-                    <input type="number" name="amount" step="0.01" min="0" required>
+                <div class="profit-field profit-field-wide">
+                    <label>Popis (nepovinný)</label>
+                    <input type="text" name="description" placeholder="Napr. rúry, subdodávka, montáž">
                 </div>
 
-                <div style="flex: 1; min-width: 130px;">
+                <div class="profit-field" data-for="amount">
+                    <label>Suma bez DPH (€)</label>
+                    <input type="number" name="amount" id="costAmount" step="0.01" min="0" inputmode="decimal">
+                </div>
+
+                <div class="profit-field" data-for="praca" hidden>
+                    <label>Hodiny</label>
+                    <input type="number" name="hours" id="costHours" step="0.25" min="0" inputmode="decimal">
+                </div>
+
+                <div class="profit-field" data-for="praca" hidden>
+                    <label>Sadzba (€/h)</label>
+                    <input type="number" name="hourly_rate" id="costRate" step="0.01" min="0" inputmode="decimal">
+                </div>
+
+                <div class="profit-field">
                     <label>Dátum</label>
                     <input type="date" name="cost_date" value="{{ today.isoformat() if today else '' }}">
                 </div>
 
-                <button type="submit" class="save-button" style="height: 42px;">
+                <div class="profit-field profit-field-total" data-for="praca" hidden>
+                    <label>Suma za prácu</label>
+                    <div id="costTotal" class="profit-total">0,00 €</div>
+                </div>
+
+                <button type="submit" class="save-button profit-submit">
                     + Pridať náklad
                 </button>
 
             </form>
 
         </div>
+
+        <script>
+
+        (function () {
+
+            const category = document.getElementById("costCategory");
+            const amount = document.getElementById("costAmount");
+            const hours = document.getElementById("costHours");
+            const rate = document.getElementById("costRate");
+            const total = document.getElementById("costTotal");
+
+            function refresh() {
+
+                const isWork = category.value === "praca";
+
+                document.querySelectorAll('#costForm [data-for="praca"]').forEach(function (el) { el.hidden = !isWork; });
+                document.querySelector('#costForm [data-for="amount"]').hidden = isWork;
+
+                amount.required = !isWork;
+                hours.required = isWork;
+                rate.required = isWork;
+
+                const value = (parseFloat(hours.value) || 0) * (parseFloat(rate.value) || 0);
+
+                total.textContent = value.toFixed(2).replace(".", ",") + " €";
+
+            }
+
+            [category, hours, rate].forEach(function (el) { el.addEventListener("input", refresh); });
+
+            refresh();
+
+        })();
+
+        </script>
 
 
         <!-- =====================================

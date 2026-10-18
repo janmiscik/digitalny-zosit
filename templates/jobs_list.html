@@ -312,6 +312,17 @@
 
                         </p>
 
+                        {% set profit_info = job_profits[job.id] %}
+
+                        {% if profit_info.has_data %}
+
+                            <p class="job-row-profit {% if profit_info.profit < 0 %}job-row-profit-loss{% endif %}">
+                                Zisk {{ "%.2f"|format(profit_info.profit) }} €
+                                {% if profit_info.margin is not none %}· marža {{ profit_info.margin }} %{% endif %}
+                            </p>
+
+                        {% endif %}
+
                     </div>
 
 

@@ -296,6 +296,23 @@ class JobCost(Base):
         nullable=False
     )
 
+    # Druh nákladu pre výpočet zisku: material / praca / ine (viď
+    # profit_utils.COST_CATEGORIES). Staré záznamy (pred zavedením druhov)
+    # dostali "ine" - appka za ne nehádala druh.
+    category = Column(
+        String,
+        nullable=False,
+        default="material",
+        server_default="ine"
+    )
+
+    # Odpracované hodiny - len informatívne pri nákladoch typu "praca"
+    # (suma = hodiny x sadzba sa vypočíta pri zadávaní).
+    hours = Column(
+        Numeric(8, 2),
+        nullable=True
+    )
+
 
     job = relationship(
         "Job",
