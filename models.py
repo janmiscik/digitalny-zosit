@@ -141,6 +141,43 @@ class Customer(Base):
         cascade="all, delete-orphan"
     )
 
+    notes = relationship(
+        "CustomerNote",
+        back_populates="customer",
+        cascade="all, delete-orphan",
+        order_by="CustomerNote.id.desc()"
+    )
+
+
+class CustomerNote(Base):
+    """
+    Poznámka v histórii zákazníka (dohoda cez telefón, špecifiká
+    objektu, kľúče od vchodu...). Na rozdiel od jedného poľa
+    Customer.note je to záznam s časom - pribúda, nič sa neprepisuje.
+    `created_at` je naivný UTC čas (zobrazuje sa v lokálnej zóne).
+    """
+
+    __tablename__ = "customer_notes"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    customer_id = Column(
+        Integer,
+        ForeignKey("customers.id"),
+        nullable=False,
+        index=True
+    )
+
+    text = Column(Text, nullable=False)
+
+    created_at = Column(
+        DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+
+    customer = relationship("Customer", back_populates="notes")
+
 
 class Job(Base):
 

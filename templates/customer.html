@@ -215,6 +215,103 @@
         {% endif %}
 
 
+
+
+        <!-- =====================================
+             PREHĽAD, POZNÁMKY A ČASOVÁ OS
+             ===================================== -->
+
+        <div class="customer-overview">
+
+            <div class="customer-overview-item">
+                <strong>{{ summary.jobs_total }}</strong>
+                <span>zákaziek{% if summary.jobs_open %} · {{ summary.jobs_open }} otvorených{% endif %}</span>
+            </div>
+
+            <div class="customer-overview-item">
+                <strong>{{ "%.2f"|format(summary.revenue) }} €</strong>
+                <span>tržba bez DPH</span>
+            </div>
+
+            {% if summary.has_job_profit %}
+                <div class="customer-overview-item {% if summary.jobs_profit < 0 %}customer-overview-loss{% endif %}">
+                    <strong>{{ "%.2f"|format(summary.jobs_profit) }} €</strong>
+                    <span>zisk zo zákaziek{% if summary.jobs_margin is not none %} · marža {{ summary.jobs_margin }} %{% endif %}</span>
+                </div>
+            {% endif %}
+
+            {% if summary.average_payment_days is not none %}
+                <div class="customer-overview-item">
+                    <strong>{{ summary.average_payment_days }} dní</strong>
+                    <span>priemerná doba platby</span>
+                </div>
+            {% endif %}
+
+        </div>
+
+
+        <div class="customer-notes" id="poznamky">
+
+            <h2>Poznámky</h2>
+
+            <form action="/customers/{{ customer.id }}/notes" method="post" class="customer-note-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                <textarea
+                    name="text"
+                    rows="2"
+                    maxlength="{{ max_note_length }}"
+                    placeholder="Napr. dohoda po telefóne, kľúče u suseda, preferuje SMS..."
+                    required
+                ></textarea>
+                <button type="submit" class="save-button">+ Pridať poznámku</button>
+            </form>
+
+            {% for note in notes %}
+
+                <div class="customer-note">
+
+                    <div class="customer-note-main">
+                        <div class="customer-note-text">{{ note.text }}</div>
+                        <div class="customer-note-time">{{ note.time }}</div>
+                    </div>
+
+                    <form action="/customers/{{ customer.id }}/notes/{{ note.id }}/delete" method="post" onsubmit="return confirm('Zmazať túto poznámku?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                        <button type="submit" class="invoice-item-remove" title="Zmazať">×</button>
+                    </form>
+
+                </div>
+
+            {% endfor %}
+
+        </div>
+
+
+        {% if timeline %}
+
+            <details class="customer-timeline" open>
+
+                <summary>Časová os</summary>
+
+                <ul>
+                    {% for event in timeline %}
+                        <li>
+                            <span class="customer-timeline-date">{{ event.date.strftime("%d.%m.%Y") }}</span>
+                            <span class="customer-timeline-icon">{{ event.icon }}</span>
+                            {% if event.url %}
+                                <a href="{{ event.url }}">{{ event.text }}</a>
+                            {% else %}
+                                {{ event.text }}
+                            {% endif %}
+                        </li>
+                    {% endfor %}
+                </ul>
+
+            </details>
+
+        {% endif %}
+
+
         <!-- =====================================
              ZÁKAZKY
              ===================================== -->
@@ -669,6 +766,31 @@
 
         </section>
 
+
+
+
+        {% if photos %}
+
+            <details class="customer-photos" id="fotky">
+
+                <summary>Fotky zo zákaziek ({{ photos|length }})</summary>
+
+                <div class="customer-photo-grid">
+
+                    {% for photo in photos %}
+
+                        <a href="/jobs/{{ photo.job_id }}/edit" class="customer-photo" title="{{ photo.job_title }} · {{ 'pred' if photo.type == 'pred' else 'po' }} · {{ photo.date.strftime('%d.%m.%Y') }}">
+                            <img src="/jobs/photos/{{ photo.filename }}" alt="{{ photo.job_title }}" loading="lazy">
+                            <span>{{ photo.job_title }} · {{ 'pred' if photo.type == 'pred' else 'po' }}</span>
+                        </a>
+
+                    {% endfor %}
+
+                </div>
+
+            </details>
+
+        {% endif %}
 
     </section>
 

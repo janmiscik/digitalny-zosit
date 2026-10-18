@@ -11,7 +11,15 @@ from auth import require_login_api, require_login_page
 from database import get_db
 from ico_lookup import lookup_company_by_ico
 from invoice_utils import calculate_invoice_totals, signed_invoice_total
-from models import Customer
+from customer_history import (
+    MAX_NOTE_LENGTH,
+    build_timeline,
+    customer_photos,
+    customer_summary,
+    format_note_time,
+)
+from audit_log import log_action
+from models import Customer, CustomerNote
 from schemas import CustomerCreate, CustomerRead, CustomerUpdate, InvoiceStatus
 from search_utils import matches_search
 from templates_config import templates
@@ -200,6 +208,19 @@ def customer_detail(
             "total_unpaid": total_unpaid,
 
             "unpaid_count": len(unpaid_invoices),
+
+            "summary": customer_summary(customer),
+
+            "timeline": build_timeline(customer),
+
+            "photos": customer_photos(customer),
+
+            "notes": [
+                {"id": note.id, "text": note.text, "time": format_note_time(note.created_at)}
+                for note in customer.notes
+            ],
+
+            "max_note_length": MAX_NOTE_LENGTH,
 
             "today": date.today()
 
@@ -501,3 +522,93 @@ def get_customers(
 
 
     return customers
+
+
+# =========================================
+# POZNÁMKY V HISTÓRII ZÁKAZNÍKA
+# =========================================
+
+@router.post("/customers/{customer_id}/notes")
+def add_customer_note(
+
+    customer_id: int,
+
+    text: str = Form(""),
+
+    db: Session = Depends(get_db),
+
+    user: str = Depends(require_login_page)
+
+):
+
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+
+    if customer is None:
+
+        raise HTTPException(status_code=404, detail="Zákazník neexistuje")
+
+    clean_text = text.strip()
+
+    if not clean_text:
+
+        raise HTTPException(status_code=422, detail="Poznámka nesmie byť prázdna")
+
+    if len(clean_text) > MAX_NOTE_LENGTH:
+
+        raise HTTPException(
+            status_code=422,
+            detail=f"Poznámka môže mať najviac {MAX_NOTE_LENGTH} znakov"
+        )
+
+    db.add(CustomerNote(customer_id=customer_id, text=clean_text))
+
+    log_action(
+        db,
+        "customer.note_add",
+        entity_type="customer",
+        entity_id=customer_id,
+        detail=f"Poznámka k zákazníkovi {customer.name}"
+    )
+
+    db.commit()
+
+    return RedirectResponse(url=f"/customers/{customer_id}#poznamky", status_code=303)
+
+
+@router.post("/customers/{customer_id}/notes/{note_id}/delete")
+def delete_customer_note(
+
+    customer_id: int,
+
+    note_id: int,
+
+    db: Session = Depends(get_db),
+
+    user: str = Depends(require_login_page)
+
+):
+
+    note = (
+        db
+        .query(CustomerNote)
+        .filter(CustomerNote.id == note_id, CustomerNote.customer_id == customer_id)
+        .first()
+    )
+
+    if note is None:
+
+        raise HTTPException(status_code=404, detail="Poznámka neexistuje")
+
+    db.delete(note)
+
+    log_action(
+        db,
+        "customer.note_delete",
+        entity_type="customer",
+        entity_id=customer_id,
+        detail="Poznámka zmazaná"
+    )
+
+    db.commit()
+
+    return RedirectResponse(url=f"/customers/{customer_id}#poznamky", status_code=303)

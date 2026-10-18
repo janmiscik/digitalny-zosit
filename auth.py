@@ -95,9 +95,16 @@ def get_current_account_slug(request: Request) -> str | None:
     return request.session.get("account_slug")
 
 
-def require_login_page(request: Request) -> str:
+async def require_login_page(request: Request) -> str:
     """
     Dependency pre stránky renderované cez Jinja2.
+
+    ZÁMERNE `async def`: sync dependency FastAPI spúšťa vo vlákne s
+    KOPIOU kontextu, takže `set_current_tenant()` (ContextVar) by sa do
+    obsluhy požiadavky neprenieslo a trasy bez get_db (fotky zákaziek,
+    logo, stiahnutie zálohy) by padali na "aktuálne konto nie je
+    nastavené". Async dependency beží v kontexte samotnej požiadavky,
+    odkiaľ ho obsluha zdedí.
     Neprihláseného používateľa presmeruje na /login.
 
     Vracia account_slug (nie username) - je to to, čo ostatné časti
@@ -117,10 +124,11 @@ def require_login_page(request: Request) -> str:
     return account_slug
 
 
-def require_login_api(request: Request) -> str:
+async def require_login_api(request: Request) -> str:
     """
     Dependency pre JSON API endpointy.
     Neprihláseného používateľa vráti ako 401 JSON.
+    (`async def` z rovnakého dôvodu ako require_login_page.)
     """
 
     account_slug = get_current_account_slug(request)

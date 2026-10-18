@@ -3588,3 +3588,152 @@ body::after {
     background: var(--surface);
     color: var(--text-primary);
 }
+
+
+/* =========================================
+   HISTÓRIA ZÁKAZNÍKA
+   ========================================= */
+
+.customer-overview {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+    margin: 18px 0;
+}
+
+.customer-overview-item {
+    padding: 14px 16px;
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.customer-overview-item strong {
+    font-size: 20px;
+    white-space: nowrap;
+}
+
+.customer-overview-item span {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.customer-overview-loss strong { color: var(--danger, #c0392b); }
+
+.customer-notes {
+    margin: 22px 0;
+}
+
+.customer-notes h2 { margin-bottom: 10px; }
+
+.customer-note-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.customer-note-form textarea {
+    width: 100%;
+    box-sizing: border-box;
+    font: inherit;
+    font-size: 16px;
+}
+
+.customer-note-form button { min-height: 44px; align-self: flex-start; }
+
+.customer-note {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+}
+
+.customer-note-text {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.customer-note-time {
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.customer-timeline,
+.customer-photos {
+    margin: 18px 0;
+    padding: 12px 16px;
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+}
+
+.customer-timeline summary,
+.customer-photos summary {
+    cursor: pointer;
+    font-weight: 700;
+    min-height: 32px;
+}
+
+.customer-timeline ul {
+    list-style: none;
+    margin: 10px 0 0 0;
+    padding: 0;
+}
+
+.customer-timeline li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    padding: 6px 0;
+    border-top: 1px solid var(--border);
+    font-size: 14px;
+}
+
+.customer-timeline-date {
+    color: var(--text-secondary);
+    min-width: 88px;
+}
+
+.customer-photo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.customer-photo {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    text-decoration: none;
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.customer-photo img {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+}
+
+.customer-history-number {
+    white-space: nowrap;
+    font-size: clamp(18px, 5.5vw, 28px);
+}
+
+.customer-timeline a {
+    color: var(--text-primary);
+    text-decoration-color: var(--border);
+}

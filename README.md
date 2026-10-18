@@ -186,6 +186,15 @@ Mobilné pravidlá sú na konci `static/style.css` (sekcia „MOBIL - OVLÁDANIE
 - Jedným klikom sa pripraví hotový text (predmet, suma, IBAN, variabilný symbol, názov firmy) – dá sa upraviť, otvoriť v e-mailovej aplikácii (`mailto:`) alebo skopírovať (napr. na SMS). Appka sama **nič neodosiela**.
 - Po odoslaní klikneš „Označiť ako pripomenuté“ – eviduje sa počet pripomienok a dátum poslednej (aj v histórii zmien), vidno ich v zozname aj na faktúre.
 
+## 👤 História zákazníka
+
+Detail zákazníka (`/customers/<id>`) ukazuje všetko na jednej stránke:
+
+- **Prehľad:** počet zákaziek (a otvorených), tržba bez DPH, zisk zo zákaziek s maržou a priemerná doba, za ktorú zákazník platí.
+- **Poznámky:** záznamy s časom (dohoda po telefóne, kľúče od vchodu, preferovaný kontakt...) – pribúdajú, nič sa neprepisuje; dajú sa zmazať.
+- **Časová os:** vystavené a uhradené faktúry, ponuky, poznámky a nahraté fotky (zlúčené po zákazke a dni), najnovšie hore.
+- **Zákazky, ponuky, faktúry** zákazníka a **fotky zo všetkých jeho zákaziek** (pred/po) v jednej galérii.
+
 ---
 
 ## 🔧 Zákazky
@@ -258,7 +267,7 @@ Pri vytváraní zákazníka appka vie podľa zadaného IČO automaticky doplniť
 python -m pytest tests/ -q
 ```
 
-Aktuálne **662 testov**, rozdelených podľa oblasti:
+Aktuálne **680 testov**, rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|
@@ -285,6 +294,8 @@ Aktuálne **662 testov**, rozdelených podľa oblasti:
 | `test_auto_backup.py` | Automatické zálohy: vytvorenie + test obnovy (poškodený ZIP, chýbajúci súbor, nesedí počet záznamov), retencia, bezpečné názvy a stiahnutie, plánovač, kontrola miesta, poistná záloha pred migráciou, trasy v Nastaveniach |
 | `test_reminders.py` | Pripomienky platieb: výber faktúr, stupne podľa omeškania, text správy a `mailto`, evidencia pripomenutí, ochrana pred nesprávnym stavom faktúry |
 | `test_profit.py` | Zisk zo zákazky: tržba bez DPH, dobropis/zálohové/návrhy, náklady podľa druhu, hodiny × sadzba, marža a strata, validácia, zobrazenie na kartách |
+| `test_customer_history.py` | História zákazníka: súhrn (tržba bez DPH, zisk, doba platby), poznámky (pridanie, validácia, mazanie, izolácia, escapovanie), časová os, galéria fotiek |
+| `test_tenant_context.py` | Regresia: fotky zákaziek sa servujú po skutočnom prihlásení (aktuálne konto v kontexte požiadavky), cudzie konto ich nevidí |
 | `test_mobile.py` | Mobilné zobrazenie - viewport meta v každej stránke, popisky buniek tabuliek položiek (pre kartičkové rozloženie), kľúčové mobilné CSS pravidlá |
 | `test_deploy.py` | `/health` (OK aj 503), štart na `$PORT`, poradie migrácií v `start.sh`, Dockerfile bez `VOLUME` s dátami v `/app/data`, `manage_accounts --upgrade-all` na existujúcom konte |
 | `test_error_handling.py` | Globálny handler neošetrených (500) chýb – používateľovi sa ukáže všeobecná hláška (nie detail výnimky), zaloguje sa traceback, JSON aj HTML vetva |
@@ -328,6 +339,7 @@ digitalny-zosit/
 ├── auth.py                 # hashovanie hesla, session, rate limiting
 ├── audit_log.py             # zápis do audit logu (história zmien)
 ├── backup_utils.py         # záloha/obnova cez SQLite backup API
+├── customer_history.py     # história zákazníka: súhrn, časová os, galéria fotiek
 ├── profit_utils.py         # zisk zo zákazky: tržba, náklady podľa druhu, marža
 ├── reminder_utils.py       # pripomienky platieb: stupne, text správy, mailto
 ├── auto_backup.py          # automatické zálohy, test obnovy, retencia, plánovač
