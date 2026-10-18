@@ -33,6 +33,13 @@ from schemas import InvoiceStatus, QuoteItemCreate, QuoteStatus
 from templates_config import templates
 
 
+# Z ktorých stavov ponuky sa dá jedným klikom vystaviť faktúra.
+CONVERTIBLE_QUOTE_STATUSES = (
+    QuoteStatus.SENT.value,
+    QuoteStatus.ACCEPTED.value,
+)
+
+
 router = APIRouter(dependencies=[Depends(verify_csrf)])
 
 
@@ -137,6 +144,8 @@ def quotes_list_page(
             "quote_totals": quote_totals,
 
             "expired_quote_ids": expired_quote_ids,
+
+            "convertible_statuses": CONVERTIBLE_QUOTE_STATUSES,
 
             "statuses": list(QuoteStatus),
 
@@ -380,7 +389,15 @@ def quote_detail(
         [s for s in next_statuses if s != QuoteStatus.CONVERTED.value]
     ) > 0
 
-    can_convert_to_invoice = quote.status == QuoteStatus.ACCEPTED.value
+    can_convert_to_invoice = quote.status in CONVERTIBLE_QUOTE_STATUSES
+
+    converted_invoices = (
+        db
+        .query(Invoice)
+        .filter(Invoice.quote_id == quote.id)
+        .order_by(Invoice.id)
+        .all()
+    )
 
 
     return templates.TemplateResponse(
@@ -400,6 +417,10 @@ def quote_detail(
             "can_change_status": can_change_status,
 
             "can_convert_to_invoice": can_convert_to_invoice,
+
+            "converted_invoices": converted_invoices,
+
+            "quote_is_sent": quote.status == QuoteStatus.SENT.value,
 
             "is_expired": is_quote_expired(quote)
 
@@ -800,15 +821,20 @@ def convert_quote_to_invoice(
             detail="Ponuka neexistuje"
         )
 
-    if quote.status != QuoteStatus.ACCEPTED.value:
+    if quote.status not in CONVERTIBLE_QUOTE_STATUSES:
 
         raise HTTPException(
             status_code=409,
             detail=(
-                "Faktúru je možné vygenerovať len z akceptovanej ponuky "
-                f"(aktuálny stav: '{quote.status}')."
+                "Faktúru je možné vygenerovať len z odoslanej alebo "
+                f"akceptovanej ponuky (aktuálny stav: '{quote.status}')."
             )
         )
+
+    # Zákazník často odsúhlasí ponuku len ústne/SMS-kou. Faktúra z
+    # odoslanej ponuky ju preto rovno považuje za akceptovanú (zapíše sa
+    # do audit logu), aby sa nemuselo najprv klikať na zmenu stavu.
+    accepted_implicitly = quote.status == QuoteStatus.SENT.value
 
 
     make_proforma = is_proforma == "on"
@@ -890,6 +916,7 @@ def convert_quote_to_invoice(
         detail=(
             f"Ponuka {quote.quote_number} -> faktúra "
             f"{new_invoice.invoice_number}"
+            + (" (odoslaná ponuka braná ako akceptovaná)" if accepted_implicitly else "")
         )
     )
     db.commit()

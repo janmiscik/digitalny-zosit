@@ -131,6 +131,10 @@
             <p>
                 {{ invoice.customer.name }}
 
+                {% if source_quote %}
+                    · z ponuky <a href="/quotes/{{ source_quote.id }}">č. {{ source_quote.quote_number }}</a>
+                {% endif %}
+
                 {% if invoice.is_credit_note and invoice.original_invoice %}
                     · k faktúre <a href="/invoices/{{ invoice.original_invoice.id }}">č. {{ invoice.original_invoice.invoice_number }}</a>
                 {% endif %}

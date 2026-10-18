@@ -146,12 +146,12 @@ def get_test_customer():
     return customer
 
 
-def create_sample_quote(db, status="Návrh"):
+def create_sample_quote(db, status="Návrh", quote_number="CP2026099"):
 
     customer = db.query(Customer).first()
 
     quote = Quote(
-        quote_number="CP2026099",
+        quote_number=quote_number,
         customer_id=customer.id,
         status=status,
         issue_date=date.today(),
@@ -906,3 +906,121 @@ def test_create_quote_with_non_numeric_job_id_is_rejected_cleanly():
     )
 
     assert response.status_code == 422
+
+
+# =========================================
+# PONUKA -> FAKTÚRA JEDNÝM KLIKOM (zlepšenia)
+# =========================================
+
+def _quote_with_status(status):
+
+    db = TestingSessionLocal()
+
+    number = f"CP2026{db.query(Quote).count() + 100}"
+
+    quote = create_sample_quote(db, status=status, quote_number=number)
+    quote_id = quote.id
+    db.close()
+
+    return quote_id
+
+
+def test_convert_sent_quote_marks_it_accepted_implicitly():
+
+    quote_id = _quote_with_status("Odoslaná")
+
+    response = client.post(
+        f"/quotes/{quote_id}/convert-to-invoice",
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+
+    db = TestingSessionLocal()
+
+    assert get_quote(quote_id).status == "Prevedená na faktúru"
+    assert db.query(Invoice).filter(Invoice.quote_id == quote_id).count() == 1
+
+    db.close()
+
+
+def test_convert_draft_rejected_or_converted_quote_is_refused():
+
+    for status in ("Návrh", "Zamietnutá", "Prevedená na faktúru"):
+
+        quote_id = _quote_with_status(status)
+
+        response = client.post(f"/quotes/{quote_id}/convert-to-invoice")
+
+        assert response.status_code == 409, status
+
+
+def test_double_click_does_not_create_second_invoice():
+
+    quote_id = _quote_with_status("Akceptovaná")
+
+    first = client.post(f"/quotes/{quote_id}/convert-to-invoice", follow_redirects=False)
+    second = client.post(f"/quotes/{quote_id}/convert-to-invoice", follow_redirects=False)
+
+    assert first.status_code == 303
+    assert second.status_code == 409
+
+    db = TestingSessionLocal()
+
+    assert db.query(Invoice).filter(Invoice.quote_id == quote_id).count() == 1
+
+    db.close()
+
+
+def test_quote_detail_offers_conversion_for_sent_and_accepted():
+
+    sent_id = _quote_with_status("Odoslaná")
+    accepted_id = _quote_with_status("Akceptovaná")
+    draft_id = _quote_with_status("Návrh")
+
+    sent_page = client.get(f"/quotes/{sent_id}").text
+
+    assert "Vygenerovať ostrú faktúru" in sent_page
+    assert "automaticky označí ako akceptovaná" in sent_page
+    assert "Vygenerovať ostrú faktúru" in client.get(f"/quotes/{accepted_id}").text
+    assert "Vygenerovať ostrú faktúru" not in client.get(f"/quotes/{draft_id}").text
+
+
+def test_quote_detail_links_to_created_invoice_and_back():
+
+    quote_id = _quote_with_status("Akceptovaná")
+
+    client.post(f"/quotes/{quote_id}/convert-to-invoice", follow_redirects=False)
+
+    db = TestingSessionLocal()
+    invoice = db.query(Invoice).filter(Invoice.quote_id == quote_id).first()
+    invoice_id, number = invoice.id, invoice.invoice_number
+    quote_number = get_quote(quote_id).quote_number
+    db.close()
+
+    quote_page = client.get(f"/quotes/{quote_id}").text
+
+    assert "Vystavené z tejto ponuky" in quote_page
+    assert f'href="/invoices/{invoice_id}"' in quote_page
+    assert number in quote_page
+    assert "Vygenerovať ostrú faktúru" not in quote_page
+
+    invoice_page = client.get(f"/invoices/{invoice_id}").text
+
+    assert f'href="/quotes/{quote_id}"' in invoice_page
+    assert quote_number in invoice_page
+
+
+def test_quote_list_shows_quick_invoice_button_only_when_convertible():
+
+    sent_id = _quote_with_status("Odoslaná")
+    accepted_id = _quote_with_status("Akceptovaná")
+    draft_id = _quote_with_status("Návrh")
+    converted_id = _quote_with_status("Prevedená na faktúru")
+
+    page = client.get("/ponuky").text
+
+    assert f'action="/quotes/{sent_id}/convert-to-invoice"' in page
+    assert f'action="/quotes/{accepted_id}/convert-to-invoice"' in page
+    assert f'action="/quotes/{draft_id}/convert-to-invoice"' not in page
+    assert f'action="/quotes/{converted_id}/convert-to-invoice"' not in page

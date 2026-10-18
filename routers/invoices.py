@@ -30,7 +30,7 @@ from invoice_utils import (
     signed_invoice_total,
     validate_invoice_vat,
 )
-from models import Company, Customer, Invoice, InvoiceItem, Job
+from models import Company, Customer, Invoice, InvoiceItem, Job, Quote
 from routers.company import get_or_create_company
 from peppol_xml import generate_peppol_xml
 from peppol_validation import validate_peppol_invoice_xml
@@ -575,6 +575,11 @@ def invoice_detail(
 
     totals = calculate_invoice_totals(invoice.items)
 
+    source_quote = (
+        db.query(Quote).filter(Quote.id == invoice.quote_id).first()
+        if invoice.quote_id else None
+    )
+
 
     # Dropdown na zmenu stavu ponúka len stavy, do ktorých sa dá z
     # aktuálneho stavu skutočne legálne prejsť (viď
@@ -619,6 +624,8 @@ def invoice_detail(
         context={
 
             "invoice": invoice,
+
+            "source_quote": source_quote,
 
             "totals": totals,
 

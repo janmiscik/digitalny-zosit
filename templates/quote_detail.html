@@ -268,11 +268,34 @@
             </div>
 
 
+            {% if converted_invoices %}
+
+                <div class="convert-box converted-invoices">
+
+                    <h3>🧾 Vystavené z tejto ponuky</h3>
+
+                    <p>
+                        {% for inv in converted_invoices %}
+                            <a href="/invoices/{{ inv.id }}">{{ "Zálohová faktúra" if inv.is_proforma else "Faktúra" }} č. {{ inv.invoice_number }}</a>
+                            ({{ inv.status }}){% if not loop.last %}, {% endif %}
+                        {% endfor %}
+                    </p>
+
+                </div>
+
+            {% endif %}
+
             {% if can_convert_to_invoice %}
 
                 <div class="convert-box">
 
-                    <h3>Ponuka je akceptovaná — vygeneruj faktúru</h3>
+                    <h3>
+                        {% if quote_is_sent %}
+                            Zákazník súhlasí? Vystav faktúru
+                        {% else %}
+                            Ponuka je akceptovaná — vygeneruj faktúru
+                        {% endif %}
+                    </h3>
 
                     <p>
                         Jedným klikom vytvoríš novú faktúru s rovnakými
@@ -280,6 +303,9 @@
                         nasledujúce číslo z fakturačnej rady, zálohová
                         (proforma) má vlastný číselný rad a nepočíta sa
                         do tržieb.
+                        {% if quote_is_sent %}
+                            Ponuka sa pritom automaticky označí ako akceptovaná.
+                        {% endif %}
                     </p>
 
                     <div class="convert-buttons">

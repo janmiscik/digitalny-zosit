@@ -244,6 +244,21 @@
 
                 </a>
 
+                {% if quote.status in convertible_statuses %}
+
+                    <form
+                        action="/quotes/{{ quote.id }}/convert-to-invoice"
+                        method="post"
+                        class="quote-quick-convert"
+                    >
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                        <button type="submit" class="quote-quick-convert-button">
+                            🧾 Vystaviť faktúru z tejto ponuky
+                        </button>
+                    </form>
+
+                {% endif %}
+
             {% endfor %}
 
         {% else %}

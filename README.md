@@ -175,7 +175,8 @@ Mobilné pravidlá sú na konci `static/style.css` (sekcia „MOBIL - OVLÁDANIE
 
 - Samostatný koncept od faktúry, vlastné číslovanie a stavy (Návrh → Odoslaná → Akceptovaná/Zamietnutá → Prevedená na faktúru).
 - Dajú sa vytvoriť samostatne alebo naviazané na konkrétnu zákazku.
-- Po akceptovaní: **jedným klikom** vygeneruješ ostrú alebo zálohovú faktúru s rovnakými položkami.
+- **Jedným klikom** vygeneruješ ostrú alebo zálohovú faktúru s rovnakými položkami – z odoslanej aj akceptovanej ponuky (odoslaná sa pritom automaticky označí ako akceptovaná). Tlačidlo je priamo v zozname ponúk aj v detaile ponuky; opätovné kliknutie druhú faktúru nevytvorí.
+- Ponuka v detaile ukazuje faktúry, ktoré z nej vznikli, a faktúra odkazuje späť na svoju ponuku.
 - PDF export ponuky aj dodacieho listu.
 
 ---
@@ -234,7 +235,7 @@ Pri vytváraní zákazníka appka vie podľa zadaného IČO automaticky doplniť
 python -m pytest tests/ -q
 ```
 
-Aktuálne **622 testov**, rozdelených podľa oblasti:
+Aktuálne **628 testov**, rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|
@@ -247,7 +248,7 @@ Aktuálne **622 testov**, rozdelených podľa oblasti:
 | `test_peppol_validation.py` | Validácia vygenerovaného Peppol XML – povinné polia, súčty, elektronická adresa (schéma + Endpoint ID), prenesenie daňovej povinnosti, nulová sadzba DPH – správne aj úmyselne pokazené scenáre |
 | `test_peppol_scheme_validator.py` | `validators.validate_peppol_scheme_id()` – formát, zhoda schémy s krajinou (napr. že `9946` nie je slovenská schéma) |
 | `test_invoices.py` | Fakturácia, DPH režim, stavy, PDF, Peppol XML, country_code/Endpoint ID zákazníka, nálezy validácie na detaile faktúry, dátum úhrady, kopírovanie, vyhľadávanie/filter |
-| `test_quotes.py` | Cenové ponuky, konverzia na faktúru, proforma |
+| `test_quotes.py` | Cenové ponuky, konverzia na faktúru (aj z odoslanej), ochrana pred dvojitým kliknutím, odkazy ponuka ↔ faktúra, rýchle tlačidlo v zozname, proforma |
 | `test_jobs_extras.py` | Fotodokumentácia, náklady/zisk (vrátane odmietnutia NaN/Infinity v sume nákladu), kalendár |
 | `test_uploads.py` | Nahrávanie loga/podpisu/fotiek zákaziek, overenie typu súboru, auto-resize a EXIF orientácia fotiek |
 | `test_uploads_resize.py` | Zúžený `except` pri zmene veľkosti fotky – poškodený obrázok vs. skutočná programátorská chyba, logovanie s traceback (`logger.exception`) |

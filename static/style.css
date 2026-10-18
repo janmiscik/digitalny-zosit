@@ -3239,3 +3239,36 @@ body::after {
 
     text-decoration: none;
 }
+
+
+/* =========================================
+   PONUKY - RÝCHLA FAKTÚRA JEDNÝM KLIKOM
+   ========================================= */
+
+.quote-quick-convert {
+    margin: -6px 0 14px 0;
+    padding: 0 4px;
+}
+
+.quote-quick-convert-button {
+    min-height: 44px;
+    padding: 8px 16px;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    background: var(--surface-secondary);
+    border: 1.5px dashed var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+}
+
+.quote-quick-convert-button:hover {
+    border-style: solid;
+}
+
+@media (max-width: 600px) {
+    .quote-quick-convert-button {
+        width: 100%;
+    }
+}
