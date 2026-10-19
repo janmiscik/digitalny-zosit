@@ -117,7 +117,17 @@ async def lifespan(app: FastAPI):
 # APP
 # =========================================
 
-app = FastAPI(lifespan=lifespan)
+# Interaktívna dokumentácia API (/docs, /redoc, /openapi.json) je verejná
+# a vyratúva všetky trasy appky - v produkcii je vypnutá. Na vývoj ju
+# zapne ENABLE_API_DOCS=true.
+_docs_enabled = os.getenv("ENABLE_API_DOCS", "false").strip().lower() in ("true", "1", "yes")
+
+app = FastAPI(
+    lifespan=lifespan,
+    docs_url="/docs" if _docs_enabled else None,
+    redoc_url="/redoc" if _docs_enabled else None,
+    openapi_url="/openapi.json" if _docs_enabled else None,
+)
 
 
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -142,6 +152,35 @@ app.add_middleware(
     same_site="lax",
     https_only=SESSION_HTTPS_ONLY,
 )
+
+
+# =========================================
+# BEZPEČNOSTNÉ HLAVIČKY
+#
+# Pridané ku každej odpovedi. CSP zámerne chýba: šablóny používajú
+# inline štýly a skripty, striktné CSP by ich rozbilo.
+# =========================================
+
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
+}
+
+if SESSION_HTTPS_ONLY:
+    SECURITY_HEADERS["Strict-Transport-Security"] = "max-age=31536000"
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+
+    response = await call_next(request)
+
+    for name, value in SECURITY_HEADERS.items():
+        response.headers.setdefault(name, value)
+
+    return response
 
 
 # =========================================

@@ -40,9 +40,11 @@ if ACCOUNTS_DATABASE_URL.startswith("sqlite:///"):
     _accounts_db_path.parent.mkdir(parents=True, exist_ok=True)
 
 
+# timeout = busy_timeout SQLite: pri súbehu (požiadavka + plánovač záloh)
+# zápis chvíľu počká namiesto okamžitého "database is locked".
 accounts_engine = create_engine(
     ACCOUNTS_DATABASE_URL,
-    connect_args={"check_same_thread": False}
+    connect_args={"check_same_thread": False, "timeout": 15}
 )
 
 

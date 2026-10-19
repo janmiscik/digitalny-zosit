@@ -75,3 +75,21 @@ def patch_tenant_paths(monkeypatch):
             )
 
     return _patch
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limits():
+    """Počítadlá limitov (prihlásenie, registrácia) sú v pamäti procesu -
+    bez vynulovania by si testy navzájom míňali limit (napr. 5 registrácií
+    za hodinu z jednej IP)."""
+
+    import auth
+
+    for store in (
+        auth._failed_login_attempts, auth._lockout_until,
+        auth._failed_username_attempts, auth._username_lockout_until,
+        auth._registrations,
+    ):
+        store.clear()
+
+    yield

@@ -14,8 +14,11 @@ from auth import (
     is_login_locked,
     login_user,
     logout_user,
+    needs_rehash,
     register_failed_login,
+    register_registration,
     register_successful_login,
+    registration_retry_after,
     verify_password,
 )
 from csrf import verify_csrf
@@ -95,6 +98,16 @@ def register_submit(
             name="register.html",
             context={"error": message},
             status_code=status_code
+        )
+
+    retry_after = registration_retry_after(request)
+
+    if retry_after:
+
+        return error(
+            "Z tejto adresy bolo založených príliš veľa kont. "
+            f"Skús to znova o približne {max(1, retry_after // 60)} min.",
+            status_code=429
         )
 
     if not (MIN_USERNAME_LENGTH <= len(username) <= MAX_USERNAME_LENGTH):
@@ -191,6 +204,8 @@ def register_submit(
             status_code=500
         )
 
+    register_registration(request)
+
     login_user(request, account.slug, account.username)
 
     _log_to_account_db(account.slug, "auth.account_created")
@@ -230,7 +245,7 @@ def login_submit(
     accounts_db: Session = Depends(get_accounts_db)
 ):
 
-    locked, retry_after_seconds = is_login_locked(request)
+    locked, retry_after_seconds = is_login_locked(request, username)
 
     if locked:
 
@@ -264,7 +279,7 @@ def login_submit(
 
     if account is None or not valid_password:
 
-        register_failed_login(request)
+        register_failed_login(request, username)
 
         # Zámerne nelogujeme zadané meno/heslo - len fakt neúspešného
         # pokusu. Logovať je kam len vtedy, keď username skutočne
@@ -281,7 +296,15 @@ def login_submit(
             status_code=401
         )
 
-    register_successful_login(request)
+    register_successful_login(request, username)
+
+    # Starý (slabší) hash sa pri úspešnom prihlásení potichu nahradí
+    # novým - heslo je práve k dispozícii v čitateľnej podobe.
+    if needs_rehash(account.password_hash):
+
+        account.password_hash = hash_password(password)
+        accounts_db.commit()
+
     login_user(request, account.slug, account.username)
 
     _log_to_account_db(account.slug, "auth.login_success")

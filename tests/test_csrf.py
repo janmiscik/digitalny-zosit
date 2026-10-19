@@ -281,11 +281,20 @@ def test_logout_requires_valid_csrf_token():
     response = client.post("/logout")
     assert response.status_code == 403
 
-    # Prihlásenie session nevyčistilo (login_user len nastaví "user"),
-    # takže pôvodný token z /login je stále platný aj po prihlásení.
+    # Prihlásenie session obnovilo (ochrana proti session fixation), takže
+    # token z /login po prihlásení už neplatí - treba nový z prihlásenej session.
     response = client.post(
         "/logout",
         data={"csrf_token": token},
+        follow_redirects=False
+    )
+    assert response.status_code == 403
+
+    new_token = get_csrf_token(client, "/settings")
+
+    response = client.post(
+        "/logout",
+        data={"csrf_token": new_token},
         follow_redirects=False
     )
 

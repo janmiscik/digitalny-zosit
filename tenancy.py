@@ -170,7 +170,8 @@ def get_account_engine(slug: str) -> Engine:
 
         engine = create_engine(
             account_database_url(slug),
-            connect_args={"check_same_thread": False}
+            # timeout = busy_timeout SQLite (viď accounts_db.py)
+            connect_args={"check_same_thread": False, "timeout": 15}
         )
 
         @event.listens_for(engine, "connect")

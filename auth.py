@@ -12,65 +12,106 @@ import tenancy
 # HASHOVANIE HESLA
 # =========================================
 
-PBKDF2_ITERATIONS = 200_000
+# OWASP odporúča pre PBKDF2-HMAC-SHA256 aspoň 600 000 iterácií. Nový
+# hash má tvar `pbkdf2_sha256$<iterácie>$<soľ>$<hash>`; staré hashe
+# (`soľ$hash`, 200 000 iterácií) sa dajú ďalej overiť a pri úspešnom
+# prihlásení sa potichu prehashujú (needs_rehash).
+PBKDF2_ITERATIONS = 600_000
+LEGACY_PBKDF2_ITERATIONS = 200_000
+HASH_PREFIX = "pbkdf2_sha256"
+
+
+def _derive(password: str, salt: str, iterations: int) -> str:
+    return hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt.encode("utf-8"),
+        iterations,
+    ).hex()
 
 
 def hash_password(password: str) -> str:
     """
     Vytvorí hash hesla v tvare:
 
-        salt$hash
+        pbkdf2_sha256$<iterácie>$<soľ>$<hash>
     """
 
     salt = secrets.token_hex(16)
 
-    derived = hashlib.pbkdf2_hmac(
-        "sha256",
-        password.encode("utf-8"),
-        salt.encode("utf-8"),
-        PBKDF2_ITERATIONS,
-    )
+    return f"{HASH_PREFIX}${PBKDF2_ITERATIONS}${salt}${_derive(password, salt, PBKDF2_ITERATIONS)}"
 
-    return f"{salt}${derived.hex()}"
+
+def _parse_hash(stored_hash: str) -> tuple[int, str, str] | None:
+    """Vráti (iterácie, soľ, hash) alebo None pri neplatnom/poškodenom hashi."""
+
+    if not stored_hash or "$" not in stored_hash:
+        return None
+
+    parts = stored_hash.split("$")
+
+    if len(parts) == 4 and parts[0] == HASH_PREFIX:
+
+        try:
+            iterations = int(parts[1])
+        except ValueError:
+            return None
+
+        # horná hranica: poškodený/podvrhnutý hash nesmie vyvolať
+        # extrémne dlhý výpočet
+        if not (LEGACY_PBKDF2_ITERATIONS <= iterations <= 5_000_000):
+            return None
+
+        salt, hex_digest = parts[2], parts[3]
+
+    elif len(parts) == 2:
+
+        iterations = LEGACY_PBKDF2_ITERATIONS
+        salt, hex_digest = parts
+
+    else:
+        return None
+
+    try:
+
+        if len(salt) != 32 or len(hex_digest) != 64:
+            return None
+
+        bytes.fromhex(salt)
+        bytes.fromhex(hex_digest)
+
+    except ValueError:
+        return None
+
+    return iterations, salt, hex_digest
 
 
 def verify_password(password: str, stored_hash: str) -> bool:
     """
-    Overí heslo proti uloženému PBKDF2 hashu.
+    Overí heslo proti uloženému PBKDF2 hashu (nový aj starý formát).
 
     Pri neplatnom alebo poškodenom hashi jednoducho vráti False.
     """
 
-    if not stored_hash or "$" not in stored_hash:
+    parsed = _parse_hash(stored_hash)
+
+    if parsed is None:
         return False
 
-    salt, hex_digest = stored_hash.split("$", 1)
+    iterations, salt, hex_digest = parsed
 
-    if not salt or not hex_digest:
-        return False
+    return hmac.compare_digest(_derive(password, salt, iterations), hex_digest)
 
-    try:
-        if len(salt) != 32:
-            return False
 
-        bytes.fromhex(salt)
+def needs_rehash(stored_hash: str) -> bool:
+    """True, ak je hash v starom formáte alebo s menej iteráciami než dnes."""
 
-        if len(hex_digest) != 64:
-            return False
+    parsed = _parse_hash(stored_hash)
 
-        bytes.fromhex(hex_digest)
-
-    except ValueError:
-        return False
-
-    derived = hashlib.pbkdf2_hmac(
-        "sha256",
-        password.encode("utf-8"),
-        salt.encode("utf-8"),
-        PBKDF2_ITERATIONS,
+    return parsed is not None and (
+        not stored_hash.startswith(HASH_PREFIX + "$")
+        or parsed[0] < PBKDF2_ITERATIONS
     )
-
-    return hmac.compare_digest(derived.hex(), hex_digest)
 
 
 # =========================================
@@ -83,6 +124,9 @@ def verify_password(password: str, stored_hash: str) -> bool:
 # =========================================
 
 def login_user(request: Request, account_slug: str, username: str) -> None:
+    # Session sa pri prihlásení vyčistí (ochrana proti session fixation:
+    # starý obsah session, vrátane CSRF tokenu, sa neprenáša do prihlásenej).
+    request.session.clear()
     request.session["account_slug"] = account_slug
     request.session["username"] = username
 
@@ -145,61 +189,149 @@ async def require_login_api(request: Request) -> str:
 
 
 # =========================================
-# RATE LIMITING PRIHLÁSENIA
+# RATE LIMITING
 #
-# KĽÚČOVANÉ PODĽA IP ADRESY - v appke s viacerými kontami by jeden
-# globálny (nekľúčovaný) limit znamenal, že útočník skúšajúci heslo k
-# JEDNÉMU kontu by dočasne zamkol prihlásenie VŠETKÝM kontám appky.
-# Limit teda platí len pre danú IP adresu, nie naprieč appkou - presne
-# tak, ako to bolo pôvodne myslené pri appke s jedným používateľom.
+# Prihlásenie sa obmedzuje DVOMA nezávislými limitmi:
+#
+#   * podľa IP adresy (5 neúspešných pokusov / 5 min -> blok 5 min) -
+#     útočník z jednej adresy nezamkne ostatné kontá appky,
+#   * podľa používateľského mena (20 neúspešných pokusov / 15 min ->
+#     blok 15 min) - ak by útočník IP adresu menil alebo podvrhol
+#     (X-Forwarded-For), heslo k jednému kontu aj tak nemôže skúšať
+#     donekonečna. Limit je zámerne vyšší než IP limit, aby samotné
+#     skúšanie cudzieho mena nezablokovalo majiteľa príliš ľahko.
+#
+# Registrácia má vlastný limit podľa IP (viď register_allowed) - bez
+# neho by sa dali donekonečna zakladať kontá (každé = databáza na
+# disku + drahé hashovanie).
+#
+# Počítadlá sú v pamäti procesu (appka beží v jednej inštancii). Staré
+# záznamy sa pravidelne čistia, aby slovník nerástol donekonečna.
 # =========================================
 
 MAX_LOGIN_ATTEMPTS = 5
 LOGIN_WINDOW_SECONDS = 300
 LOGIN_LOCKOUT_SECONDS = 300
 
+MAX_USERNAME_ATTEMPTS = 20
+USERNAME_WINDOW_SECONDS = 900
+USERNAME_LOCKOUT_SECONDS = 900
+
+MAX_REGISTRATIONS_PER_IP = 5
+REGISTRATION_WINDOW_SECONDS = 3600
+
 _failed_login_attempts: dict[str, list[float]] = {}
 _lockout_until: dict[str, float] = {}
 
+_failed_username_attempts: dict[str, list[float]] = {}
+_username_lockout_until: dict[str, float] = {}
+
+_registrations: dict[str, list[float]] = {}
+
+_last_cleanup = 0.0
+CLEANUP_INTERVAL_SECONDS = 600
+
+
+def _cleanup(now: float) -> None:
+    """Zahodí záznamy, ktorým už vypršalo okno aj blokácia."""
+
+    global _last_cleanup
+
+    if now - _last_cleanup < CLEANUP_INTERVAL_SECONDS:
+        return
+
+    _last_cleanup = now
+
+    for attempts, until, window in (
+        (_failed_login_attempts, _lockout_until, LOGIN_WINDOW_SECONDS),
+        (_failed_username_attempts, _username_lockout_until, USERNAME_WINDOW_SECONDS),
+    ):
+
+        for key in list(attempts):
+
+            fresh = [t for t in attempts[key] if now - t < window]
+
+            if fresh:
+                attempts[key] = fresh
+            else:
+                attempts.pop(key, None)
+
+        for key in list(until):
+
+            if until[key] <= now:
+                until.pop(key, None)
+
+    for key in list(_registrations):
+
+        fresh = [t for t in _registrations[key] if now - t < REGISTRATION_WINDOW_SECONDS]
+
+        if fresh:
+            _registrations[key] = fresh
+        else:
+            _registrations.pop(key, None)
+
 
 def _rate_limit_key(request: Request) -> str:
-    """IP adresa klienta - pri appke za reverse proxy by sem v
-    budúcnosti mohlo byť treba doplniť X-Forwarded-For, zatiaľ appka
-    beží priamo."""
+    """IP adresa klienta. Za reverse proxy (Railway) ju uvicorn doplní z
+    X-Forwarded-For (viď FORWARDED_ALLOW_IPS v Dockerfile)."""
 
     return request.client.host if request.client else "unknown"
 
 
-def is_login_locked(request: Request) -> tuple[bool, int]:
+def _username_key(username: str) -> str:
+    return (username or "").strip().lower()[:100]
+
+
+def is_login_locked(request: Request, username: str | None = None) -> tuple[bool, int]:
     """
     Vráti:
 
         (True, počet sekúnd)
 
-    ak je prihlásenie z tejto IP adresy dočasne zablokované.
+    ak je prihlásenie z tejto IP adresy (alebo pre dané používateľské
+    meno, ak je zadané) dočasne zablokované.
     """
 
-    key = _rate_limit_key(request)
-    until = _lockout_until.get(key)
-
-    if until is None:
-        return False, 0
-
-    remaining = until - time.time()
-
-    if remaining <= 0:
-        _lockout_until.pop(key, None)
-        _failed_login_attempts.pop(key, None)
-        return False, 0
-
-    return True, int(remaining) + 1
-
-
-def register_failed_login(request: Request) -> None:
-    """Zaznamená neúspešný pokus pre IP adresu tejto požiadavky."""
-
-    key = _rate_limit_key(request)
     now = time.time()
+
+    _cleanup(now)
+
+    remaining_values = []
+
+    for lockouts, attempts, key in (
+        (_lockout_until, _failed_login_attempts, _rate_limit_key(request)),
+        (_username_lockout_until, _failed_username_attempts, _username_key(username) if username else None),
+    ):
+
+        if key is None:
+            continue
+
+        until = lockouts.get(key)
+
+        if until is None:
+            continue
+
+        remaining = until - now
+
+        if remaining <= 0:
+            lockouts.pop(key, None)
+            attempts.pop(key, None)
+            continue
+
+        remaining_values.append(remaining)
+
+    if not remaining_values:
+        return False, 0
+
+    return True, int(max(remaining_values)) + 1
+
+
+def register_failed_login(request: Request, username: str | None = None) -> None:
+    """Zaznamená neúspešný pokus pre IP adresu (a používateľské meno)."""
+
+    now = time.time()
+
+    key = _rate_limit_key(request)
 
     attempts = _failed_login_attempts.setdefault(key, [])
 
@@ -211,11 +343,56 @@ def register_failed_login(request: Request) -> None:
     if len(attempts) >= MAX_LOGIN_ATTEMPTS:
         _lockout_until[key] = now + LOGIN_LOCKOUT_SECONDS
 
+    if username:
 
-def register_successful_login(request: Request) -> None:
-    """Po úspešnom prihlásení vyčistí históriu zlyhaní pre túto IP."""
+        user_key = _username_key(username)
+
+        user_attempts = _failed_username_attempts.setdefault(user_key, [])
+
+        while user_attempts and now - user_attempts[0] >= USERNAME_WINDOW_SECONDS:
+            user_attempts.pop(0)
+
+        user_attempts.append(now)
+
+        if len(user_attempts) >= MAX_USERNAME_ATTEMPTS:
+            _username_lockout_until[user_key] = now + USERNAME_LOCKOUT_SECONDS
+
+
+def register_successful_login(request: Request, username: str | None = None) -> None:
+    """Po úspešnom prihlásení vyčistí históriu zlyhaní pre IP aj meno."""
 
     key = _rate_limit_key(request)
 
     _failed_login_attempts.pop(key, None)
     _lockout_until.pop(key, None)
+
+    if username:
+
+        user_key = _username_key(username)
+
+        _failed_username_attempts.pop(user_key, None)
+        _username_lockout_until.pop(user_key, None)
+
+
+def registration_retry_after(request: Request) -> int:
+    """Počet sekúnd do ďalšej povolenej registrácie z tejto IP (0 = môže)."""
+
+    now = time.time()
+
+    _cleanup(now)
+
+    attempts = [
+        t for t in _registrations.get(_rate_limit_key(request), [])
+        if now - t < REGISTRATION_WINDOW_SECONDS
+    ]
+
+    if len(attempts) < MAX_REGISTRATIONS_PER_IP:
+        return 0
+
+    return int(REGISTRATION_WINDOW_SECONDS - (now - attempts[0])) + 1
+
+
+def register_registration(request: Request) -> None:
+    """Zapíše úspešnú registráciu do limitu danej IP."""
+
+    _registrations.setdefault(_rate_limit_key(request), []).append(time.time())

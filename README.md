@@ -100,9 +100,13 @@ Appka sa nasadzuje cez `Dockerfile` (`railway.json` ho vyberie a nastaví health
 
 ## 🔐 Prihlásenie a bezpečnosť
 
-- **Kontá a registrácia** (`/register`, `/login`) – každý používateľ má vlastné konto (`Account` v `accounts.db`: meno, hash hesla, `slug` priečinka), heslo min. 8 znakov hashované cez PBKDF2, session-based prihlásenie (cookie). Dáta kont sú fyzicky oddelené – appka pri obsluhe jedného konta nikdy neotvorí súbor iného (viď `tenancy.py`).
+- **Kontá a registrácia** (`/register`, `/login`) – každý používateľ má vlastné konto (`Account` v `accounts.db`: meno, hash hesla, `slug` priečinka), heslo min. 8 znakov hashované cez PBKDF2-SHA256 (600 000 iterácií; staré hashe sa pri prihlásení potichu prehashujú), session-based prihlásenie (cookie). Dáta kont sú fyzicky oddelené – appka pri obsluhe jedného konta nikdy neotvorí súbor iného (viď `tenancy.py`).
 - HTML stránky vyžadujú prihlásenie – neprihláseného používateľa presmerujú na `/login`. JSON API endpointy vrátia `401 Unauthorized`.
-- **Rate limiting** na `/login` – po 5 zlých pokusoch v priebehu 5 minút sa prihlásenie zamkne na 5 minút (kľúčované podľa IP adresy klienta, aby útočník na jedno konto nezamkol všetkým ostatným).
+- **Rate limiting** – `/login`: po 5 zlých pokusoch z jednej IP za 5 minút sa prihlásenie zamkne na 5 minút; popri tom limit podľa mena konta (20 zlých pokusov za 15 min), aby sa heslo nedalo skúšať donekonečna ani pri zmene IP. `/register`: max. 5 nových kont za hodinu z jednej IP.
+- **Session** sa pri prihlásení vymení (ochrana proti session fixation), takže starý CSRF token po prihlásení neplatí.
+- **Bezpečnostné hlavičky** na každej odpovedi: `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy` a pri HTTPS aj `Strict-Transport-Security`. CSP zatiaľ nie je (šablóny majú inline skripty a štýly).
+- **Interaktívna dokumentácia API** (`/docs`, `/redoc`, `/openapi.json`) je v produkcii vypnutá; na vývoj ju zapne `ENABLE_API_DOCS=true`.
+- **SQLite `busy_timeout`** 15 s – súbeh požiadavky a automatickej zálohy nekončí chybou „database is locked“.
 - Session cookie je kryptograficky podpísaná (`itsdangerous`) – akákoľvek manipulácia s cookie sa odmietne. Cookie sa navyše posiela iba cez HTTPS (`https_only`, konfigurovateľné cez `SESSION_HTTPS_ONLY` - viď sekcia `.env` vyššie).
 - **CSRF ochrana** – všetky formuláre (POST/PUT/PATCH/DELETE) nesú skrytý token naviazaný na session (double-submit pattern); požiadavka bez platného tokenu sa odmietne s `403`.
 - Nahrávané obrázky (logo, podpis, fotky zákaziek) sa overujú podľa **skutočného obsahu súboru** (cez Pillow), nielen podľa prípony – zabraňuje to nahratiu skrytého škodlivého súboru pod príponou `.png`. Zároveň sa kontroluje aj rozlíšenie (max. 40 megapixelov) ako ochrana proti "decompression bomb" útoku (malý súbor, ktorý sa pri dekódovaní rozvinie do enormnej veľkosti v pamäti).
@@ -276,10 +280,11 @@ Pri vytváraní zákazníka appka vie podľa zadaného IČO automaticky doplniť
 ## ✅ Testy
 
 ```powershell
+pip install -r requirements-dev.txt   # raz, pytest sa do produkčného obrazu neinštaluje
 python -m pytest tests/ -q
 ```
 
-Aktuálne **702 testov**, rozdelených podľa oblasti:
+Aktuálne **723 testov**, rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|
@@ -307,6 +312,7 @@ Aktuálne **702 testov**, rozdelených podľa oblasti:
 | `test_reminders.py` | Pripomienky platieb: výber faktúr, stupne podľa omeškania, text správy a `mailto`, evidencia pripomenutí, ochrana pred nesprávnym stavom faktúry |
 | `test_profit.py` | Zisk zo zákazky: tržba bez DPH, dobropis/zálohové/návrhy, náklady podľa druhu, hodiny × sadzba, marža a strata, validácia, zobrazenie na kartách |
 | `test_customer_history.py` | História zákazníka: súhrn (tržba bez DPH, zisk, doba platby), poznámky (pridanie, validácia, mazanie, izolácia, escapovanie), časová os, galéria fotiek |
+| `test_hardening.py` | Audit: hash hesiel (formát, starý hash, poškodené hashe), limity (IP, meno, registrácia, čistenie), obnova session, bezpečnostné hlavičky, vypnuté /docs, busy_timeout |
 | `test_export.py` | Export: obdobia (hranice roka, priestupný rok), výber dokladov, CSV formát, štruktúra Excelu, DPH rekapitulácia, ochrana pred vzorcami, ZIP s PDF, validácia, audit |
 | `test_tenant_context.py` | Regresia: fotky zákaziek sa servujú po skutočnom prihlásení (aktuálne konto v kontexte požiadavky), cudzie konto ich nevidí |
 | `test_mobile.py` | Mobilné zobrazenie - viewport meta v každej stránke, popisky buniek tabuliek položiek (pre kartičkové rozloženie), kľúčové mobilné CSS pravidlá |
@@ -343,7 +349,7 @@ digitalny-zosit/
 ├── templates/            # Jinja2 šablóny (jedna na stránku)
 │
 ├── tests/                # pytest, viď sekcia Testy vyššie
-│   └── conftest.py       # SESSION_HTTPS_ONLY=false pre testy (viď sekcia Testy)
+│   └── conftest.py       # SESSION_HTTPS_ONLY=false pre testy, nulovanie limitov (viď sekcia Testy)
 │
 ├── alembic_accounts/     # migrácie master databázy kont (accounts.db)
 │
@@ -389,6 +395,7 @@ digitalny-zosit/
 ├── railway.json            # Railway: Dockerfile + healthcheck /health
 ├── alembic.ini
 ├── alembic_accounts.ini
-├── requirements.txt
+├── requirements.txt         # produkčné závislosti (Docker obraz)
+├── requirements-dev.txt     # + pytest, pypdf, httpx (na testy)
 └── README.md
 ```
