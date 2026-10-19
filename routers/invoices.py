@@ -1,3 +1,4 @@
+from decimal import Decimal
 from datetime import date, timedelta
 
 from urllib.parse import urlencode
@@ -1189,6 +1190,33 @@ async def create_credit_note(
         raise HTTPException(
             status_code=422,
             detail=str(exc)
+        )
+
+
+    # Dobropisy spolu nesmú presiahnuť pôvodnú faktúru (zrušené sa nerátajú).
+    already_credited = sum(
+        (
+            calculate_invoice_totals(other.items)["total_gross"]
+            for other in db.query(Invoice).options(joinedload(Invoice.items)).filter(
+                Invoice.original_invoice_id == original.id,
+                Invoice.is_credit_note.is_(True),
+                Invoice.status != InvoiceStatus.CANCELLED.value,
+            )
+        ),
+        Decimal("0"),
+    )
+
+    original_gross = calculate_invoice_totals(original.items)["total_gross"]
+    new_gross = calculate_invoice_totals(items_data)["total_gross"]
+
+    if already_credited + new_gross > original_gross:
+
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Dobropisy by spolu ({already_credited + new_gross:.2f} €) presiahli "
+                f"pôvodnú faktúru ({original_gross:.2f} €)."
+            )
         )
 
 

@@ -36,3 +36,12 @@ Rozsah: bezpečnosť, databázy, trvalé úložisko, testy, závislosti. Stav k 
 5. **Zmena hesla a obnova zabudnutého hesla** v appke nie sú; bez e-mailového odosielania sa dá riešiť len manuálne cez `manage_accounts.py`.
 6. **WAL režim SQLite** by zlepšil súbeh čítania a zápisu, ale mení správanie záloh a obnovy (súbory `-wal`/`-shm`), preto som ho nezapínal bez samostatného testu na Railway.
 7. V koreni projektu leží osamotený `invoice_detail.html` (starý duplikát `templates/invoice_detail.html`); appka ho nepoužíva, dá sa zmazať.
+
+## Dodatok: nálezy z externého posúdenia
+
+| Bod | Výsledok |
+|---|---|
+| Obnova po strate úložiska | Postup je otestovaný end-to-end (`test_disaster_recovery.py`) a popísaný v `docs/OBNOVA.md`. Pri tom sa našli a opravili dve chyby: záloha zo staršej verzie appky sa po obnove nemigrovala (appka by padala na chýbajúcich stĺpcoch) a poškodené logo zhodilo tvorbu PDF. Obnova teraz po nahraní migruje schému a pri zlyhaní vráti pôvodný stav. **Zostáva riziko, že zálohy ležia na tom istom Volume** – treba ich sťahovať mimo Railway alebo doplniť automatický export (S3/Backblaze). |
+| Účtovná správnosť | **Chyba opravená:** DPH sa zaokrúhľovalo po riadkoch, nie po sadzbe. Pri veľa malých položkách vychádzalo o centy inak než v rekapitulácii a než vyžaduje Peppol pravidlo BR-CO-17 (napr. 3 × 0,10 € pri 23 %: 0,06 € namiesto 0,07 €). Teraz sa DPH počíta zo súčtu základov danej sadzby. Pridaná kontrola, že dobropisy spolu nepresiahnu pôvodnú faktúru. Číslovanie (RRRRPPP, DP…, ZF…, CP…) je po rokoch a typoch oddelené a pri kolízii sa bezpečne opakuje. **Nie je to daňové poradenstvo** – správnosť pre konkrétneho používateľa (režim DPH, prenesenie daňovej povinnosti, zahraniční odberatelia) má potvrdiť účtovník. |
+| Reprodukovateľnosť testov | `pay-by-square` je v `requirements.txt` (0.2.0); chýbal len v prostredí bez inštalácie závislostí. Pridané GitHub Actions s čistou inštaláciou a `pip-audit`. Testy prešli aj v novom virtuálnom prostredí s pripnutými verziami. |
+| Migrácie a súbežnosť | Testy: dáta z každej z 19 revízií sa po migrácii na head zachovajú (integrity + foreign key check), `--upgrade-all` a štart appky pokračujú po zlyhaní jedného konta, 6 súbežných zapisovačov počas nepretržitých záloh bez „database is locked“ a bez straty riadkov. SQLite migrácie nie sú atomické (alembic: „non-transactional DDL“), preto pred migráciou vzniká poistná záloha a migrácie majú ochrany proti opakovaniu. |

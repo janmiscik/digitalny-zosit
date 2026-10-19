@@ -13,7 +13,7 @@ from reportlab.platypus import (
 )
 from reportlab.lib.styles import ParagraphStyle
 
-from invoice_pdf import _register_fonts, format_date, scaled_image
+from invoice_pdf import _register_fonts, format_date, readable_image_path, scaled_image
 from uploads_utils import image_path
 
 
@@ -120,7 +120,7 @@ def generate_delivery_note_pdf(
         )
     ]
 
-    logo_file = image_path(company.logo_filename) if company else None
+    logo_file = readable_image_path(company.logo_filename) if company else None
 
     if logo_file is not None:
 

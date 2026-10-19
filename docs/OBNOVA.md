@@ -1,0 +1,28 @@
+# Obnova dát po úplnej strate úložiska
+
+Všetky dáta (databázy, fotky, logo, zálohy) ležia na jednom Railway Volume (`/app/data`).
+Ak Volume zmizne, zmiznú aj zálohy na ňom. **Preto si zálohu priebežne sťahuj mimo Railway.**
+
+## Prevencia (5 minút týždenne)
+1. Nastavenia → Záloha → **Stiahnuť zálohu** (ZIP s databázou aj súbormi).
+2. Ulož ju mimo Railway (osobný disk, cloud). Pred väčšou zmenou (nová verzia, import) stiahni novú.
+3. Raz za čas zálohu otestuj: Nastavenia → Overiť zálohu (appka zálohu rozbalí a skontroluje).
+
+## Postup po strate úložiska
+1. V Railway pripoj nový Volume s Mount path `/app/data` a nasaď službu. V logu musí byť
+   `[ULOZISKE] OK: /app/data je samostatný disk`.
+2. Otvor appku a **zaregistruj sa znova s rovnakým menom konta** (kontá sú vo Volume, takže zmizli).
+3. Prihlás sa → Nastavenia → **Obnoviť zo zálohy** → nahraj stiahnutý ZIP.
+4. Appka záloha overí, uloží poistnú zálohu, obnoví databázu aj súbory a doplní schému na aktuálnu verziu.
+   Ak záloha pochádza z novšej verzie appky alebo je poškodená, pôvodný stav ostane nedotknutý.
+5. Skontroluj faktúry, zákazníkov a logo na PDF. Dáta sú v stave z času zálohy; doklady vystavené
+   po zálohe treba vystaviť/zapísať znova.
+
+## Čo test pokrýva
+`tests/test_disaster_recovery.py` simuluje presne tento postup: vymaže celé úložisko aj zoznam kont,
+zaregistruje konto znova, nahrá stiahnutú zálohu a porovná dáta, súbory a schému. Overuje aj poškodené
+zálohy, zálohu zo staršej verzie a rollback pri zlyhaní migrácie.
+
+## Limity
+- Maximálna veľkosť nahrávanej zálohy je 200 MB.
+- Záloha je po konte: obnova jedného konta sa nedotkne ostatných.

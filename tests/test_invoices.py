@@ -3244,7 +3244,7 @@ def test_create_credit_note_success():
             ("description", "Vrátená položka"),
             ("quantity", "1"),
             ("unit", "ks"),
-            ("unit_price", "50.00"),
+            ("unit_price", "30.00"),
             ("vat_rate", "19"),
         ],
         follow_redirects=False
@@ -3263,7 +3263,7 @@ def test_create_credit_note_success():
     assert credit_note.status == "Návrh"
     assert "Reklamácia časti práce" in credit_note.note
     # položka sa uloží s KLADNOU hodnotou (znamienko len pri zobrazení)
-    assert credit_note.items[0].unit_price == Decimal("50.00")
+    assert credit_note.items[0].unit_price == Decimal("30.00")
 
     db.close()
 
@@ -3283,7 +3283,7 @@ def test_create_credit_note_requires_reason():
             ("description", "Práca"),
             ("quantity", "1"),
             ("unit", "ks"),
-            ("unit_price", "50.00"),
+            ("unit_price", "30.00"),
             ("vat_rate", "19"),
         ]
     )
@@ -3305,7 +3305,7 @@ def test_create_credit_note_requires_sent_or_paid():
             ("description", "Práca"),
             ("quantity", "1"),
             ("unit", "ks"),
-            ("unit_price", "50.00"),
+            ("unit_price", "30.00"),
             ("vat_rate", "19"),
         ]
     )
@@ -3329,7 +3329,7 @@ def test_cannot_create_credit_note_of_a_credit_note():
             ("description", "Vrátené"),
             ("quantity", "1"),
             ("unit", "ks"),
-            ("unit_price", "50.00"),
+            ("unit_price", "30.00"),
             ("vat_rate", "19"),
         ],
         follow_redirects=False
@@ -3357,7 +3357,7 @@ def test_create_credit_note_not_found():
             ("description", "Práca"),
             ("quantity", "1"),
             ("unit", "ks"),
-            ("unit_price", "50.00"),
+            ("unit_price", "30.00"),
             ("vat_rate", "19"),
         ]
     )
@@ -3385,7 +3385,7 @@ def test_credit_note_rejects_vat_regime_conflict():
             ("description", "Práca"),
             ("quantity", "1"),
             ("unit", "ks"),
-            ("unit_price", "50.00"),
+            ("unit_price", "30.00"),
             ("vat_rate", "19"),
         ]
     )
@@ -3409,7 +3409,7 @@ def test_credit_note_pdf_shows_dobropis_title():
             ("description", "Vrátená položka"),
             ("quantity", "1"),
             ("unit", "ks"),
-            ("unit_price", "50.00"),
+            ("unit_price", "30.00"),
             ("vat_rate", "19"),
         ]
     )
@@ -3426,7 +3426,7 @@ def test_credit_note_pdf_shows_dobropis_title():
     text = extract_pdf_text(response.content)
 
     assert "DOBROPIS" in text
-    assert "-50.00" in text or "-59.50" in text  # záporná suma niekde v PDF
+    assert "-30.00" in text or "-35.70" in text  # záporná suma niekde v PDF
 
 
 def test_credit_note_pdf_omits_payment_section():
@@ -3445,7 +3445,7 @@ def test_credit_note_pdf_omits_payment_section():
             ("description", "Vrátená položka"),
             ("quantity", "1"),
             ("unit", "ks"),
-            ("unit_price", "50.00"),
+            ("unit_price", "30.00"),
             ("vat_rate", "19"),
         ]
     )
@@ -3901,3 +3901,77 @@ def test_customer_form_rejects_removed_eas_scheme_at_input_time():
     )
 
     assert response.status_code == 422
+
+
+# =========================================
+# DOBROPIS NESMIE PRESIAHNUŤ PÔVODNÚ FAKTÚRU
+# (create_sample_invoice: 3 x 15,50 + 19 % DPH = 55,34 €)
+# =========================================
+
+def _credit(invoice_id, unit_price):
+
+    return post_form(
+        f"/invoices/{invoice_id}/credit-note",
+        [
+            ("reason", "Reklamácia"),
+            ("description", "Vrátená položka"),
+            ("quantity", "1"),
+            ("unit", "ks"),
+            ("unit_price", unit_price),
+            ("vat_rate", "19"),
+        ],
+        follow_redirects=False
+    )
+
+
+def _sent_invoice_id():
+
+    db = TestingSessionLocal()
+    invoice = create_sample_invoice(db)
+    invoice.status = "Odoslaná"
+    invoice_id = invoice.id
+    db.commit()
+    db.close()
+
+    return invoice_id
+
+
+def test_credit_note_cannot_exceed_original_invoice():
+
+    invoice_id = _sent_invoice_id()
+
+    response = _credit(invoice_id, "50.00")           # 59,50 € > 55,34 €
+
+    assert response.status_code == 422
+    assert "presiahli" in response.json()["detail"]
+
+
+def test_credit_note_exactly_full_amount_is_allowed():
+
+    invoice_id = _sent_invoice_id()
+
+    assert _credit(invoice_id, "46.50").status_code == 303        # 55,34 € = celá faktúra
+
+
+def test_credit_notes_together_cannot_exceed_original():
+
+    invoice_id = _sent_invoice_id()
+
+    assert _credit(invoice_id, "30.00").status_code == 303        # 35,70 €
+    assert _credit(invoice_id, "20.00").status_code == 422        # +23,80 € = 59,50 €
+    assert _credit(invoice_id, "16.50").status_code == 303        # +19,64 € = 55,34 €
+
+
+def test_cancelled_credit_note_frees_the_amount():
+
+    invoice_id = _sent_invoice_id()
+
+    response = _credit(invoice_id, "46.50")
+    credit_id = int(response.headers["location"].split("/")[-1])
+
+    db = TestingSessionLocal()
+    db.query(Invoice).filter(Invoice.id == credit_id).first().status = "Stornovaná"
+    db.commit()
+    db.close()
+
+    assert _credit(invoice_id, "10.00").status_code == 303

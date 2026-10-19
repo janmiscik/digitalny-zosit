@@ -22,6 +22,7 @@ kopírovanie by mohlo zachytiť nekonzistentný stav.
 """
 
 import io
+import logging
 import os
 import shutil
 import sqlite3
@@ -34,6 +35,8 @@ from fastapi import HTTPException
 
 import tenancy
 from uploads_utils import uploads_dir
+
+logger = logging.getLogger(__name__)
 
 
 # Tabuľky, ktoré musí mať KAŽDÁ platná záloha tejto appky - slúžia na
@@ -520,6 +523,53 @@ def _validate_backup_file(file_bytes: bytes) -> None:
         )
 
 
+def _rollback_to_safety_backup(safety_backup_path: Path) -> None:
+    """Vráti databázu a uploads/ zo zálohy vytvorenej tesne pred obnovou."""
+
+    with zipfile.ZipFile(safety_backup_path) as zf:
+
+        db_bytes = _extract_and_validate_db_bytes(zf)
+
+        tenancy.discard_account_engine(tenancy.get_current_tenant())
+
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+
+            tmp.write(db_bytes)
+            tmp_path = Path(tmp.name)
+
+        try:
+
+            source = sqlite3.connect(str(tmp_path))
+            destination = sqlite3.connect(str(_sqlite_file_path()))
+
+            with destination:
+                source.backup(destination)
+
+            source.close()
+            destination.close()
+
+        finally:
+            tmp_path.unlink(missing_ok=True)
+
+        if uploads_dir().exists():
+            shutil.rmtree(uploads_dir())
+
+        uploads_dir().mkdir(parents=True, exist_ok=True)
+
+        for member in zf.namelist():
+
+            if not member.startswith("uploads/") or member.endswith("/"):
+                continue
+
+            target_path = uploads_dir() / member[len("uploads/"):]
+
+            if uploads_dir() not in target_path.resolve().parents:
+                continue
+
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            target_path.write_bytes(zf.read(member))
+
+
 def restore_from_upload(file_bytes: bytes) -> Path:
     """
     Obnoví appku (databázu aj uploads/) z nahranej zálohy.
@@ -603,6 +653,29 @@ def restore_from_upload(file_bytes: bytes) -> Path:
 
                 target_path.write_bytes(source_file.read())
 
+
+    # Záloha môže pochádzať zo staršej verzie appky (bez novších tabuliek
+    # a stĺpcov) - po obnove sa preto databáza hneď doplní na aktuálnu
+    # schému. Ak migrácia zlyhá, vráti sa poistná záloha spred obnovy,
+    # aby konto nezostalo v rozbitom stave.
+    try:
+
+        tenancy.upgrade_account_database(tenancy.get_current_tenant())
+
+    except Exception as exc:
+
+        logger.exception("Migrácia obnovenej databázy zlyhala - vraciam pôvodný stav")
+
+        _rollback_to_safety_backup(safety_backup_path)
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Obnova zlyhala pri aktualizácii schémy databázy "
+                f"({type(exc).__name__}) - záloha možno pochádza z novšej verzie "
+                "appky. Pôvodné dáta boli vrátené."
+            )
+        )
 
     # Záznam o obnove sa musí zapísať AŽ TERAZ, priamo do (už
     # obnoveného) DB súboru - logovať PRED obnovou by bolo zbytočné,

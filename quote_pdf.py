@@ -18,6 +18,7 @@ from invoice_pdf import (
     _register_fonts,
     format_date,
     format_money,
+    readable_image_path,
     scaled_image,
 )
 from invoice_utils import calculate_invoice_totals
@@ -133,7 +134,7 @@ def generate_quote_pdf(quote, company) -> bytes:
         )
     ]
 
-    logo_file = image_path(company.logo_filename) if company else None
+    logo_file = readable_image_path(company.logo_filename) if company else None
 
     if logo_file is not None:
 

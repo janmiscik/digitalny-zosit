@@ -227,6 +227,9 @@ Stránka `/export` (odkaz na prehľade) pripraví podklady za zvolené obdobie �
 
 ## 💾 Záloha a obnova databázy
 
+Postup po úplnej strate úložiska je v [docs/OBNOVA.md](docs/OBNOVA.md). GitHub Actions (`.github/workflows/tests.yml`) spúšťa testy na čistej inštalácii závislostí.
+
+
 V Nastaveniach (`/settings`):
 
 - **Stiahnutie zálohy** – konzistentná kópia databázy cez natívne SQLite backup API (bezpečné aj počas behu appky); pred zabalením sa databáza overí cez `PRAGMA integrity_check` – poškodená databáza sa nezálohuje.
@@ -284,7 +287,7 @@ pip install -r requirements-dev.txt   # raz, pytest sa do produkčného obrazu n
 python -m pytest tests/ -q
 ```
 
-Aktuálne **723 testov**, rozdelených podľa oblasti:
+Aktuálne **760 testov**, rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|
@@ -312,6 +315,9 @@ Aktuálne **723 testov**, rozdelených podľa oblasti:
 | `test_reminders.py` | Pripomienky platieb: výber faktúr, stupne podľa omeškania, text správy a `mailto`, evidencia pripomenutí, ochrana pred nesprávnym stavom faktúry |
 | `test_profit.py` | Zisk zo zákazky: tržba bez DPH, dobropis/zálohové/návrhy, náklady podľa druhu, hodiny × sadzba, marža a strata, validácia, zobrazenie na kartách |
 | `test_customer_history.py` | História zákazníka: súhrn (tržba bez DPH, zisk, doba platby), poznámky (pridanie, validácia, mazanie, izolácia, escapovanie), časová os, galéria fotiek |
+| `test_accounting.py` | Zaokrúhľovanie DPH po sadzbách (nie po riadkoch), rekapitulácia, súlad s Peppol BR-CO-17 |
+| `test_disaster_recovery.py` | Úplná strata úložiska a obnova zo stiahnutej zálohy, poškodené zálohy, záloha zo staršej verzie, rollback pri zlyhaní migrácie, poškodené logo v PDF |
+| `test_migrations_concurrency.py` | Migrácie nad dátami z každej revízie, zlyhanie jedného konta, súbežné zápisy počas zálohy |
 | `test_hardening.py` | Audit: hash hesiel (formát, starý hash, poškodené hashe), limity (IP, meno, registrácia, čistenie), obnova session, bezpečnostné hlavičky, vypnuté /docs, busy_timeout |
 | `test_export.py` | Export: obdobia (hranice roka, priestupný rok), výber dokladov, CSV formát, štruktúra Excelu, DPH rekapitulácia, ochrana pred vzorcami, ZIP s PDF, validácia, audit |
 | `test_tenant_context.py` | Regresia: fotky zákaziek sa servujú po skutočnom prihlásení (aktuálne konto v kontexte požiadavky), cudzie konto ich nevidí |

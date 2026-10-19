@@ -143,46 +143,50 @@ def calculate_invoice_totals(items) -> dict:
     Vypočíta celkové súčty faktúry a rozpis DPH podľa sadzieb
     (rekapitulácia DPH, ktorá musí byť na faktúre).
 
+    DPH sa počíta zo SÚČTU základov danej sadzby a zaokrúhli sa raz
+    (nie po riadkoch a potom sčítava) - tak, ako to vyžaduje rekapitulácia
+    DPH na faktúre a pravidlo EN16931 BR-CO-17 (TaxAmount = TaxableAmount
+    x sadzba / 100). Zaokrúhľovanie po riadkoch by pri veľa malých
+    položkách dávalo odlišnú DPH o niekoľko centov.
+
     `items` môžu byť InvoiceItem (SQLAlchemy) alebo InvoiceItemCreate (Pydantic) -
     stačí, že majú atribúty quantity, unit_price, vat_rate.
     """
+
+    cent = Decimal("0.01")
+
+    base_by_rate: dict[int, Decimal] = {}
+
+    for item in items:
+
+        line_base = (
+            Decimal(str(item.quantity)) * Decimal(str(item.unit_price))
+        ).quantize(cent, rounding=ROUND_HALF_UP)
+
+        base_by_rate[item.vat_rate] = base_by_rate.get(item.vat_rate, Decimal("0")) + line_base
+
+    vat_breakdown = []
 
     total_base = Decimal("0")
     total_vat = Decimal("0")
     total_gross = Decimal("0")
 
-    vat_breakdown: dict[int, dict] = {}
+    for rate in sorted(base_by_rate):
 
+        base = base_by_rate[rate]
 
-    for item in items:
+        vat = (base * Decimal(rate) / Decimal(100)).quantize(cent, rounding=ROUND_HALF_UP)
 
-        quantity = Decimal(str(item.quantity))
-        unit_price = Decimal(str(item.unit_price))
+        vat_breakdown.append({
+            "rate": rate,
+            "base": base,
+            "vat": vat,
+            "gross": base + vat,
+        })
 
-        line = calculate_item_totals(
-            quantity,
-            unit_price,
-            item.vat_rate
-        )
-
-        total_base += line["base"]
-        total_vat += line["vat"]
-        total_gross += line["gross"]
-
-
-        if item.vat_rate not in vat_breakdown:
-
-            vat_breakdown[item.vat_rate] = {
-                "rate": item.vat_rate,
-                "base": Decimal("0"),
-                "vat": Decimal("0"),
-                "gross": Decimal("0")
-            }
-
-        vat_breakdown[item.vat_rate]["base"] += line["base"]
-        vat_breakdown[item.vat_rate]["vat"] += line["vat"]
-        vat_breakdown[item.vat_rate]["gross"] += line["gross"]
-
+        total_base += base
+        total_vat += vat
+        total_gross += base + vat
 
     return {
 
@@ -192,10 +196,7 @@ def calculate_invoice_totals(items) -> dict:
 
         "total_gross": total_gross,
 
-        "vat_breakdown": sorted(
-            vat_breakdown.values(),
-            key=lambda row: row["rate"]
-        )
+        "vat_breakdown": vat_breakdown
 
     }
 

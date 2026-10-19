@@ -28,6 +28,8 @@ sys.path.insert(
 
 
 import pytest
+
+import tenancy
 from fastapi.testclient import TestClient
 
 import backup_utils
@@ -96,6 +98,14 @@ def override_auth():
     yield
 
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(autouse=True)
+def skip_schema_migration(monkeypatch):
+    """Tieto testy používajú syntetickú DB s vymyslenou revíziou ('test-head') -
+    reálna migrácia po obnove sa testuje v test_disaster_recovery.py."""
+
+    monkeypatch.setattr(tenancy, "upgrade_account_database", lambda slug: None)
 
 
 client = TestClient(app)

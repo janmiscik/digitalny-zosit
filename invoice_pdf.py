@@ -1,3 +1,4 @@
+import logging
 import os
 from datetime import date
 from decimal import Decimal
@@ -26,6 +27,34 @@ from invoice_utils import (
 )
 from qr_payment import generate_payment_qr_image
 from uploads_utils import image_path
+
+logger = logging.getLogger(__name__)
+
+
+def readable_image_path(filename):
+    """
+    Ako image_path(), ale vráti cestu len ak sa súbor dá otvoriť ako obrázok.
+    Poškodené logo/podpis (napr. po neúplnej obnove) tak nezhodí tvorbu PDF -
+    faktúra sa vygeneruje bez obrázka a chyba sa zapíše do logu.
+    """
+
+    path = image_path(filename)
+
+    if path is None:
+        return None
+
+    try:
+
+        with PILImage.open(path) as pil_img:
+            pil_img.verify()
+
+    except Exception:
+
+        logger.warning("Obrázok %s je poškodený - v PDF sa vynechá", filename)
+
+        return None
+
+    return path
 
 
 def scaled_image(path, max_width_mm: float, max_height_mm: float) -> Image:
@@ -234,7 +263,7 @@ def generate_invoice_pdf(invoice, company) -> bytes:
 
     title_block = title_lines
 
-    logo_file = image_path(company.logo_filename) if company else None
+    logo_file = readable_image_path(company.logo_filename) if company else None
 
     if logo_file is not None:
 
@@ -746,7 +775,7 @@ def generate_invoice_pdf(invoice, company) -> bytes:
     # PODPIS / PEČIATKA
     # =====================================
 
-    signature_file = image_path(company.signature_filename) if company else None
+    signature_file = readable_image_path(company.signature_filename) if company else None
 
     if signature_file is not None:
 
