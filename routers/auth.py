@@ -1,7 +1,7 @@
 import hmac
 import shutil
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
@@ -19,6 +19,7 @@ from auth import (
     register_registration,
     register_successful_login,
     registration_retry_after,
+    require_login_page,
     verify_password,
 )
 from csrf import verify_csrf
@@ -333,3 +334,90 @@ def logout(request: Request):
         url="/login",
         status_code=303
     )
+
+
+# =========================================
+# ZMENA HESLA (prihlásený používateľ)
+# =========================================
+
+MAX_PASSWORD_LENGTH = 256
+
+
+@router.post("/settings/password")
+def change_password(
+    request: Request,
+    current_password: str = Form(...),
+    new_password: str = Form(...),
+    new_password_confirm: str = Form(...),
+    account_slug: str = Depends(require_login_page),
+    accounts_db: Session = Depends(get_accounts_db)
+):
+
+    account = (
+        accounts_db
+        .query(Account)
+        .filter(Account.slug == account_slug)
+        .first()
+    )
+
+    if account is None:
+
+        raise HTTPException(status_code=401, detail="Konto neexistuje.")
+
+    # Aj tu platí limit pokusov - ukradnutá session by inak mohla hádať
+    # staré heslo donekonečna.
+    locked, retry_after_seconds = is_login_locked(request, account.username)
+
+    if locked:
+
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                "Príliš veľa neúspešných pokusov. "
+                f"Skús to znova o približne {max(1, retry_after_seconds // 60)} min."
+            )
+        )
+
+    if not verify_password(current_password, account.password_hash):
+
+        register_failed_login(request, account.username)
+        _log_to_account_db(account.slug, "auth.password_change_failed")
+
+        raise HTTPException(status_code=403, detail="Súčasné heslo nie je správne.")
+
+    if len(new_password) < MIN_PASSWORD_LENGTH:
+
+        raise HTTPException(
+            status_code=422,
+            detail=f"Nové heslo musí mať aspoň {MIN_PASSWORD_LENGTH} znakov."
+        )
+
+    if len(new_password) > MAX_PASSWORD_LENGTH:
+
+        raise HTTPException(
+            status_code=422,
+            detail=f"Nové heslo môže mať najviac {MAX_PASSWORD_LENGTH} znakov."
+        )
+
+    if new_password != new_password_confirm:
+
+        raise HTTPException(status_code=422, detail="Nové heslá sa nezhodujú.")
+
+    if hmac.compare_digest(new_password, current_password):
+
+        raise HTTPException(
+            status_code=422,
+            detail="Nové heslo musí byť iné ako súčasné."
+        )
+
+    account.password_hash = hash_password(new_password)
+    accounts_db.commit()
+
+    register_successful_login(request, account.username)
+
+    # Nová session (nový CSRF token) - rovnako ako pri prihlásení.
+    login_user(request, account.slug, account.username)
+
+    _log_to_account_db(account.slug, "auth.password_changed")
+
+    return RedirectResponse(url="/settings?password=ok", status_code=303)

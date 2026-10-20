@@ -103,6 +103,7 @@ Appka sa nasadzuje cez `Dockerfile` (`railway.json` ho vyberie a nastaví health
 - **Kontá a registrácia** (`/register`, `/login`) – každý používateľ má vlastné konto (`Account` v `accounts.db`: meno, hash hesla, `slug` priečinka), heslo min. 8 znakov hashované cez PBKDF2-SHA256 (600 000 iterácií; staré hashe sa pri prihlásení potichu prehashujú), session-based prihlásenie (cookie). Dáta kont sú fyzicky oddelené – appka pri obsluhe jedného konta nikdy neotvorí súbor iného (viď `tenancy.py`).
 - HTML stránky vyžadujú prihlásenie – neprihláseného používateľa presmerujú na `/login`. JSON API endpointy vrátia `401 Unauthorized`.
 - **Rate limiting** – `/login`: po 5 zlých pokusoch z jednej IP za 5 minút sa prihlásenie zamkne na 5 minút; popri tom limit podľa mena konta (20 zlých pokusov za 15 min), aby sa heslo nedalo skúšať donekonečna ani pri zmene IP. `/register`: max. 5 nových kont za hodinu z jednej IP.
+- **Zmena hesla** (Nastavenia → Zmena hesla): vyžaduje súčasné heslo, nové aspoň 8 znakov a iné ako súčasné; zlé súčasné heslo sa počíta do limitu pokusov; zmena sa zapíše do histórie zmien. Prihlásenia na iných zariadeniach ostávajú platné.
 - **Session** sa pri prihlásení vymení (ochrana proti session fixation), takže starý CSRF token po prihlásení neplatí.
 - **Bezpečnostné hlavičky** na každej odpovedi: `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy` a pri HTTPS aj `Strict-Transport-Security`. CSP zatiaľ nie je (šablóny majú inline skripty a štýly).
 - **Interaktívna dokumentácia API** (`/docs`, `/redoc`, `/openapi.json`) je v produkcii vypnutá; na vývoj ju zapne `ENABLE_API_DOCS=true`.
@@ -303,7 +304,7 @@ pip install -r requirements-dev.txt   # raz, pytest sa do produkčného obrazu n
 python -m pytest tests/ -q
 ```
 
-Aktuálne **776 testov**, rozdelených podľa oblasti:
+Aktuálne **789 testov**, rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|
@@ -331,6 +332,7 @@ Aktuálne **776 testov**, rozdelených podľa oblasti:
 | `test_reminders.py` | Pripomienky platieb: výber faktúr, stupne podľa omeškania, text správy a `mailto`, evidencia pripomenutí, ochrana pred nesprávnym stavom faktúry |
 | `test_profit.py` | Zisk zo zákazky: tržba bez DPH, dobropis/zálohové/návrhy, náklady podľa druhu, hodiny × sadzba, marža a strata, validácia, zobrazenie na kartách |
 | `test_customer_history.py` | História zákazníka: súhrn (tržba bez DPH, zisk, doba platby), poznámky (pridanie, validácia, mazanie, izolácia, escapovanie), časová os, galéria fotiek |
+| `test_change_password.py` | Zmena hesla: úspech, nové prihlásenie, zlé súčasné heslo, validácia, limit pokusov, CSRF, vyžaduje prihlásenie, izolácia kont, audit log |
 | `test_offsite_backup.py` | Nahrávanie záloh mimo servera: zapnutie podľa premenných, kľúče/predpona, kontrola veľkosti, retencia po kontách, chyba siete nezhodí lokálnu zálohu, nahratá záloha prejde testom obnovy, upozornenia v Nastaveniach |
 | `test_accounting.py` | Zaokrúhľovanie DPH po sadzbách (nie po riadkoch), rekapitulácia, súlad s Peppol BR-CO-17 |
 | `test_disaster_recovery.py` | Úplná strata úložiska a obnova zo stiahnutej zálohy, poškodené zálohy, záloha zo staršej verzie, rollback pri zlyhaní migrácie, poškodené logo v PDF |

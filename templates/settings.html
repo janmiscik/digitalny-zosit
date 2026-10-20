@@ -557,6 +557,46 @@
 
 
         <!-- =====================================
+             ZMENA HESLA
+             ===================================== -->
+
+        <div class="edit-customer-card" id="heslo">
+
+            <h2 style="margin-top: 0;">
+                Zmena hesla
+            </h2>
+
+            {% if request.query_params.get('password') == 'ok' %}
+                <div class="backup-notice backup-notice-ok">✅ Heslo bolo zmenené.</div>
+            {% endif %}
+
+            <form action="/settings/password" method="post" autocomplete="off">
+
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+
+                <label>Súčasné heslo</label>
+                <input type="password" name="current_password" autocomplete="current-password" required>
+
+                <label>Nové heslo (aspoň 8 znakov)</label>
+                <input type="password" name="new_password" autocomplete="new-password" minlength="8" required>
+
+                <label>Nové heslo znova</label>
+                <input type="password" name="new_password_confirm" autocomplete="new-password" minlength="8" required>
+
+                <button type="submit" class="save-button">
+                    🔑 Zmeniť heslo
+                </button>
+
+            </form>
+
+            <p style="color: var(--text-muted); font-size: 0.9em;">
+                Prihlásenie na iných zariadeniach ostane platné, kým sa tam neodhlásiš.
+            </p>
+
+        </div>
+
+
+        <!-- =====================================
              AUDIT LOG
              ===================================== -->
 
