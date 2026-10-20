@@ -11,7 +11,7 @@ Rozsah: bezpečnosť, databázy, trvalé úložisko, testy, závislosti. Stav k 
 | Prihlásenie | Limit len podľa IP (za proxy sa dá obchádzať) | Pridaný limit podľa mena konta (20 pokusov / 15 min) |
 | Registrácia | Neobmedzené zakladanie kont (každé = databáza + drahé hashovanie) | Max. 5 kont / hodinu / IP |
 | Session | Pri prihlásení sa starý obsah session (aj CSRF token) preniesol | Session sa pri prihlásení vymení (session fixation) |
-| Hlavičky | Žiadne bezpečnostné hlavičky | `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, HSTS pri HTTPS |
+| Hlavičky | Žiadne bezpečnostné hlavičky | `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, HSTS pri HTTPS, praktická CSP pri HTML stránkach |
 | Informácie | `/docs`, `/redoc`, `/openapi.json` boli verejné a vypisovali všetky trasy | Vypnuté; zapne ich `ENABLE_API_DOCS=true` |
 | SQLite | Bez `busy_timeout`: súbeh požiadavky a plánovača záloh mohol skončiť „database is locked“ | Timeout 15 s pre databázu kont aj pre databázy kont-firiem |
 | Testy | Limit registrácií by sa v testoch míňal naprieč súbormi | `conftest.py` vynuluje počítadlá pred každým testom |
@@ -32,7 +32,7 @@ Rozsah: bezpečnosť, databázy, trvalé úložisko, testy, závislosti. Stav k 
 1. **Záloha mimo Railway.** Zálohy ležia na tom istom Volume ako dáta. Pri strate Volume zmiznú spolu s dátami. Pravidelne si sťahuj zálohu v Nastaveniach, alebo doplň odosielanie do S3/Backblaze.
 2. **Overenie Volume.** V Railway logu hľadaj riadky `[ULOZISKE]`: musí tam byť „OK: /app/data je samostatný disk (Volume)“. Ak je tam VAROVANIE, dáta sa po redeployi stratia.
 3. **Jedna replika.** Limity pokusov a plánovač záloh sú v pamäti procesu; pri škálovaní na viac replík by sa nezdieľali (a SQLite na Volume by aj tak nezvládla viac zapisovateľov). Nechaj 1 repliku.
-4. **CSP.** Šablóny majú inline skripty a štýly; striktná Content-Security-Policy by ich rozbila. Vyžadovalo by to presun skriptov do `static/` alebo nonce.
+4. **CSP.** Zavedená je praktická CSP (cudzie domény zakázané, výnimka Google Fonts), overená v prehliadači na 16 stránkach. Striktná verzia bez `'unsafe-inline'` vyžaduje prepísať 23 šablón (inline skripty) a 57 inline handlerov do súborov v `static/`; zatiaľ sa to neoplatí, lebo Jinja escapuje výstup a `|safe` sa nikde nepoužíva.
 5. **Zmena hesla** v Nastaveniach pribudla. **Obnova zabudnutého hesla** v appke stále nie je (vyžaduje e-mailové odosielanie); rieši sa manuálne cez `manage_accounts.py`. Zmena hesla neodhlási ostatné zariadenia (session je v cookie).
 6. **WAL režim SQLite** by zlepšil súbeh čítania a zápisu, ale mení správanie záloh a obnovy (súbory `-wal`/`-shm`), preto som ho nezapínal bez samostatného testu na Railway.
 7. V koreni projektu leží osamotený `invoice_detail.html` (starý duplikát `templates/invoice_detail.html`); appka ho nepoužíva, dá sa zmazať.

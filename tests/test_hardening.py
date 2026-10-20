@@ -213,3 +213,23 @@ def test_accounts_engine_has_busy_timeout():
 
     with accounts_engine.connect() as connection:
         assert connection.exec_driver_sql("PRAGMA busy_timeout").scalar() == 15000
+
+
+# ---------- Content-Security-Policy ----------
+
+def test_csp_is_sent_with_html_pages_only():
+
+    client = TestClient(app)
+
+    html = client.get("/login")
+    csp = html.headers["content-security-policy"]
+
+    for directive in ("default-src 'self'", "object-src 'none'", "base-uri 'self'",
+                      "form-action 'self'", "frame-ancestors 'none'",
+                      "https://fonts.googleapis.com", "https://fonts.gstatic.com"):
+        assert directive in csp
+
+    assert "http:" not in csp and "*" not in csp.replace("'unsafe-inline'", "")
+
+    # JSON a ostatné odpovede CSP nenesú (PDF viewer v prehliadači by mohol zlyhať)
+    assert "content-security-policy" not in client.get("/health").headers

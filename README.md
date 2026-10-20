@@ -105,7 +105,7 @@ Appka sa nasadzuje cez `Dockerfile` (`railway.json` ho vyberie a nastaví health
 - **Rate limiting** – `/login`: po 5 zlých pokusoch z jednej IP za 5 minút sa prihlásenie zamkne na 5 minút; popri tom limit podľa mena konta (20 zlých pokusov za 15 min), aby sa heslo nedalo skúšať donekonečna ani pri zmene IP. `/register`: max. 5 nových kont za hodinu z jednej IP.
 - **Zmena hesla** (Nastavenia → Zmena hesla): vyžaduje súčasné heslo, nové aspoň 8 znakov a iné ako súčasné; zlé súčasné heslo sa počíta do limitu pokusov; zmena sa zapíše do histórie zmien. Prihlásenia na iných zariadeniach ostávajú platné.
 - **Session** sa pri prihlásení vymení (ochrana proti session fixation), takže starý CSRF token po prihlásení neplatí.
-- **Bezpečnostné hlavičky** na každej odpovedi: `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy` a pri HTTPS aj `Strict-Transport-Security`. CSP zatiaľ nie je (šablóny majú inline skripty a štýly).
+- **Bezpečnostné hlavičky** na každej odpovedi: `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy` a pri HTTPS aj `Strict-Transport-Security`. K HTML stránkam sa posiela aj **Content-Security-Policy**: skripty, štýly, obrázky, formuláre a spojenia len z vlastnej domény (výnimka: písma Google Fonts), žiadne `<object>`, žiadne vloženie do cudzieho rámu. Povolené je `'unsafe-inline'`, lebo šablóny majú inline skripty a handlery; striktná CSP by vyžadovala presun do `static/`. PDF a JSON odpovede CSP nenesú.
 - **Interaktívna dokumentácia API** (`/docs`, `/redoc`, `/openapi.json`) je v produkcii vypnutá; na vývoj ju zapne `ENABLE_API_DOCS=true`.
 - **SQLite `busy_timeout`** 15 s – súbeh požiadavky a automatickej zálohy nekončí chybou „database is locked“.
 - Session cookie je kryptograficky podpísaná (`itsdangerous`) – akákoľvek manipulácia s cookie sa odmietne. Cookie sa navyše posiela iba cez HTTPS (`https_only`, konfigurovateľné cez `SESSION_HTTPS_ONLY` - viď sekcia `.env` vyššie).
@@ -304,7 +304,7 @@ pip install -r requirements-dev.txt   # raz, pytest sa do produkčného obrazu n
 python -m pytest tests/ -q
 ```
 
-Aktuálne **789 testov**, rozdelených podľa oblasti:
+Aktuálne **790 testov**, rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|

@@ -157,8 +157,14 @@ app.add_middleware(
 # =========================================
 # BEZPEČNOSTNÉ HLAVIČKY
 #
-# Pridané ku každej odpovedi. CSP zámerne chýba: šablóny používajú
-# inline štýly a skripty, striktné CSP by ich rozbilo.
+# Pridané ku každej odpovedi. Content-Security-Policy sa posiela len k HTML
+# stránkam. Je "praktická", nie striktná: šablóny majú inline skripty,
+# onclick handlery a inline štýly, preto je povolené 'unsafe-inline'.
+# Chráni pred načítaním skriptov/štýlov/obrázkov z cudzích domén,
+# odoslaním formulára inam, vložením do cudzieho rámu, <object> a <base>.
+# Jediný povolený externý zdroj sú písma Google Fonts (static/style.css).
+# Striktná CSP (bez 'unsafe-inline') by vyžadovala presun všetkých
+# inline skriptov a handlerov do súborov v static/.
 # =========================================
 
 SECURITY_HEADERS = {
@@ -172,6 +178,20 @@ if SESSION_HTTPS_ONLY:
     SECURITY_HEADERS["Strict-Transport-Security"] = "max-age=31536000"
 
 
+CONTENT_SECURITY_POLICY = "; ".join([
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com data:",
+    "img-src 'self' data: blob:",
+    "connect-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+])
+
+
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
 
@@ -179,6 +199,9 @@ async def add_security_headers(request: Request, call_next):
 
     for name, value in SECURITY_HEADERS.items():
         response.headers.setdefault(name, value)
+
+    if response.headers.get("content-type", "").startswith("text/html"):
+        response.headers.setdefault("Content-Security-Policy", CONTENT_SECURITY_POLICY)
 
     return response
 
