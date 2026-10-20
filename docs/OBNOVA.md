@@ -3,10 +3,14 @@
 Všetky dáta (databázy, fotky, logo, zálohy) ležia na jednom Railway Volume (`/app/data`).
 Ak Volume zmizne, zmiznú aj zálohy na ňom. **Preto si zálohu priebežne sťahuj mimo Railway.**
 
-## Prevencia (5 minút týždenne)
+## Prevencia
+**Najlepšie: zapni automatické nahrávanie mimo Railway** (premenné `OFFSITE_BACKUP_*`, viď README → Záloha mimo servera). Potom každá záloha skončí aj v tvojom bucketi a pri strate Volume ju len stiahneš odtiaľ.
+
+Bez toho (5 minút týždenne):
 1. Nastavenia → Záloha → **Stiahnuť zálohu** (ZIP s databázou aj súbormi).
 2. Ulož ju mimo Railway (osobný disk, cloud). Pred väčšou zmenou (nová verzia, import) stiahni novú.
-3. Raz za čas zálohu otestuj: Nastavenia → Overiť zálohu (appka zálohu rozbalí a skontroluje).
+3. Zálohu z bucketu stiahneš v konzole poskytovateľa (cesta `<predpona>/<konto>/<názov>.zip`) a nahráš v Nastaveniach.
+4. Raz za čas zálohu otestuj: Nastavenia → Overiť zálohu (appka zálohu rozbalí a skontroluje).
 
 ## Postup po strate úložiska
 1. V Railway pripoj nový Volume s Mount path `/app/data` a nasaď službu. V logu musí byť

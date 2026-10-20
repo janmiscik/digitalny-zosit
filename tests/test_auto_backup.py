@@ -531,7 +531,8 @@ def test_overview_lists_backups_after_run(monkeypatch):
 
     overview = auto_backup.backup_overview(SLUG)
 
-    assert overview["warnings"] == []
+    # jediné upozornenie: zálohy nie sú nahrávané mimo servera (OFFSITE_BACKUP_* nie je nastavené)
+    assert [w for w in overview["warnings"] if "mimo servera" not in w] == []
     assert overview["backups"][0]["label"] == "Ručná"
     assert overview["verification"]["ok"] is True
 

@@ -261,6 +261,22 @@ python manage_accounts.py --verify-all                 # test obnovy najnovšej 
 
 > ⚠️ **Zálohy na tom istom Volume nechránia pred stratou celého Volume.** Chránia pred chybou v appke, omylom zmazanými dátami a pokazenou migráciou. Preto si občas stiahni zálohu aj mimo Railway (Nastavenia → Stiahnuť) a ak to tvoj plán ponúka, zapni aj Railway Volume Backups.
 
+### Záloha mimo servera (odporúčané)
+
+Zálohy ležia na tom istom Volume ako dáta, takže pri jeho strate zmiznú spolu s nimi. Preto vie appka každú vytvorenú a overenú zálohu nahrať aj do **súkromného** S3-kompatibilného úložiska (Backblaze B2, Cloudflare R2, AWS S3, MinIO). Predvolene je vypnuté; zapne sa nastavením premenných v Railway → Variables:
+
+| Premenná | Význam |
+|---|---|
+| `OFFSITE_BACKUP_BUCKET` | názov bucketu (povinné) |
+| `OFFSITE_BACKUP_ACCESS_KEY_ID` | prístupový kľúč (povinné) |
+| `OFFSITE_BACKUP_SECRET_ACCESS_KEY` | tajný kľúč (povinné) |
+| `OFFSITE_BACKUP_ENDPOINT` | URL S3 API, napr. `https://s3.eu-central-003.backblazeb2.com` (pri AWS S3 prázdne) |
+| `OFFSITE_BACKUP_REGION` | región (predvolené `auto`) |
+| `OFFSITE_BACKUP_PREFIX` | predpona kľúčov (predvolené `digitalny-zosit`) |
+| `OFFSITE_BACKUP_KEEP` | koľko záloh na konto držať v bucketi (predvolené 30) |
+
+Súbory sa ukladajú ako `<predpona>/<konto>/<názov zálohy>.zip`. Po nahratí appka overí veľkosť súboru v bucketi a poreže staré zálohy nad limit (len v priečinku daného konta). Chyba nahrávania nezhodí vytvorenie zálohy – zobrazí sa ako upozornenie v Nastaveniach. Bucket nastav ako **súkromný** (zálohy obsahujú dáta zákazníkov) a pre appku vytvor kľúč len s prístupom k tomuto bucketu.
+
 ### Obnova prístupu, keď zmizne zoznam kont
 
 Ak sa stratí alebo prepíše `data/accounts.db` (prihlásenie hlási zlé meno/heslo), dáta samotných kont v `data/accounts/<konto>/` ostávajú. Pripoj ich k novému menu a heslu:
@@ -287,7 +303,7 @@ pip install -r requirements-dev.txt   # raz, pytest sa do produkčného obrazu n
 python -m pytest tests/ -q
 ```
 
-Aktuálne **760 testov**, rozdelených podľa oblasti:
+Aktuálne **776 testov**, rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|
@@ -315,6 +331,7 @@ Aktuálne **760 testov**, rozdelených podľa oblasti:
 | `test_reminders.py` | Pripomienky platieb: výber faktúr, stupne podľa omeškania, text správy a `mailto`, evidencia pripomenutí, ochrana pred nesprávnym stavom faktúry |
 | `test_profit.py` | Zisk zo zákazky: tržba bez DPH, dobropis/zálohové/návrhy, náklady podľa druhu, hodiny × sadzba, marža a strata, validácia, zobrazenie na kartách |
 | `test_customer_history.py` | História zákazníka: súhrn (tržba bez DPH, zisk, doba platby), poznámky (pridanie, validácia, mazanie, izolácia, escapovanie), časová os, galéria fotiek |
+| `test_offsite_backup.py` | Nahrávanie záloh mimo servera: zapnutie podľa premenných, kľúče/predpona, kontrola veľkosti, retencia po kontách, chyba siete nezhodí lokálnu zálohu, nahratá záloha prejde testom obnovy, upozornenia v Nastaveniach |
 | `test_accounting.py` | Zaokrúhľovanie DPH po sadzbách (nie po riadkoch), rekapitulácia, súlad s Peppol BR-CO-17 |
 | `test_disaster_recovery.py` | Úplná strata úložiska a obnova zo stiahnutej zálohy, poškodené zálohy, záloha zo staršej verzie, rollback pri zlyhaní migrácie, poškodené logo v PDF |
 | `test_migrations_concurrency.py` | Migrácie nad dátami z každej revízie, zlyhanie jedného konta, súbežné zápisy počas zálohy |

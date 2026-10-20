@@ -49,6 +49,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from fastapi import HTTPException
 
 import backup_utils
+import offsite_backup
 import tenancy
 
 logger = logging.getLogger(__name__)
@@ -625,6 +626,18 @@ def run_backup(slug: str, kind: str = "auto") -> BackupResult:
 
         removed = apply_retention(slug)
 
+        # Kópia mimo servera (ak je nastavená) - chyba nezhodí lokálnu zálohu
+        if offsite_backup.enabled():
+
+            offsite = offsite_backup.upload_backup(slug, destination)
+
+            status["offsite"] = {
+                "at": utc_now().isoformat(),
+                "ok": offsite.ok,
+                "file": destination.name,
+                "error": offsite.error,
+            }
+
         _write_status(slug, status)
 
         logger.info(
@@ -848,6 +861,23 @@ def backup_overview(slug: str) -> dict:
     if status.get("last_error"):
         warnings.append(f"Posledná chyba zálohovania: {status['last_error']}")
 
+    offsite = status.get("offsite")
+
+    if offsite_backup.enabled():
+
+        if offsite is None:
+            warnings.append("Nahrávanie záloh mimo servera je zapnuté, ale zatiaľ neprebehlo.")
+
+        elif not offsite.get("ok"):
+            warnings.append(f"Nahratie zálohy mimo servera zlyhalo: {offsite.get('error')}")
+
+    else:
+
+        warnings.append(
+            "Zálohy ležia len na tom istom disku ako dáta - stiahni si ich pravidelne "
+            "alebo zapni nahrávanie mimo servera (OFFSITE_BACKUP_*)."
+        )
+
     if verification and not verification.get("ok"):
         warnings.append("Posledné overenie obnovy zlyhalo: " + "; ".join(verification.get("problems", [])))
 
@@ -868,6 +898,10 @@ def backup_overview(slug: str) -> dict:
             if verification else None
         ),
         "warnings": warnings,
+        "offsite": (
+            {**offsite, "at_display": format_local(offsite.get("at"))} if offsite else None
+        ),
+        "offsite_enabled": offsite_backup.enabled(),
         "backups": [
             {
                 "name": item.name,

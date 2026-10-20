@@ -416,6 +416,16 @@
                 {% endif %}
             </p>
 
+            {% if backup.offsite_enabled %}
+                <p class="backup-meta">
+                    <strong>Kópia mimo servera:</strong>
+                    {% if backup.offsite %}
+                        {% if backup.offsite.ok %}✅ nahratá{% else %}❌ zlyhala{% endif %}
+                        ({{ backup.offsite.at_display }}, {{ backup.offsite.file }})
+                    {% else %}zatiaľ neprebehla{% endif %}
+                </p>
+            {% endif %}
+
             <div class="backup-actions">
 
                 <form action="/settings/backups/run" method="post">
