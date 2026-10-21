@@ -3,9 +3,12 @@ import hmac
 import secrets
 import time
 
-from fastapi import HTTPException, Request, status
+from fastapi import Depends, HTTPException, Request, status
+from sqlalchemy.orm import Session
 
 import tenancy
+from accounts_db import get_accounts_db
+from accounts_models import Account
 
 
 # =========================================
@@ -123,12 +126,29 @@ def needs_rehash(stored_hash: str) -> bool:
 # ďalšieho dotazu do accounts.db pri KAŽDEJ požiadavke.
 # =========================================
 
-def login_user(request: Request, account_slug: str, username: str) -> None:
+def password_fingerprint(password_hash: str) -> str:
+    """
+    Krátky odtlačok hashu hesla. Ukladá sa do session a pri každej
+    požiadavke sa porovnáva s kontom - po zmene (alebo obnove) hesla
+    sa hash zmení, a tým prestanú platiť VŠETKY ostatné už vydané
+    prihlásenia (podpísané cookies by inak platili ďalej).
+    """
+
+    return hashlib.sha256(password_hash.encode("utf-8")).hexdigest()[:24]
+
+
+def login_user(
+    request: Request,
+    account_slug: str,
+    username: str,
+    password_hash: str,
+) -> None:
     # Session sa pri prihlásení vyčistí (ochrana proti session fixation:
     # starý obsah session, vrátane CSRF tokenu, sa neprenáša do prihlásenej).
     request.session.clear()
     request.session["account_slug"] = account_slug
     request.session["username"] = username
+    request.session["pwv"] = password_fingerprint(password_hash)
 
 
 def logout_user(request: Request) -> None:
@@ -139,7 +159,36 @@ def get_current_account_slug(request: Request) -> str | None:
     return request.session.get("account_slug")
 
 
-async def require_login_page(request: Request) -> str:
+def _session_is_current(
+    request: Request, account_slug: str, accounts_db: Session
+) -> bool:
+    """
+    True, ak konto stále existuje a heslo sa od prihlásenia nezmenilo.
+    Session bez odtlačku (vydaná pred touto kontrolou) neplatí - používateľ
+    sa raz znova prihlási.
+    """
+
+    account = (
+        accounts_db
+        .query(Account.password_hash)
+        .filter(Account.slug == account_slug)
+        .first()
+    )
+
+    if account is None:
+        return False
+
+    stored = request.session.get("pwv")
+
+    return isinstance(stored, str) and hmac.compare_digest(
+        stored, password_fingerprint(account.password_hash)
+    )
+
+
+async def require_login_page(
+    request: Request,
+    accounts_db: Session = Depends(get_accounts_db),
+) -> str:
     """
     Dependency pre stránky renderované cez Jinja2.
 
@@ -157,7 +206,10 @@ async def require_login_page(request: Request) -> str:
 
     account_slug = get_current_account_slug(request)
 
-    if account_slug is None:
+    if account_slug is None or not _session_is_current(
+        request, account_slug, accounts_db
+    ):
+        request.session.clear()
         raise HTTPException(
             status_code=status.HTTP_303_SEE_OTHER,
             headers={"Location": "/login"},
@@ -168,7 +220,10 @@ async def require_login_page(request: Request) -> str:
     return account_slug
 
 
-async def require_login_api(request: Request) -> str:
+async def require_login_api(
+    request: Request,
+    accounts_db: Session = Depends(get_accounts_db),
+) -> str:
     """
     Dependency pre JSON API endpointy.
     Neprihláseného používateľa vráti ako 401 JSON.
@@ -177,7 +232,10 @@ async def require_login_api(request: Request) -> str:
 
     account_slug = get_current_account_slug(request)
 
-    if account_slug is None:
+    if account_slug is None or not _session_is_current(
+        request, account_slug, accounts_db
+    ):
+        request.session.clear()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Neprihlásený používateľ",

@@ -213,7 +213,7 @@ def register_submit(
 
     register_registration(request)
 
-    login_user(request, account.slug, account.username)
+    login_user(request, account.slug, account.username, account.password_hash)
 
     _log_to_account_db(account.slug, "auth.account_created")
     _log_to_account_db(account.slug, "auth.login_success")
@@ -312,7 +312,7 @@ def login_submit(
         account.password_hash = hash_password(password)
         accounts_db.commit()
 
-    login_user(request, account.slug, account.username)
+    login_user(request, account.slug, account.username, account.password_hash)
 
     _log_to_account_db(account.slug, "auth.login_success")
 
@@ -422,7 +422,7 @@ def change_password(
     register_successful_login(request, account.username)
 
     # Nová session (nový CSRF token) - rovnako ako pri prihlásení.
-    login_user(request, account.slug, account.username)
+    login_user(request, account.slug, account.username, account.password_hash)
 
     _log_to_account_db(account.slug, "auth.password_changed")
 

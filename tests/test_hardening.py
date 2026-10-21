@@ -151,9 +151,13 @@ def test_login_rotates_session_content():
 
     request = fake_request(session={"_csrf_token": "stary", "cudzie": "x"})
 
-    auth.login_user(request, "firma", "Firma")
+    auth.login_user(request, "firma", "Firma", "hash-hesla")
 
-    assert request.session == {"account_slug": "firma", "username": "Firma"}
+    assert request.session == {
+        "account_slug": "firma",
+        "username": "Firma",
+        "pwv": auth.password_fingerprint("hash-hesla"),
+    }
 
 
 # ---------- hlavičky a dokumentácia ----------
