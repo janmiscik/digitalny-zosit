@@ -118,7 +118,7 @@
 
             <div class="integrity-ok-banner">
                 ✅ Všetko v poriadku - databáza a súbory na disku si
-                zodpovedajú.
+                zodpovedajú a číslovanie dokladov je súvislé.
             </div>
 
         {% else %}
@@ -144,6 +144,36 @@
                         <div class="integrity-issue">
                             <span>{{ issue.description }}</span>
                             <span class="integrity-issue-file">{{ issue.filename }}</span>
+                        </div>
+
+                    {% endfor %}
+
+                </div>
+
+            {% endif %}
+
+
+            {% if report.number_gaps %}
+
+                <div class="integrity-section">
+
+                    <h3>
+                        🔢 Medzery v číslovaní dokladov ({{ report.number_gaps | length }})
+                    </h3>
+
+                    <p style="color: var(--text-muted); font-size: 0.9em;">
+                        V týchto číselných radoch chýba číslo. Najčastejšie ide
+                        o zmazaný návrh. Faktúry majú byť číslované súvisle,
+                        preto si dôvod medzery zapíš (účtovník sa na ňu môže
+                        opýtať). Doklad, ktorý už mal byť vystavený, namiesto
+                        zmazania stornuj.
+                    </p>
+
+                    {% for gap in report.number_gaps %}
+
+                        <div class="integrity-issue">
+                            <span>{{ gap.series }}</span>
+                            <span class="integrity-issue-file">chýba: {{ gap.missing | join(', ') }}</span>
                         </div>
 
                     {% endfor %}

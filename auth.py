@@ -228,6 +228,10 @@ _username_lockout_until: dict[str, float] = {}
 
 _registrations: dict[str, list[float]] = {}
 
+MAX_RESET_REQUESTS_PER_IP = 5
+RESET_WINDOW_SECONDS = 3600
+_reset_requests: dict[str, list[float]] = {}
+
 _last_cleanup = 0.0
 CLEANUP_INTERVAL_SECONDS = 600
 
@@ -396,3 +400,24 @@ def register_registration(request: Request) -> None:
     """Zapíše úspešnú registráciu do limitu danej IP."""
 
     _registrations.setdefault(_rate_limit_key(request), []).append(time.time())
+
+
+def reset_request_allowed(request: Request) -> bool:
+    """Žiadosti o obnovu hesla: max. 5 za hodinu z jednej IP (proti spamovaniu e-mailov)."""
+
+    now = time.time()
+
+    key = _rate_limit_key(request)
+
+    attempts = [t for t in _reset_requests.get(key, []) if now - t < RESET_WINDOW_SECONDS]
+
+    if len(attempts) >= MAX_RESET_REQUESTS_PER_IP:
+
+        _reset_requests[key] = attempts
+
+        return False
+
+    attempts.append(now)
+    _reset_requests[key] = attempts
+
+    return True

@@ -6,6 +6,8 @@ from fastapi.responses import FileResponse, RedirectResponse, Response
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from accounts_db import get_accounts_db
+from accounts_models import Account
 from csrf import verify_csrf
 from audit_log import log_action
 from auth import require_login_page
@@ -116,11 +118,20 @@ def settings_form(
 
     db: Session = Depends(get_db),
 
+    accounts_db: Session = Depends(get_accounts_db),
+
     user: str = Depends(require_login_page)
 
 ):
 
     company = get_or_create_company(db)
+
+    try:
+        account = accounts_db.query(Account).filter(Account.slug == user).first()
+        account_email = account.email if account else None
+
+    except Exception:       # noqa: BLE001 - e-mail konta nesmie rozbiť stránku nastavení
+        account_email = None
 
 
     return templates.TemplateResponse(
@@ -132,6 +143,8 @@ def settings_form(
         context={
 
             "company": company,
+
+            "account_email": account_email,
 
             "NON_VAT_PAYER_NOTICE": NON_VAT_PAYER_NOTICE,
 

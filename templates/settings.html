@@ -593,6 +593,30 @@
                 Prihlásenie na iných zariadeniach ostane platné, kým sa tam neodhlásiš.
             </p>
 
+            {% if password_reset_enabled() %}
+
+            <h3>E-mail na obnovu hesla</h3>
+
+            {% if request.query_params.get('email') == 'ok' %}
+                <div class="backup-notice backup-notice-ok">✅ E-mail bol uložený.</div>
+            {% endif %}
+
+            <form action="/settings/email" method="post" autocomplete="off">
+
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+
+                <label>E-mail (nechaj prázdny na odstránenie)</label>
+                <input type="email" name="email" value="{{ account_email or '' }}" autocomplete="email">
+
+                <label>Súčasné heslo (na potvrdenie)</label>
+                <input type="password" name="current_password" autocomplete="current-password" required>
+
+                <button type="submit" class="save-button">💾 Uložiť e-mail</button>
+
+            </form>
+
+            {% endif %}
+
         </div>
 
 

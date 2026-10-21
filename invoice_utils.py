@@ -14,41 +14,22 @@ def _next_sequential_number(db: Session, column, prefix: str) -> str:
     Spoločná logika číslovania pre faktúry, ponuky aj zálohové faktúry -
     nájde najväčšie existujúce číslo so zadaným prefixom a vráti ďalšie
     v poradí, vo formáte {prefix}{poradie:03d}.
+
+    Poradie sa porovnáva ČÍSELNE (nie ako text): pri textovom zoradení by
+    "2026999" bolo väčšie než "20261000" a appka by po 999. doklade za rok
+    stále vracala to isté číslo.
     """
 
-    latest = (
+    latest_sequence = 0
 
-        db
-        .query(column)
-        .filter(
-            column.like(f"{prefix}%")
-        )
-        .order_by(
-            column.desc()
-        )
-        .first()
+    for (number,) in db.query(column).filter(column.like(f"{prefix}%")).all():
 
-    )
+        suffix = (number or "")[len(prefix):]
 
+        if suffix.isdigit():
+            latest_sequence = max(latest_sequence, int(suffix))
 
-    if latest is None:
-
-        next_sequence = 1
-
-    else:
-
-        latest_number = latest[0]
-
-        try:
-
-            latest_sequence = int(latest_number[len(prefix):])
-
-        except ValueError:
-
-            latest_sequence = 0
-
-        next_sequence = latest_sequence + 1
-
+    next_sequence = latest_sequence + 1
 
     return f"{prefix}{next_sequence:03d}"
 

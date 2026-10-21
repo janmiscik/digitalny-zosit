@@ -88,7 +88,7 @@ def reset_rate_limits():
     for store in (
         auth._failed_login_attempts, auth._lockout_until,
         auth._failed_username_attempts, auth._username_lockout_until,
-        auth._registrations,
+        auth._registrations, auth._reset_requests,
     ):
         store.clear()
 

@@ -329,3 +329,46 @@ def test_concurrent_writes_during_backups_do_not_lock_or_lose_rows(storage):
     result = auto_backup.verify_existing_backup(slug, auto_backup.list_backups(slug)[0].name)
 
     assert result.ok
+
+
+# ---------- migrácia databázy kont (accounts.db) ----------
+
+def test_accounts_db_migration_adds_email_and_keeps_accounts(tmp_path):
+    """Beží tak ako start.sh: samostatný proces s ACCOUNTS_DATABASE_URL (alembic_accounts/env.py
+    berie adresu z premennej, nie z konfigurácie)."""
+
+    import subprocess
+    import sys
+
+    db_path = tmp_path / "accounts.db"
+    env = {**os.environ, "ACCOUNTS_DATABASE_URL": f"sqlite:///{db_path}"}
+
+    def upgrade(revision):
+
+        result = subprocess.run(
+            [sys.executable, "-m", "alembic", "-c", "alembic_accounts.ini", "upgrade", revision],
+            cwd=str(tenancy.PROJECT_ROOT), env=env, capture_output=True, text=True,
+        )
+
+        assert result.returncode == 0, result.stderr[-500:]
+
+    upgrade("4b7cf1298419")                              # stav pred pridaním e-mailu
+
+    conn = sqlite3.connect(str(db_path))
+    assert "email" not in [row[1] for row in conn.execute("PRAGMA table_info(accounts)")]
+
+    conn.execute(
+        "INSERT INTO accounts (username, slug, password_hash, created_at) "
+        "VALUES ('jano', 'jano', 'x', '2026-01-01 00:00:00')"
+    )
+    conn.commit()
+    conn.close()
+
+    upgrade("head")
+    upgrade("head")                                      # idempotentné
+
+    conn = sqlite3.connect(str(db_path))
+
+    assert conn.execute("SELECT username, slug, email FROM accounts").fetchall() == [("jano", "jano", None)]
+    assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    conn.close()

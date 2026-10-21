@@ -9,3 +9,8 @@ templates = Jinja2Templates(
 
 # Dostupné vo všetkých šablónach ako {{ csrf_token(request) }}.
 templates.env.globals["csrf_token"] = get_csrf_token
+
+import mailer
+
+# {{ password_reset_enabled() }} - odkaz „Zabudnuté heslo?" sa ukáže len keď je nastavený SMTP.
+templates.env.globals["password_reset_enabled"] = mailer.enabled

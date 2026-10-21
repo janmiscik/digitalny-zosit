@@ -44,6 +44,13 @@ class Account(AccountsBase):
         nullable=False
     )
 
+    # Voliteľný e-mail na obnovu zabudnutého hesla (nastavuje si ho
+    # používateľ v Nastaveniach; bez neho sa heslo cez e-mail obnoviť nedá).
+    email = Column(
+        String,
+        nullable=True
+    )
+
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,

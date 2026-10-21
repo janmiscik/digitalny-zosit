@@ -1,8 +1,11 @@
+import hashlib
 import hmac
+import os
 import shutil
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -20,11 +23,14 @@ from auth import (
     register_successful_login,
     registration_retry_after,
     require_login_page,
+    reset_request_allowed,
     verify_password,
 )
 from csrf import verify_csrf
+import mailer
 from templates_config import templates
 import tenancy
+from validators import validate_email_format
 
 
 router = APIRouter(dependencies=[Depends(verify_csrf)])
@@ -421,3 +427,258 @@ def change_password(
     _log_to_account_db(account.slug, "auth.password_changed")
 
     return RedirectResponse(url="/settings?password=ok", status_code=303)
+
+
+# =========================================
+# E-MAIL KONTA (na obnovu hesla)
+# =========================================
+
+@router.post("/settings/email")
+def set_account_email(
+    request: Request,
+    email: str = Form(""),
+    current_password: str = Form(...),
+    account_slug: str = Depends(require_login_page),
+    accounts_db: Session = Depends(get_accounts_db)
+):
+
+    account = accounts_db.query(Account).filter(Account.slug == account_slug).first()
+
+    if account is None:
+
+        raise HTTPException(status_code=401, detail="Konto neexistuje.")
+
+    locked, retry_after_seconds = is_login_locked(request, account.username)
+
+    if locked:
+
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                "Príliš veľa neúspešných pokusov. "
+                f"Skús to znova o približne {max(1, retry_after_seconds // 60)} min."
+            )
+        )
+
+    # Bez súčasného hesla by si ukradnutou session vedel nastaviť vlastný
+    # e-mail a následne heslo obnoviť.
+    if not verify_password(current_password, account.password_hash):
+
+        register_failed_login(request, account.username)
+
+        raise HTTPException(status_code=403, detail="Súčasné heslo nie je správne.")
+
+    email = email.strip()
+
+    if email:
+
+        try:
+            email = validate_email_format(email)
+
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+
+    account.email = email or None
+    accounts_db.commit()
+
+    _log_to_account_db(account.slug, "auth.email_changed", "nastavený" if email else "odstránený")
+
+    return RedirectResponse(url="/settings?email=ok#heslo", status_code=303)
+
+
+# =========================================
+# OBNOVA ZABUDNUTÉHO HESLA (cez e-mail)
+#
+# Odkaz obsahuje podpísaný časovo obmedzený token (1 hodina), do ktorého
+# je zahrnutý odtlačok súčasného hashu hesla - po zmene hesla preto
+# prestane platiť (jednorazový). Odpoveď na žiadosť je vždy rovnaká,
+# nech konto existuje alebo nie (nedá sa zistiť, ktoré mená sú
+# zaregistrované). Funguje len keď je nastavený SMTP aj APP_BASE_URL.
+# =========================================
+
+RESET_TOKEN_MAX_AGE_SECONDS = 3600
+RESET_NEUTRAL_MESSAGE = (
+    "Ak konto s týmto menom existuje a má nastavený e-mail, poslali sme naň "
+    "odkaz na zmenu hesla (platí 1 hodinu)."
+)
+
+
+def _reset_serializer() -> URLSafeTimedSerializer:
+
+    return URLSafeTimedSerializer(os.environ["SECRET_KEY"], salt="password-reset")
+
+
+def _password_fingerprint(password_hash: str) -> str:
+
+    return hashlib.sha256(password_hash.encode("utf-8")).hexdigest()[:24]
+
+
+def make_reset_token(account: Account) -> str:
+
+    return _reset_serializer().dumps({"id": account.id, "f": _password_fingerprint(account.password_hash)})
+
+
+def account_from_reset_token(token: str, accounts_db: Session) -> Account | None:
+    """Vráti konto, ak je token platný, nevypršal a heslo sa od jeho vydania nezmenilo."""
+
+    try:
+        data = _reset_serializer().loads(token, max_age=RESET_TOKEN_MAX_AGE_SECONDS)
+
+    except (BadSignature, SignatureExpired):
+        return None
+
+    if not isinstance(data, dict):
+        return None
+
+    account = accounts_db.query(Account).filter(Account.id == data.get("id")).first()
+
+    if account is None or not hmac.compare_digest(
+        str(data.get("f", "")), _password_fingerprint(account.password_hash)
+    ):
+        return None
+
+    return account
+
+
+def _require_reset_enabled() -> None:
+
+    if not mailer.enabled():
+
+        raise HTTPException(status_code=404, detail="Obnova hesla cez e-mail nie je zapnutá.")
+
+
+@router.get("/forgot-password")
+def forgot_password_form(request: Request):
+
+    _require_reset_enabled()
+
+    return templates.TemplateResponse(
+        request=request, name="forgot_password.html", context={"message": None, "error": None}
+    )
+
+
+def _send_reset_mail(account_slug: str, username: str, email: str, link: str) -> None:
+    """Odošle e-mail s odkazom (beží na pozadí) a zapíše výsledok do histórie zmien."""
+
+    sent = mailer.send_mail(
+        email,
+        "Obnova hesla - Digitálny zošit",
+        (
+            f"Dobrý deň,\n\nna obnovu hesla k účtu „{username}“ použite tento odkaz "
+            f"(platí 1 hodinu a dá sa použiť raz):\n\n{link}\n\n"
+            "Ak ste o obnovu nežiadali, tento e-mail ignorujte - heslo ostáva nezmenené.\n"
+        )
+    )
+
+    _log_to_account_db(
+        account_slug, "auth.password_reset_requested",
+        "e-mail odoslaný" if sent else "odoslanie zlyhalo"
+    )
+
+
+@router.post("/forgot-password")
+def forgot_password_submit(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    username: str = Form(...),
+    accounts_db: Session = Depends(get_accounts_db)
+):
+
+    _require_reset_enabled()
+
+    if not reset_request_allowed(request):
+
+        return templates.TemplateResponse(
+            request=request,
+            name="forgot_password.html",
+            context={"message": None, "error": "Príliš veľa žiadostí. Skús to neskôr."},
+            status_code=429
+        )
+
+    account = accounts_db.query(Account).filter(Account.username == username.strip()).first()
+
+    if account is not None and account.email:
+
+        link = f"{mailer.base_url()}/reset-password/{make_reset_token(account)}"
+
+        # Odosielanie ide na pozadí: odpoveď trvá rovnako dlho, nech konto
+        # existuje alebo nie (inak by sa zo času odpovede dalo zistiť, ktoré
+        # mená sú zaregistrované).
+        background_tasks.add_task(_send_reset_mail, account.slug, account.username, account.email, link)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="forgot_password.html",
+        context={"message": RESET_NEUTRAL_MESSAGE, "error": None}
+    )
+
+
+@router.get("/reset-password/{token}")
+def reset_password_form(
+    token: str,
+    request: Request,
+    accounts_db: Session = Depends(get_accounts_db)
+):
+
+    _require_reset_enabled()
+
+    valid = account_from_reset_token(token, accounts_db) is not None
+
+    return templates.TemplateResponse(
+        request=request,
+        name="reset_password.html",
+        context={
+            "token": token,
+            "valid": valid,
+            "error": None if valid else "Odkaz je neplatný alebo vypršal. Vyžiadaj si nový."
+        },
+        status_code=200 if valid else 400
+    )
+
+
+@router.post("/reset-password/{token}")
+def reset_password_submit(
+    token: str,
+    request: Request,
+    new_password: str = Form(...),
+    new_password_confirm: str = Form(...),
+    accounts_db: Session = Depends(get_accounts_db)
+):
+
+    _require_reset_enabled()
+
+    account = account_from_reset_token(token, accounts_db)
+
+    def fail(message: str, status_code: int):
+
+        return templates.TemplateResponse(
+            request=request,
+            name="reset_password.html",
+            context={"token": token, "valid": account is not None, "error": message},
+            status_code=status_code
+        )
+
+    if account is None:
+
+        return fail("Odkaz je neplatný alebo vypršal. Vyžiadaj si nový.", 400)
+
+    if len(new_password) < MIN_PASSWORD_LENGTH:
+
+        return fail(f"Heslo musí mať aspoň {MIN_PASSWORD_LENGTH} znakov.", 422)
+
+    if len(new_password) > MAX_PASSWORD_LENGTH:
+
+        return fail(f"Heslo môže mať najviac {MAX_PASSWORD_LENGTH} znakov.", 422)
+
+    if new_password != new_password_confirm:
+
+        return fail("Heslá sa nezhodujú.", 422)
+
+    account.password_hash = hash_password(new_password)
+    accounts_db.commit()
+
+    register_successful_login(request, account.username)      # zruší prípadný zámok prihlásenia
+
+    _log_to_account_db(account.slug, "auth.password_reset_done")
+
+    return RedirectResponse(url="/login?reset=ok", status_code=303)

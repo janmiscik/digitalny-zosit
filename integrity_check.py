@@ -23,11 +23,12 @@ cleanup_orphan_files() nižšie, volané výslovne z /settings/integrity-check
 """
 
 import os
+import re
 from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
 
-from models import Company, JobPhoto
+from models import Company, Invoice, JobPhoto, Quote
 from uploads_utils import ALLOWED_EXTENSIONS, job_photos_dir, uploads_dir
 
 
@@ -50,14 +51,69 @@ class OrphanFileIssue:
 
 
 @dataclass
+class NumberGapIssue:
+    """V číselnom rade dokladov chýba číslo (zrejme zmazaný návrh)."""
+
+    series: str                 # napr. "Faktúry 2026"
+    missing: list[str]          # chýbajúce čísla, napr. ["2026003"]
+
+
+@dataclass
 class IntegrityReport:
 
     missing_files: list[MissingFileIssue] = field(default_factory=list)
     orphan_files: list[OrphanFileIssue] = field(default_factory=list)
+    number_gaps: list[NumberGapIssue] = field(default_factory=list)
 
     @property
     def is_clean(self) -> bool:
-        return not self.missing_files and not self.orphan_files
+        return not self.missing_files and not self.orphan_files and not self.number_gaps
+
+
+# Číselné rady dokladov: (regulárny výraz čísla, názov rady, formát čísla)
+_SERIES = (
+    (re.compile(r"^(\d{4})(\d{3,})$"), "Faktúry", "{year}{seq:03d}"),
+    (re.compile(r"^ZF(\d{4})(\d{3,})$"), "Zálohové faktúry", "ZF{year}{seq:03d}"),
+    (re.compile(r"^DP(\d{4})(\d{3,})$"), "Dobropisy", "DP{year}{seq:03d}"),
+    (re.compile(r"^CP(\d{4})(\d{3,})$"), "Cenové ponuky", "CP{year}{seq:03d}"),
+)
+
+
+def find_number_gaps(numbers: list[str]) -> list[NumberGapIssue]:
+    """
+    Nájde medzery v súvislých radoch RRRRPPP / ZFRRRRPPP / DPRRRRPPP /
+    CPRRRRPPP (každý rok a typ má vlastný rad od 001). Čísla, ktoré nemajú
+    tento tvar (ručne zadané), sa ignorujú.
+    """
+
+    found: dict[tuple[str, str, str], set[int]] = {}
+
+    for number in numbers:
+
+        for pattern, label, fmt in _SERIES:
+
+            match = pattern.match(number or "")
+
+            if match:
+
+                found.setdefault((label, match.group(1), fmt), set()).add(int(match.group(2)))
+
+                break
+
+    issues = []
+
+    for (label, year, fmt), sequences in sorted(found.items(), key=lambda item: (item[0][1], item[0][0])):
+
+        missing = [
+            fmt.format(year=year, seq=seq)
+            for seq in range(1, max(sequences) + 1)
+            if seq not in sequences
+        ]
+
+        if missing:
+            issues.append(NumberGapIssue(series=f"{label} {year}", missing=missing))
+
+    return issues
 
 
 def check_integrity(db: Session) -> IntegrityReport:
@@ -137,6 +193,12 @@ def check_integrity(db: Session) -> IntegrityReport:
                         relative_path=f"job_photos/{path.name}"
                     )
                 )
+
+    # --- Medzery v číslovaní dokladov ---
+    report.number_gaps = find_number_gaps(
+        [row[0] for row in db.query(Invoice.invoice_number).all()]
+        + [row[0] for row in db.query(Quote.quote_number).all()]
+    )
 
     return report
 

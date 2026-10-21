@@ -71,6 +71,10 @@
         <div class="edit-customer-card">
 
 
+            {% if request.query_params.get('reset') == 'ok' %}
+                <div class="backup-notice backup-notice-ok">✅ Heslo bolo zmenené. Môžeš sa prihlásiť.</div>
+            {% endif %}
+
             {% if error %}
 
             <p style="color: var(--danger); margin-bottom: 16px;">
@@ -128,6 +132,12 @@
 
             </form>
 
+
+            {% if password_reset_enabled() %}
+            <p style="margin-top: 16px; font-size: 14px;">
+                <a href="/forgot-password">Zabudnuté heslo?</a>
+            </p>
+            {% endif %}
 
             <p style="margin-top: 16px; font-size: 14px;">
                 Nemáš ešte konto? <a href="/register">Zaregistruj sa</a>.
