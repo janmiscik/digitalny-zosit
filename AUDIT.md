@@ -58,3 +58,7 @@ Prihlásenie je podpísaná cookie. Nová kontrola pri každej požiadavke porov
 ## Dodatok: overenie off-site zálohy podľa obsahu
 
 Kontrola veľkosti objektu v bucketi nestačí (dve rovnako veľké súbory môžu mať rôzne dáta). Po každom nahratí sa záloha z bucketu znova stiahne, porovná sa jej SHA-256 s lokálnym súborom (hash sa ukladá aj ako metadáta objektu) a stiahnutá kópia prejde plným testom obnovy (`verify_backup_zip`). Až potom sa zálohy v bucketi orežú podľa retencie, takže neoverená záloha nikdy nevytlačí overenú. Výsledok je v Nastaveniach pri „Kópia mimo servera" a pri zlyhaní appka zobrazí upozornenie. Cena je jedno stiahnutie zálohy pri každom zálohovaní (zálohy majú rádovo MB).
+
+## Dodatok: WAL a upratanie
+
+SQLite engine kont aj `accounts.db` teraz používa `journal_mode=WAL` a `synchronous=NORMAL` (spolu s existujúcim `busy_timeout` 15 s). Režim sa do súboru zapíše pri prvom otvorení a je trvalý. Zálohy aj obnova idú cez SQLite backup API, takže s WAL fungujú a kompletná testovacia sada (vrátane obnovy po strate úložiska) prešla bez zmeny. Zmazaný bol osamotený `invoice_detail.html` v koreni projektu (staršia, neúplná kópia `templates/invoice_detail.html`: bez CSRF polí a pripomienok platby).

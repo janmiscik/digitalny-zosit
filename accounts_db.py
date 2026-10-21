@@ -55,6 +55,12 @@ if accounts_engine.dialect.name == "sqlite":
 
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
+        # WAL: čitatelia neblokujú zapisovateľa (a naopak), pri súbežných
+        # požiadavkách tak odpadá väčšina "database is locked". NORMAL je
+        # v WAL režime bezpečné voči pádu aplikácie; pri páde celého
+        # stroja môže prísť o posledné potvrdené transakcie, nie o súbor.
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
         cursor.close()
 
 
