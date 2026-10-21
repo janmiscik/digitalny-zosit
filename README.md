@@ -306,7 +306,7 @@ pip install -r requirements-dev.txt   # raz, pytest sa do produkčného obrazu n
 python -m pytest tests/ -q
 ```
 
-Aktuálne **832 testov**, rozdelených podľa oblasti:
+Aktuálne **838 testov**, rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|
@@ -338,7 +338,7 @@ Aktuálne **832 testov**, rozdelených podľa oblasti:
 | `test_numbering.py` | Číslovanie dokladov: číselné poradie aj nad 999, nezávislé rady, hľadanie medzier v rade |
 | `test_session_invalidation.py` | Odhlásenie ostatných zariadení po zmene hesla, zmazané konto, cookie bez odtlačku |
 | `test_change_password.py` | Zmena hesla: úspech, nové prihlásenie, zlé súčasné heslo, validácia, limit pokusov, CSRF, vyžaduje prihlásenie, izolácia kont, audit log |
-| `test_offsite_backup.py` | Nahrávanie záloh mimo servera: zapnutie podľa premenných, kľúče/predpona, kontrola veľkosti, retencia po kontách, chyba siete nezhodí lokálnu zálohu, nahratá záloha prejde testom obnovy, upozornenia v Nastaveniach |
+| `test_offsite_backup.py` | Nahrávanie záloh mimo servera: zapnutie podľa premenných, kľúče/predpona, kontrola veľkosti, SHA-256 a stiahnutie späť, test obnovy stiahnutej kópie, retencia po kontách, chyba siete nezhodí lokálnu zálohu, upozornenia v Nastaveniach |
 | `test_accounting.py` | Zaokrúhľovanie DPH po sadzbách (nie po riadkoch), rekapitulácia, súlad s Peppol BR-CO-17 |
 | `test_disaster_recovery.py` | Úplná strata úložiska a obnova zo stiahnutej zálohy, poškodené zálohy, záloha zo staršej verzie, rollback pri zlyhaní migrácie, poškodené logo v PDF |
 | `test_migrations_concurrency.py` | Migrácie nad dátami z každej revízie, zlyhanie jedného konta, súbežné zápisy počas zálohy |

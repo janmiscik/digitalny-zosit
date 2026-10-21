@@ -33,8 +33,10 @@ class FakeS3:
         self.truncate_uploads = truncate_uploads
         self.fail_upload = fail_upload
         self.counter = 0
+        self.corrupt_downloads = False
+        self.same_size_corruption = False
 
-    def upload_file(self, filename, bucket, key):
+    def upload_file(self, filename, bucket, key, ExtraArgs=None):
 
         if self.fail_upload:
             raise ConnectionError("sieť nedostupná")
@@ -44,11 +46,25 @@ class FakeS3:
         if self.truncate_uploads:
             data = data[:-5]
 
+        if self.same_size_corruption:
+            data = bytes([data[0] ^ 1]) + data[1:]
+
         self.counter += 1
         self.objects[(bucket, key)] = {
             "data": data,
+            "meta": (ExtraArgs or {}).get("Metadata", {}),
             "modified": datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(minutes=self.counter),
         }
+
+    def download_file(self, bucket, key, filename):
+
+        data = self.objects[(bucket, key)]["data"]
+
+        if self.corrupt_downloads:
+            data = bytes([data[0] ^ 1]) + data[1:]
+
+        with open(filename, "wb") as handle:
+            handle.write(data)
 
     def head_object(self, Bucket, Key):
 
@@ -315,3 +331,81 @@ def test_settings_page_shows_offsite_state(s3):
     page = client.get("/settings").text
 
     assert "mimo servera" in page and "✅ nahratá" in page
+
+
+# ---------- obsah, nielen veľkosť ----------
+
+def test_same_size_but_different_content_is_detected(s3, tmp_path):
+
+    s3.same_size_corruption = True
+
+    result = offsite_backup.upload_backup("firma", local_file(tmp_path))
+
+    assert result.ok is False
+    assert "SHA-256" in result.error
+
+
+def test_upload_stores_sha256_and_marks_verified(s3, tmp_path):
+
+    path = local_file(tmp_path)
+
+    result = offsite_backup.upload_backup("firma", path)
+
+    assert result.ok and result.verified
+    assert result.sha256 == offsite_backup.file_sha256(path)
+    assert s3.objects[("moj-bucket", result.key)]["meta"] == {"sha256": result.sha256}
+
+
+def test_validator_failure_marks_backup_as_failed_and_keeps_old_ones(s3, tmp_path, monkeypatch):
+
+    monkeypatch.setenv("OFFSITE_BACKUP_KEEP", "1")
+
+    offsite_backup.upload_backup("firma", local_file(tmp_path, name="stara.zip"))
+
+    result = offsite_backup.upload_backup(
+        "firma", local_file(tmp_path, name="nova.zip"),
+        validator=lambda path: ["poškodená databáza"],
+    )
+
+    assert result.ok is False and "testom obnovy" in result.error
+    # retencia sa pri neoverenej zálohe nespúšťa - stará záloha ostáva
+    assert ("moj-bucket", "digitalny-zosit/firma/stara.zip") in s3.objects
+
+
+def test_validator_receives_downloaded_copy_and_temp_file_is_removed(s3, tmp_path):
+
+    seen = {}
+
+    def validator(path):
+
+        seen["path"] = path
+        seen["data"] = path.read_bytes()
+        return []
+
+    result = offsite_backup.upload_backup("firma", local_file(tmp_path), validator=validator)
+
+    assert result.ok and seen["data"] == b"obsah zalohy"
+    assert not seen["path"].exists()
+
+
+def test_run_backup_verifies_downloaded_copy_with_restore_test(s3):
+
+    slug = make_account()
+
+    auto_backup.run_backup(slug, "manual")
+
+    offsite = auto_backup.read_status(slug)["offsite"]
+
+    assert offsite["ok"] and offsite["verified"] and len(offsite["sha256"]) == 64
+
+
+def test_run_backup_reports_corrupted_remote_copy(s3):
+
+    s3.same_size_corruption = True
+    slug = make_account()
+
+    auto_backup.run_backup(slug, "manual")
+
+    offsite = auto_backup.read_status(slug)["offsite"]
+
+    assert offsite["ok"] is False and "SHA-256" in offsite["error"]

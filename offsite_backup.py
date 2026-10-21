@@ -16,12 +16,18 @@ každá úspešne vytvorená a overená záloha sa nahrá aj do externého bucke
     OFFSITE_BACKUP_KEEP               koľko záloh na konto držať v bucketi (predvolené 30)
 
 Zálohy obsahujú dáta zákazníkov - bucket musí byť SÚKROMNÝ (bez verejného prístupu).
+Po nahratí sa záloha z bucketu znova STIAHNE, porovná sa jej SHA-256 s lokálnym
+súborom a (ak je zadaný overovač) prejde úplným testom obnovy. Za funkčnú sa
+nepovažuje, kým toto neprejde - samotné nahratie ani zhodná veľkosť nestačí.
 Nahrávanie nikdy nezhodí vytváranie zálohy: chyba sa zapíše do stavu konta
 a zobrazí v Nastaveniach.
 """
 
+import hashlib
 import logging
 import os
+import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -36,6 +42,8 @@ class OffsiteResult:
     key: str | None = None
     error: str | None = None
     removed: int = 0
+    sha256: str | None = None
+    verified: bool = False
 
 
 def enabled() -> bool:
@@ -80,44 +88,102 @@ def _client():
     )
 
 
-def upload_backup(slug: str, path: Path) -> OffsiteResult:
+def file_sha256(path: Path) -> str:
+
+    digest = hashlib.sha256()
+
+    with open(path, "rb") as handle:
+
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+
+    return digest.hexdigest()
+
+
+def upload_backup(
+    slug: str,
+    path: Path,
+    validator: Callable[[Path], list[str]] | None = None,
+) -> OffsiteResult:
     """
-    Nahrá súbor zálohy, overí jeho veľkosť v bucketi a poreže staré zálohy
-    konta nad limit. Nikdy nevyhodí výnimku.
+    Nahrá súbor zálohy, overí jeho veľkosť, potom ho z bucketu znova
+    stiahne a porovná SHA-256 s lokálnym súborom. Ak je zadaný `validator`
+    (vráti zoznam problémov), spustí ho nad stiahnutou kópiou (test
+    obnovy). Staré zálohy konta poreže nad limit AŽ po úspešnom overení.
+    Nikdy nevyhodí výnimku.
     """
 
     if not enabled():
         return OffsiteResult(ok=False, error="Nahrávanie mimo servera nie je nastavené.")
 
     key = _prefix_for(slug) + path.name
+    downloaded: Path | None = None
 
     try:
 
         client = _client()
         bucket = os.environ["OFFSITE_BACKUP_BUCKET"].strip()
 
-        client.upload_file(str(path), bucket, key)
+        local_hash = file_sha256(path)
+
+        client.upload_file(
+            str(path), bucket, key,
+            ExtraArgs={"Metadata": {"sha256": local_hash}},
+        )
 
         remote_size = client.head_object(Bucket=bucket, Key=key)["ContentLength"]
 
         if remote_size != path.stat().st_size:
 
             return OffsiteResult(
-                ok=False, key=key,
+                ok=False, key=key, sha256=local_hash,
                 error=f"Veľkosť v úložisku ({remote_size} B) sa nezhoduje s lokálnou ({path.stat().st_size} B).",
             )
 
+        # Obsah z bucketu sa stiahne späť a porovná - dve rovnako veľké
+        # súbory ešte nemusia mať rovnaké dáta.
+        fd, tmp_name = tempfile.mkstemp(suffix=".zip")
+        os.close(fd)
+        downloaded = Path(tmp_name)
+
+        client.download_file(bucket, key, str(downloaded))
+
+        remote_hash = file_sha256(downloaded)
+
+        if remote_hash != local_hash:
+
+            return OffsiteResult(
+                ok=False, key=key, sha256=local_hash,
+                error="Obsah zálohy v úložisku sa nezhoduje s lokálnym súborom (iný SHA-256).",
+            )
+
+        if validator is not None:
+
+            problems = validator(downloaded)
+
+            if problems:
+
+                return OffsiteResult(
+                    ok=False, key=key, sha256=local_hash,
+                    error=("Záloha stiahnutá z úložiska neprešla testom obnovy: " + "; ".join(problems))[:300],
+                )
+
         removed = _apply_retention(client, bucket, slug)
 
-        logger.info("Záloha %s nahraná mimo servera (%s), zmazané staré: %s", path.name, key, removed)
+        logger.info("Záloha %s nahraná mimo servera a overená (%s), zmazané staré: %s", path.name, key, removed)
 
-        return OffsiteResult(ok=True, key=key, removed=removed)
+        return OffsiteResult(ok=True, key=key, removed=removed, sha256=local_hash, verified=True)
 
     except Exception as exc:   # noqa: BLE001 - záloha nesmie zlyhať kvôli sieti
 
         logger.exception("Nahrávanie zálohy %s mimo servera zlyhalo", path.name)
 
         return OffsiteResult(ok=False, key=key, error=f"{type(exc).__name__}: {exc}"[:300])
+
+    finally:
+
+        if downloaded is not None:
+            downloaded.unlink(missing_ok=True)
 
 
 def _apply_retention(client, bucket: str, slug: str) -> int:

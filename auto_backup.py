@@ -629,13 +629,18 @@ def run_backup(slug: str, kind: str = "auto") -> BackupResult:
         # Kópia mimo servera (ak je nastavená) - chyba nezhodí lokálnu zálohu
         if offsite_backup.enabled():
 
-            offsite = offsite_backup.upload_backup(slug, destination)
+            offsite = offsite_backup.upload_backup(
+                slug, destination,
+                validator=lambda downloaded: verify_backup_zip(downloaded).problems,
+            )
 
             status["offsite"] = {
                 "at": utc_now().isoformat(),
                 "ok": offsite.ok,
                 "file": destination.name,
                 "error": offsite.error,
+                "sha256": offsite.sha256,
+                "verified": offsite.verified,
             }
 
         _write_status(slug, status)

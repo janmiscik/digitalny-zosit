@@ -54,3 +54,7 @@ Rozsah: bezpečnosť, databázy, trvalé úložisko, testy, závislosti. Stav k 
 ## Dodatok: platnosť prihlásení
 
 Prihlásenie je podpísaná cookie. Nová kontrola pri každej požiadavke porovná odtlačok hashu hesla uložený v session s kontom v `accounts.db`. Zmena alebo obnova hesla preto odhlási všetky ostatné zariadenia (zariadenie, z ktorého sa heslo mení, ostáva prihlásené) a session zmazaného konta prestane platiť. Dôsledok pri nasadení: každý je raz odhlásený, lebo staré cookies odtlačok nemajú. Pri prvom prihlásení konta so starým hashom hesla (automatický prehash) sa ostatné zariadenia odhlásia tiež, ide o jednorazový jav.
+
+## Dodatok: overenie off-site zálohy podľa obsahu
+
+Kontrola veľkosti objektu v bucketi nestačí (dve rovnako veľké súbory môžu mať rôzne dáta). Po každom nahratí sa záloha z bucketu znova stiahne, porovná sa jej SHA-256 s lokálnym súborom (hash sa ukladá aj ako metadáta objektu) a stiahnutá kópia prejde plným testom obnovy (`verify_backup_zip`). Až potom sa zálohy v bucketi orežú podľa retencie, takže neoverená záloha nikdy nevytlačí overenú. Výsledok je v Nastaveniach pri „Kópia mimo servera" a pri zlyhaní appka zobrazí upozornenie. Cena je jedno stiahnutie zálohy pri každom zálohovaní (zálohy majú rádovo MB).
