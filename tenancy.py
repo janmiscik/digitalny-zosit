@@ -131,9 +131,23 @@ def upgrade_account_database(slug: str) -> None:
     VŠETKY existujúce kontá - viď manage_accounts.py).
     """
 
+    _upgrade_url(account_database_url(slug))
+
+
+def upgrade_database_file(path) -> None:
+    """
+    Zmigruje na aktuálnu schému ľubovoľný SQLite súbor (napr. dočasnú
+    kópiu databázy z nahranej zálohy) - bez dotyku živých dát konta.
+    """
+
+    _upgrade_url(f"sqlite:///{Path(path).as_posix()}")
+
+
+def _upgrade_url(url: str) -> None:
+
     cfg = Config(str(PROJECT_ROOT / "alembic.ini"))
     cfg.set_main_option("script_location", str(PROJECT_ROOT / "alembic"))
-    cfg.set_main_option("sqlalchemy.url", account_database_url(slug))
+    cfg.set_main_option("sqlalchemy.url", url)
 
     command.upgrade(cfg, "head")
 

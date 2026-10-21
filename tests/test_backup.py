@@ -105,7 +105,7 @@ def skip_schema_migration(monkeypatch):
     """Tieto testy používajú syntetickú DB s vymyslenou revíziou ('test-head') -
     reálna migrácia po obnove sa testuje v test_disaster_recovery.py."""
 
-    monkeypatch.setattr(tenancy, "upgrade_account_database", lambda slug: None)
+    monkeypatch.setattr(tenancy, "upgrade_database_file", lambda path: None)
 
 
 client = TestClient(app)

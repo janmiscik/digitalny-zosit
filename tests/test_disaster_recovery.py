@@ -282,13 +282,13 @@ def test_restore_of_older_schema_backup_is_migrated_to_head(storage):
     assert client.get("/customers/1").status_code == 200           # stránka používa novú tabuľku
 
 
-def test_failed_migration_after_restore_rolls_back_to_previous_state(storage, monkeypatch):
+def test_failed_migration_leaves_live_data_untouched(storage, monkeypatch):
 
     client, slug = register()
     seed(slug)
     good = client.get("/settings/backup").content
 
-    # po zálohe sa dáta zmenia - rollback sa musí vrátiť k TÝMTO (pred obnovou)
+    # po zálohe sa dáta zmenia - po neúspešnej obnove musia ostať TIETO
     conn = sqlite3.connect(str(tenancy.account_database_path(slug)))
     conn.execute("INSERT INTO customers (name) VALUES ('Nový po zálohe')")
     conn.commit()
@@ -296,16 +296,92 @@ def test_failed_migration_after_restore_rolls_back_to_previous_state(storage, mo
 
     before = db_state(slug)
 
-    def boom(_slug):
+    def boom(_path):
         raise RuntimeError("migrácia spadla")
 
-    monkeypatch.setattr(tenancy, "upgrade_account_database", boom)
+    monkeypatch.setattr(tenancy, "upgrade_database_file", boom)
+
+    response = restore(client, good)
+
+    assert response.status_code == 422
+    assert "Pôvodné dáta zostali nedotknuté" in response.text
+    assert db_state(slug) == before
+    assert (tenancy.account_uploads_dir(slug) / "logo.png").read_bytes() == b"logo-bytes"
+
+
+def test_damaged_photo_in_zip_is_rejected_before_any_change(storage):
+
+    client, slug = register()
+    seed(slug)
+    good = client.get("/settings/backup").content
+
+    # Poškodíme obsah fotky v archíve (CRC prestane sedieť), štruktúra ostane platná.
+    with zipfile.ZipFile(io.BytesIO(good)) as zf:
+
+        info = zf.getinfo("uploads/job_photos/foto1.jpg")
+
+    data_start = info.header_offset + 30 + len(info.filename.encode()) + 0
+    damaged = bytearray(good)
+    damaged[data_start] ^= 0xFF
+    damaged = bytes(damaged)
+
+    before = db_state(slug)
+
+    response = restore(client, damaged)
+
+    assert response.status_code == 422
+    assert "poškodená" in response.text
+    assert db_state(slug) == before
+    assert (tenancy.account_uploads_dir(slug) / "job_photos" / "foto1.jpg").read_bytes() == b"photo-bytes"
+
+
+def test_failure_during_swap_restores_database_and_files(storage, monkeypatch):
+
+    import backup_utils
+
+    client, slug = register()
+    seed(slug)
+    good = client.get("/settings/backup").content
+
+    conn = sqlite3.connect(str(tenancy.account_database_path(slug)))
+    conn.execute("INSERT INTO customers (name) VALUES ('Nový po zálohe')")
+    conn.commit()
+    conn.close()
+    (tenancy.account_uploads_dir(slug) / "novy-subor.txt").write_bytes(b"novy")
+
+    before = db_state(slug)
+
+    real_move = backup_utils.shutil.move
+    calls = {"n": 0}
+
+    def flaky_move(src, dst, *args, **kwargs):
+
+        calls["n"] += 1
+
+        if calls["n"] == 2:                      # po presune starých uploads/, pri nasadení nových
+            raise OSError("disk plný")
+
+        return real_move(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(backup_utils.shutil, "move", flaky_move)
 
     response = restore(client, good)
 
     assert response.status_code == 500
-    assert "Pôvodné dáta boli vrátené" in response.text or "Pôvodné dáta boli vrátené" in str(response.content)
+    assert "Pôvodné dáta boli vrátené" in response.text
     assert db_state(slug) == before
+    assert (tenancy.account_uploads_dir(slug) / "novy-subor.txt").read_bytes() == b"novy"
+    assert (tenancy.account_uploads_dir(slug) / "logo.png").read_bytes() == b"logo-bytes"
+
+
+def test_no_staging_leftovers_after_restore(storage):
+
+    client, slug = register()
+    seed(slug)
+
+    restore(client, client.get("/settings/backup").content)
+
+    assert not list(tenancy.account_database_path(slug).parent.glob("restore-*"))
 
 
 def test_restore_creates_safety_backup_first(storage):

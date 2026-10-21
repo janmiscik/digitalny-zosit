@@ -33,7 +33,7 @@ Rozsah: bezpečnosť, databázy, trvalé úložisko, testy, závislosti. Stav k 
 2. **Overenie Volume.** V Railway logu hľadaj riadky `[ULOZISKE]`: musí tam byť „OK: /app/data je samostatný disk (Volume)“. Ak je tam VAROVANIE, dáta sa po redeployi stratia.
 3. **Jedna replika.** Limity pokusov a plánovač záloh sú v pamäti procesu; pri škálovaní na viac replík by sa nezdieľali (a SQLite na Volume by aj tak nezvládla viac zapisovateľov). Nechaj 1 repliku.
 4. **CSP.** Zavedená je praktická CSP (cudzie domény zakázané, výnimka Google Fonts), overená v prehliadači na 16 stránkach. Striktná verzia bez `'unsafe-inline'` vyžaduje prepísať 23 šablón (inline skripty) a 57 inline handlerov do súborov v `static/`; zatiaľ sa to neoplatí, lebo Jinja escapuje výstup a `|safe` sa nikde nepoužíva.
-5. **Zmena hesla** v Nastaveniach pribudla. **Obnova zabudnutého hesla cez e-mail** pribudla ako voliteľná (zapne sa nastavením `SMTP_*` a `APP_BASE_URL`); konto bez nastaveného e-mailu sa obnovuje manuálne cez `manage_accounts.py`. Zmena hesla neodhlási ostatné zariadenia (session je v cookie).
+5. **Zmena hesla** v Nastaveniach pribudla. **Obnova zabudnutého hesla cez e-mail** pribudla ako voliteľná (zapne sa nastavením `SMTP_*` a `APP_BASE_URL`); konto bez nastaveného e-mailu sa obnovuje manuálne cez `manage_accounts.py`. Zmena aj obnova hesla odhlásia ostatné zariadenia (pozri dodatok o platnosti prihlásení).
 6. **WAL režim SQLite** by zlepšil súbeh čítania a zápisu, ale mení správanie záloh a obnovy (súbory `-wal`/`-shm`), preto som ho nezapínal bez samostatného testu na Railway.
 7. V koreni projektu leží osamotený `invoice_detail.html` (starý duplikát `templates/invoice_detail.html`); appka ho nepoužíva, dá sa zmazať.
 

@@ -28,6 +28,7 @@ import shutil
 import sqlite3
 import tempfile
 import zipfile
+import zlib
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -509,6 +510,24 @@ def _validate_backup_file(file_bytes: bytes) -> None:
         with zipfile.ZipFile(io.BytesIO(file_bytes)) as zf:
 
             _validate_zip_members(zf)
+
+            # CRC VŠETKÝCH súborov (aj fotiek), nielen databázy - poškodená
+            # položka sa tak odhalí pred akoukoľvek zmenou živých dát.
+            try:
+
+                damaged = zf.testzip()
+
+            except (zlib.error, zipfile.BadZipFile, EOFError, OSError, RuntimeError):
+
+                damaged = "(nečitateľná položka)"
+
+            if damaged is not None:
+
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Záloha je poškodená (súbor '{damaged}' v archíve).",
+                )
+
             _extract_and_validate_db_bytes(zf)
 
     except zipfile.BadZipFile:
@@ -570,20 +589,94 @@ def _rollback_to_safety_backup(safety_backup_path: Path) -> None:
             target_path.write_bytes(zf.read(member))
 
 
+def _stage_restore(zf: zipfile.ZipFile, db_bytes: bytes, staging: Path) -> tuple[Path, Path]:
+    """
+    Pripraví obnovu v DOČASNOM adresári, bez dotyku živých dát:
+    databázu zmigruje na aktuálnu schému, overí ju a rozbalí uploads/.
+    Akákoľvek chyba tu znamená, že živé dáta ostali nedotknuté.
+    """
+
+    staged_db = staging / "database.db"
+    staged_uploads = staging / "uploads"
+
+    staged_db.write_bytes(db_bytes)
+
+    # Záloha môže pochádzať zo staršej verzie appky (bez novších tabuliek
+    # a stĺpcov) - schéma sa dopĺňa na kópii, ešte pred výmenou živých dát.
+    try:
+
+        tenancy.upgrade_database_file(staged_db)
+
+    except Exception as exc:
+
+        logger.exception("Migrácia databázy zo zálohy zlyhala - živé dáta ostávajú nedotknuté")
+
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Záloha sa nepodarilo aktualizovať na aktuálnu schému "
+                f"databázy ({type(exc).__name__}) - možno pochádza z novšej "
+                "verzie appky. Pôvodné dáta zostali nedotknuté."
+            )
+        )
+
+    conn = sqlite3.connect(str(staged_db))
+
+    try:
+
+        problem = _integrity_check_failure(conn)
+
+    finally:
+
+        conn.close()
+
+    if problem is not None:
+
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Databáza po aktualizácii schémy je poškodená "
+                f"({problem}). Pôvodné dáta zostali nedotknuté."
+            )
+        )
+
+    staged_uploads.mkdir(parents=True, exist_ok=True)
+
+    for member in zf.namelist():
+
+        if not member.startswith("uploads/") or member.endswith("/"):
+            continue
+
+        target_path = staged_uploads / member[len("uploads/"):]
+
+        # Obrana proti path traversal v mene súboru v ZIP archíve -
+        # nikdy nezapisovať mimo uploads/.
+        if staged_uploads.resolve() not in target_path.resolve().parents:
+            continue
+
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with zf.open(member) as source_file, open(target_path, "wb") as out:
+
+            shutil.copyfileobj(source_file, out)
+
+    return staged_db, staged_uploads
+
+
 def restore_from_upload(file_bytes: bytes) -> Path:
     """
-    Obnoví appku (databázu aj uploads/) z nahranej zálohy.
+    Obnoví appku (databázu aj uploads/) z nahranej zálohy ako jednu
+    operáciu: buď sa podarí celá, alebo ostane pôvodný stav.
 
     Postup:
-    1. Overí, že nahraný súbor je platná záloha tejto appky.
-    2. Uloží AUTOMATICKÚ kompletnú zálohu súčasného stavu (pre prípad chyby).
-    3. Zavrie všetky pooled SQLAlchemy spojenia (tenancy.discard_account_engine(tenancy.get_current_tenant())) - inak
-       by appka mohla po obnove pracovať so zastaraným spojením/cache.
-    4. Nahraný obsah databázy skopíruje do živého DB súboru cez SQLite
-       backup API.
-    5. Nahradí obsah uploads/ presne tým, čo je v zálohe (staré súbory,
-       ktoré v zálohe nie sú, sa odstránia - obnova má appku vrátiť do
-       PRESNE toho stavu, aký zachytáva záloha).
+    1. Overí celý ZIP (štruktúru, CRC všetkých súborov, databázu).
+    2. Uloží AUTOMATICKÚ kompletnú zálohu súčasného stavu.
+    3. V dočasnom adresári pripraví databázu (zmigrovanú na aktuálnu
+       schému a overenú) aj súbory. Chyba tu = živé dáta nedotknuté.
+    4. Zavrie pooled spojenia a vymení databázu aj uploads/ (staré
+       súbory, ktoré v zálohe nie sú, sa odstránia).
+    5. Ak zlyhá čokoľvek po začatí výmeny, vráti databázu aj súbory
+       z poistnej zálohy.
 
     Vráti cestu k automatickej zálohe vytvorenej pred obnovou.
     """
@@ -592,90 +685,74 @@ def restore_from_upload(file_bytes: bytes) -> Path:
 
     safety_backup_path = save_automatic_backup()
 
-    with zipfile.ZipFile(io.BytesIO(file_bytes)) as zf:
+    db_path = _sqlite_file_path()
+    uploads_path = uploads_dir()
 
-        db_bytes = _extract_and_validate_db_bytes(zf)
+    staging = Path(tempfile.mkdtemp(prefix="restore-", dir=str(db_path.parent)))
+    old_uploads = staging / "old-uploads"
 
-        # Zatvoríme všetky poolované SQLAlchemy spojenia PRED obnovou -
-        # appka si pri ďalšom použití vytvorí nové spojenia nad (už
-        # obnoveným) súborom. Bez tohto kroku by mohlo staré poolované
-        # spojenie držať zastaraný stav alebo zámok na pôvodnom súbore.
-        tenancy.discard_account_engine(tenancy.get_current_tenant())
-
-        db_path = _sqlite_file_path()
-
-        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
-
-            tmp.write(db_bytes)
-            tmp_path = Path(tmp.name)
-
-        try:
-
-            source = sqlite3.connect(str(tmp_path))
-            destination = sqlite3.connect(str(db_path))
-
-            with destination:
-                source.backup(destination)
-
-            source.close()
-            destination.close()
-
-        finally:
-
-            tmp_path.unlink(missing_ok=True)
-
-
-        # Nahradenie uploads/ - appka sa má po obnove nachádzať PRESNE v
-        # stave, ktorý záloha zachytáva (nie zlúčenie starého a nového).
-        if uploads_dir().exists():
-
-            shutil.rmtree(uploads_dir())
-
-        uploads_dir().mkdir(parents=True, exist_ok=True)
-
-        for member in zf.namelist():
-
-            if not member.startswith("uploads/") or member.endswith("/"):
-                continue
-
-            relative_path = member[len("uploads/"):]
-
-            target_path = uploads_dir() / relative_path
-
-            # Obrana proti path traversal v mene súboru v ZIP archíve -
-            # nikdy nezapisovať mimo uploads_dir().
-            if uploads_dir() not in target_path.resolve().parents:
-                continue
-
-            target_path.parent.mkdir(parents=True, exist_ok=True)
-
-            with zf.open(member) as source_file:
-
-                target_path.write_bytes(source_file.read())
-
-
-    # Záloha môže pochádzať zo staršej verzie appky (bez novších tabuliek
-    # a stĺpcov) - po obnove sa preto databáza hneď doplní na aktuálnu
-    # schému. Ak migrácia zlyhá, vráti sa poistná záloha spred obnovy,
-    # aby konto nezostalo v rozbitom stave.
     try:
 
-        tenancy.upgrade_account_database(tenancy.get_current_tenant())
+        with zipfile.ZipFile(io.BytesIO(file_bytes)) as zf:
 
-    except Exception as exc:
+            db_bytes = _extract_and_validate_db_bytes(zf)
 
-        logger.exception("Migrácia obnovenej databázy zlyhala - vraciam pôvodný stav")
+            staged_db, staged_uploads = _stage_restore(zf, db_bytes, staging)
 
-        _rollback_to_safety_backup(safety_backup_path)
+        # Od tohto bodu sa menia živé dáta - každá chyba vracia pôvodný stav.
+        try:
 
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                "Obnova zlyhala pri aktualizácii schémy databázy "
-                f"({type(exc).__name__}) - záloha možno pochádza z novšej verzie "
-                "appky. Pôvodné dáta boli vrátené."
+            tenancy.discard_account_engine(tenancy.get_current_tenant())
+
+            source = sqlite3.connect(str(staged_db))
+            destination = sqlite3.connect(str(db_path))
+
+            try:
+
+                with destination:
+                    source.backup(destination)
+
+            finally:
+
+                source.close()
+                destination.close()
+
+            if uploads_path.exists():
+                shutil.move(str(uploads_path), str(old_uploads))
+
+            shutil.move(str(staged_uploads), str(uploads_path))
+
+        except Exception as exc:
+
+            logger.exception("Obnova zlyhala počas výmeny dát - vraciam pôvodný stav")
+
+            try:
+
+                _rollback_to_safety_backup(safety_backup_path)
+
+            except Exception:
+
+                logger.exception("Návrat k poistnej zálohe zlyhal")
+
+                raise HTTPException(
+                    status_code=500,
+                    detail=(
+                        "Obnova zlyhala a návrat pôvodného stavu sa tiež nepodaril. "
+                        f"Poistná záloha je v súbore {safety_backup_path.name}."
+                    )
+                )
+
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    f"Obnova zlyhala ({type(exc).__name__}). "
+                    "Pôvodné dáta boli vrátené."
+                )
             )
-        )
+
+    finally:
+
+        shutil.rmtree(staging, ignore_errors=True)
 
     # Záznam o obnove sa musí zapísať AŽ TERAZ, priamo do (už
     # obnoveného) DB súboru - logovať PRED obnovou by bolo zbytočné,
