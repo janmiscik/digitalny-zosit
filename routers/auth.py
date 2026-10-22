@@ -674,8 +674,19 @@ def reset_password_submit(
 
         return fail("Heslá sa nezhodujú.", 422)
 
-    account.password_hash = hash_password(new_password)
+    # Zmena hesla s podmienkou "heslo je ešte to, pre ktoré bol odkaz vydaný":
+    # pri dvoch súbežných odoslaniach toho istého odkazu uspeje len jedno
+    # (druhé nezmení nič riadok a skončí ako neplatný odkaz).
+    changed = (
+        accounts_db.query(Account)
+        .filter(Account.id == account.id, Account.password_hash == account.password_hash)
+        .update({Account.password_hash: hash_password(new_password)}, synchronize_session=False)
+    )
     accounts_db.commit()
+
+    if changed != 1:
+
+        return fail("Odkaz je neplatný alebo vypršal. Vyžiadaj si nový.", 400)
 
     register_successful_login(request, account.username)      # zruší prípadný zámok prihlásenia
 

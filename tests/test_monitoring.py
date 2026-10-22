@@ -185,3 +185,15 @@ def test_plain_health_is_unaffected_by_stale_backups(client):
     write_status(last_success_at=now_iso(timedelta(days=30)))
 
     assert client.get("/health").json() == {"status": "ok"}
+
+
+def test_unrecovered_interrupted_restore_is_degraded(client):
+
+    import backup_utils
+
+    write_status(last_success_at=now_iso())
+    backup_utils.journal_path(SLUG).write_text("{}", encoding="utf-8")
+
+    body = get(client).json()
+
+    assert any(p["kind"] == "restore" for p in body["problems"])

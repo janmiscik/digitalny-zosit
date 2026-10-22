@@ -36,7 +36,12 @@ logger = logging.getLogger(__name__)
 import monitoring
 from accounts_db import accounts_engine, get_accounts_db
 from accounts_models import Account
-from auto_backup import start_scheduler, stop_scheduler, upgrade_accounts_on_startup
+from auto_backup import (
+    recover_interrupted_restores_on_startup,
+    start_scheduler,
+    stop_scheduler,
+    upgrade_accounts_on_startup,
+)
 from auth import require_login_page
 from dashboard_utils import (
     first_day_of_month_back,
@@ -97,6 +102,10 @@ async def lifespan(app: FastAPI):
             "alembic_version). Pred spustením appky spusti migrácie:\n\n"
             "    alembic -c alembic_accounts.ini upgrade head\n"
         )
+
+    # Najprv vrátiť konto po prípadne prerušenej obnove (pád procesu
+    # uprostred výmeny dát), až potom migrovať.
+    recover_interrupted_restores_on_startup()
 
     # Kontám s čakajúcou migráciou schémy ju doplní (lokálny beh po
     # aktualizácii kódu; na Railway to robí aj start.sh).

@@ -67,3 +67,13 @@ SQLite engine kont aj `accounts.db` teraz používa `journal_mode=WAL` a `synchr
 
 - **Izolácia kont:** `tests/test_account_isolation.py` vytvorí dve skutočné kontá a z konta B skúsi každú trasu appky s ID alebo názvom súboru, ktoré patria kontu A (faktúry, ponuky, zákazky, náklady, fotky, logo, stiahnutie záloh, exporty, obnova), vrátane path traversal. Test overuje, že nič z A neuniklo, A zostalo nezmenené a B nič nevzniklo. Zoznam trás sa zbiera z aplikácie automaticky, takže nová trasa s ID sa do testu dostane sama (poistka počtu trás zabráni nepovšimnutému zúženiu). Overené mutáciou: keď `get_db` vždy otvorí databázu konta A, test padne.
 - **Monitoring:** `/health/details` (chránený `MONITOR_TOKEN`) hlási zastarané alebo zlyhané zálohy, off-site kópiu a nezmigrované databázy kont pre externý nástroj (503 = poplach). `/health` ostáva jednoduchý, aby Railway kvôli záloham neblokoval nasadenie.
+
+## Dodatok: odolnosť obnovy, číslovanie a obnova hesla
+
+- **Pád procesu počas obnovy:** žurnál obnovy + automatický návrat z poistnej zálohy pri štarte (pred migráciami), testované zabitím procesu v troch bodoch výmeny. Neúspešný návrat hlási monitoring (`restore`).
+- **CI:** čistá inštalácia z `requirements-dev.txt` na Pythone 3.12 (rovnaký ako Docker a GitHub Actions) aj 3.13, `pip check` bez chýb, celá sada prechádza.
+- **Súbežné číslovanie:** serializácia ukladania dokladu po kontách + UNIQUE s opakovaním, test s 20 vláknami.
+- **Medzery v číslovaní** sú upozornenie s možnosťou preverenia (dôvod v audit logu), nie chyba integrity.
+- **Obnova hesla:** len cez https `APP_BASE_URL`; atomická jednorazovosť odkazu (podmienený UPDATE) aj pri súbežných požiadavkách; testované chyby SMTP (autentifikácia, spojenie, odmietnutý príjemca, timeout, TLS); zmena hesla odhlási ostatné zariadenia.
+- **Externé zálohy:** zámok objektov/verzie v bucketi neznemožnia úspešnú zálohu (chyba mazania starých = upozornenie); odporúčané nastavenie v `docs/PREVADZKA.md`.
+- **Prevádzka:** `docs/PREVADZKA.md` popisuje poplachy `/health/details` a postup pri každom z nich. Poznámka: skutočné zapnutie zámku objektov a verzovania v bucketi je nastavenie u poskytovateľa a nedá sa vynútiť z appky.

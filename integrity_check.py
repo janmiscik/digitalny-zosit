@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
 
-from models import Company, Invoice, JobPhoto, Quote
+from models import AuditLog, Company, Invoice, JobPhoto, Quote
 from uploads_utils import ALLOWED_EXTENSIONS, job_photos_dir, uploads_dir
 
 
@@ -59,15 +59,38 @@ class NumberGapIssue:
 
 
 @dataclass
+class AcknowledgedGap:
+    """Medzera v číslovaní, ktorú používateľ preveril a zapísal dôvod."""
+
+    number: str
+    note: str
+    when: str
+
+
+GAP_ACK_ACTION = "integrity.gap_acknowledged"
+
+
+@dataclass
 class IntegrityReport:
 
     missing_files: list[MissingFileIssue] = field(default_factory=list)
     orphan_files: list[OrphanFileIssue] = field(default_factory=list)
+    # Medzery v číslovaní NIE sú chyba integrity dát (súbory a databáza si
+    # zodpovedajú), ale upozornenie na preverenie - samostatne od chýb.
     number_gaps: list[NumberGapIssue] = field(default_factory=list)
+    acknowledged_gaps: list[AcknowledgedGap] = field(default_factory=list)
 
     @property
     def is_clean(self) -> bool:
-        return not self.missing_files and not self.orphan_files and not self.number_gaps
+        """Žiadna CHYBA integrity (chýbajúce/osirotené súbory). Upozornenia sa nepočítajú."""
+
+        return not self.missing_files and not self.orphan_files
+
+    @property
+    def has_warnings(self) -> bool:
+        """Zostali nepreverené medzery v číslovaní."""
+
+        return bool(self.number_gaps)
 
 
 # Číselné rady dokladov: (regulárny výraz čísla, názov rady, formát čísla)
@@ -195,12 +218,50 @@ def check_integrity(db: Session) -> IntegrityReport:
                 )
 
     # --- Medzery v číslovaní dokladov ---
-    report.number_gaps = find_number_gaps(
+    all_gaps = find_number_gaps(
         [row[0] for row in db.query(Invoice.invoice_number).all()]
         + [row[0] for row in db.query(Quote.quote_number).all()]
     )
 
+    acknowledged = acknowledged_gap_notes(db)
+
+    for gap in all_gaps:
+
+        still_open = [number for number in gap.missing if number not in acknowledged]
+
+        if still_open:
+            report.number_gaps.append(NumberGapIssue(series=gap.series, missing=still_open))
+
+        for number in gap.missing:
+
+            if number in acknowledged:
+                note, when = acknowledged[number]
+                report.acknowledged_gaps.append(AcknowledgedGap(number=number, note=note, when=when))
+
     return report
+
+
+def acknowledged_gap_notes(db: Session) -> dict[str, tuple[str, str]]:
+    """Preverené medzery z audit_log: {číslo: (dôvod, dátum)}; novší záznam prepíše starší."""
+
+    notes: dict[str, tuple[str, str]] = {}
+
+    rows = (
+        db.query(AuditLog)
+        .filter(AuditLog.action == GAP_ACK_ACTION)
+        .order_by(AuditLog.id)
+        .all()
+    )
+
+    for row in rows:
+
+        number, _, note = (row.detail or "").partition("|")
+
+        if number:
+            created = getattr(row, "created_at", None)
+            notes[number] = (note, created.strftime("%d.%m.%Y") if created else "")
+
+    return notes
 
 
 def cleanup_orphan_files(db: Session) -> list[str]:

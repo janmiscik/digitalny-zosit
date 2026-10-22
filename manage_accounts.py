@@ -158,6 +158,23 @@ def verify_all() -> None:
         sys.exit(1)
 
 
+def recover_restores() -> None:
+
+    import auto_backup
+
+    results = auto_backup.recover_interrupted_restores_on_startup()
+
+    if not results:
+        print("Žiadna prerušená obnova.")
+        return
+
+    for slug, outcome in results.items():
+        print(f"Konto {slug}: prerušená obnova - {outcome}")
+
+    if "failed" in results.values():
+        raise SystemExit("VAROVANIE: vrátenie prerušenej obnovy zlyhalo - pozri log.")
+
+
 def find_orphan_slugs() -> list[str]:
     """Priečinky kont na disku, ku ktorým neexistuje konto v accounts.db
     (typicky po strate/prepísaní accounts.db - dáta sú v poriadku, len
@@ -287,6 +304,12 @@ def main() -> None:
         help="Test obnovy nad najnovšou zálohou každého konta."
     )
 
+    parser.add_argument(
+        "--recover-restores",
+        action="store_true",
+        help="Vráti kontá po prerušenej obnove zo zálohy (spúšťa start.sh pred migráciami)."
+    )
+
     parser.add_argument("--list-orphans", action="store_true",
                         help="Vypíše dáta kont, ktoré nemajú záznam v accounts.db.")
 
@@ -307,6 +330,11 @@ def main() -> None:
     if args.reattach:
 
         reattach(args.reattach, args.username or "", args.password)
+        return
+
+    if args.recover_restores:
+
+        recover_restores()
         return
 
     if args.backup_all:

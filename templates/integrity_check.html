@@ -114,14 +114,26 @@
         </div>
 
 
-        {% if report.is_clean %}
+        {% if report.is_clean and not report.has_warnings %}
 
             <div class="integrity-ok-banner">
                 ✅ Všetko v poriadku - databáza a súbory na disku si
-                zodpovedajú a číslovanie dokladov je súvislé.
+                zodpovedajú a číslovanie dokladov je súvislé alebo
+                preverené.
             </div>
 
-        {% else %}
+        {% endif %}
+
+        {% if report.is_clean and report.has_warnings %}
+
+            <div class="integrity-ok-banner">
+                ✅ Databáza a súbory na disku si zodpovedajú. Nižšie je
+                upozornenie na preverenie (nie je to chyba dát).
+            </div>
+
+        {% endif %}
+
+        {% if not report.is_clean or report.has_warnings or report.acknowledged_gaps %}
 
             {% if report.missing_files %}
 
@@ -158,22 +170,51 @@
                 <div class="integrity-section">
 
                     <h3>
-                        🔢 Medzery v číslovaní dokladov ({{ report.number_gaps | length }})
+                        ℹ️ Upozornenie: medzery v číslovaní dokladov ({{ report.number_gaps | length }})
                     </h3>
 
                     <p style="color: var(--text-muted); font-size: 0.9em;">
                         V týchto číselných radoch chýba číslo. Najčastejšie ide
                         o zmazaný návrh. Faktúry majú byť číslované súvisle,
-                        preto si dôvod medzery zapíš (účtovník sa na ňu môže
-                        opýtať). Doklad, ktorý už mal byť vystavený, namiesto
-                        zmazania stornuj.
+                        preto medzeru preveríš a zapíšeš dôvod (účtovník sa na
+                        ňu môže opýtať). Doklad, ktorý už mal byť vystavený,
+                        namiesto zmazania stornuj.
                     </p>
 
                     {% for gap in report.number_gaps %}
 
+                        {% for number in gap.missing %}
+
+                            <form method="post" action="/settings/integrity-check/gap-ack" class="integrity-issue" style="gap: 8px; flex-wrap: wrap;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                                <input type="hidden" name="number" value="{{ number }}">
+                                <span>{{ gap.series }}: <strong>{{ number }}</strong></span>
+                                <input type="text" name="note" required minlength="3" maxlength="200"
+                                       placeholder="Dôvod (napr. zmazaný návrh)" style="flex: 1; min-width: 180px;">
+                                <button type="submit" class="save-button">Preverené</button>
+                            </form>
+
+                        {% endfor %}
+
+                    {% endfor %}
+
+                </div>
+
+            {% endif %}
+
+            {% if report.acknowledged_gaps %}
+
+                <div class="integrity-section">
+
+                    <h3>
+                        ✅ Preverené medzery ({{ report.acknowledged_gaps | length }})
+                    </h3>
+
+                    {% for item in report.acknowledged_gaps %}
+
                         <div class="integrity-issue">
-                            <span>{{ gap.series }}</span>
-                            <span class="integrity-issue-file">chýba: {{ gap.missing | join(', ') }}</span>
+                            <span>{{ item.number }}</span>
+                            <span class="integrity-issue-file">{{ item.note }}{% if item.when %} ({{ item.when }}){% endif %}</span>
                         </div>
 
                     {% endfor %}

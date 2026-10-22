@@ -8,8 +8,8 @@ kým nie sú nastavené premenné:
     SMTP_PASSWORD   heslo (voliteľné)
     SMTP_FROM       adresa odosielateľa (povinné)
     APP_BASE_URL    verejná adresa appky, napr. https://digitalny-zosit-production.up.railway.app
-                    (povinné: odkaz na obnovu hesla sa skladá z nej, nie z hlavičky Host,
-                    ktorú by mohol podvrhnúť útočník)
+                    (povinné, musí byť https:// - okrem localhost; odkaz na obnovu hesla sa
+                    skladá z nej, nie z hlavičky Host, ktorú by mohol podvrhnúť útočník)
 
 Odoslanie nikdy nevyhodí výnimku - vráti False a zapíše chybu do logu.
 """
@@ -19,13 +19,37 @@ import os
 import smtplib
 import ssl
 from email.message import EmailMessage
+from urllib.parse import urlsplit
 
 logger = logging.getLogger(__name__)
 
 
+def _is_secure_base_url(url: str) -> bool:
+    """Odkaz s tokenom smie viesť len na https (výnimka: lokálny vývoj)."""
+
+    parsed = urlsplit(url.strip())
+
+    if parsed.scheme.lower() == "https" and parsed.hostname:
+        return True
+
+    return parsed.scheme.lower() == "http" and parsed.hostname in ("localhost", "127.0.0.1", "::1")
+
+
 def enabled() -> bool:
 
-    return all(os.getenv(name, "").strip() for name in ("SMTP_HOST", "SMTP_FROM", "APP_BASE_URL"))
+    if not all(os.getenv(name, "").strip() for name in ("SMTP_HOST", "SMTP_FROM", "APP_BASE_URL")):
+        return False
+
+    if not _is_secure_base_url(os.environ["APP_BASE_URL"]):
+
+        logger.warning(
+            "Obnova hesla je vypnutá: APP_BASE_URL musí začínať https:// "
+            "(odkaz s tokenom by inak išiel po nezabezpečenom spojení)."
+        )
+
+        return False
+
+    return True
 
 
 def base_url() -> str:

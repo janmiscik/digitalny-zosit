@@ -406,3 +406,165 @@ def test_corrupt_logo_does_not_break_pdf(storage):
 
         assert response.status_code == 200
         assert response.content.startswith(b"%PDF")
+
+
+# ---------- pád procesu uprostred obnovy ----------
+
+class ProcessKilled(BaseException):
+    """Simuluje náhle ukončenie procesu: nie je to Exception, takže ju rollback v kóde nezachytí."""
+
+
+def uploads_state(slug):
+
+    base = tenancy.account_uploads_dir(slug)
+
+    return {str(p.relative_to(base)): p.read_bytes() for p in sorted(base.rglob("*")) if p.is_file()}
+
+
+def kill_during_restore(client, good, monkeypatch, where):
+    """Spustí obnovu a "zabije" proces na zvolenom mieste. Dočasné súbory sa NEupracú (ako po SIGKILL)."""
+
+    real_move = shutil.move
+    calls = {"n": 0}
+    dead = {"value": False}
+
+    def move(src, dst, *args, **kwargs):
+
+        calls["n"] += 1
+
+        if where == "before_uploads_move" and calls["n"] == 1:
+            dead["value"] = True
+            raise ProcessKilled()
+
+        if where == "between_uploads_moves" and calls["n"] == 2:
+            dead["value"] = True
+            raise ProcessKilled()
+
+        return real_move(src, dst, *args, **kwargs)
+
+    real_rmtree = shutil.rmtree
+
+    def rmtree(path, *args, **kwargs):
+
+        if dead["value"]:
+            return None
+
+        return real_rmtree(path, *args, **kwargs)
+
+    monkeypatch.setattr(backup_utils.shutil, "move", move)
+    monkeypatch.setattr(backup_utils.shutil, "rmtree", rmtree)
+
+    real_clear = backup_utils._clear_journal
+
+    if where == "before_journal_clear":
+
+        def killed(_slug):
+            dead["value"] = True
+            raise ProcessKilled()
+
+        monkeypatch.setattr(backup_utils, "_clear_journal", killed)
+
+    # Starlette výnimku obalí do skupiny výnimiek - stačí, že proces "zomrel".
+    with pytest.raises(BaseException) as raised:
+        restore(client, good)
+
+    assert dead["value"], raised.value
+
+    monkeypatch.setattr(backup_utils.shutil, "move", real_move)
+    monkeypatch.setattr(backup_utils.shutil, "rmtree", real_rmtree)
+    monkeypatch.setattr(backup_utils, "_clear_journal", real_clear)
+
+
+@pytest.mark.parametrize("where", ["before_uploads_move", "between_uploads_moves", "before_journal_clear"])
+def test_crash_mid_restore_is_rolled_back_on_next_start(storage, monkeypatch, where):
+
+    client, slug = register()
+    seed(slug)
+    good = client.get("/settings/backup").content
+
+    # po zálohe sa dáta zmenia - po páde a reštarte musia ostať TIETO
+    conn = sqlite3.connect(str(tenancy.account_database_path(slug)))
+    conn.execute("INSERT INTO customers (name) VALUES ('Nový po zálohe')")
+    conn.commit()
+    conn.close()
+    (tenancy.account_uploads_dir(slug) / "nova-po-zalohe.png").write_bytes(b"nove")
+
+    before_db = db_state(slug)
+    before_files = uploads_state(slug)
+
+    kill_during_restore(client, good, monkeypatch, where)
+
+    # proces zomrel: žurnál a dočasný adresár ostali
+    assert backup_utils.has_unrecovered_restore(slug)
+
+    # reštart appky
+    backup_utils_result = backup_utils.recover_interrupted_restore(slug)
+
+    assert backup_utils_result == "recovered"
+    assert db_state(slug) == before_db
+    assert uploads_state(slug) == before_files
+    assert not backup_utils.has_unrecovered_restore(slug)
+    assert not list(tenancy.account_dir(slug).glob("restore-*"))
+
+    conn = sqlite3.connect(str(tenancy.account_database_path(slug)))
+    actions = [row[0] for row in conn.execute("SELECT action FROM audit_log")]
+    conn.close()
+
+    assert "backup.restore_interrupted" in actions
+
+
+def test_crash_before_any_live_change_only_cleans_staging(storage, monkeypatch):
+
+    client, slug = register()
+    seed(slug)
+    before_db = db_state(slug)
+    before_files = uploads_state(slug)
+
+    leftover = tenancy.account_dir(slug) / "restore-abc123"
+    leftover.mkdir()
+    (leftover / "database.db").write_bytes(b"x")
+
+    assert backup_utils.recover_interrupted_restore(slug) is None
+
+    assert not leftover.exists()
+    assert db_state(slug) == before_db
+    assert uploads_state(slug) == before_files
+
+
+def test_recovery_failure_keeps_journal_for_monitoring(storage, monkeypatch):
+
+    client, slug = register()
+    seed(slug)
+
+    backup_utils._write_journal(slug, tenancy.account_backups_dir(slug) / "neexistuje.zip",
+                                tenancy.account_dir(slug) / "restore-x")
+
+    assert backup_utils.recover_interrupted_restore(slug) == "failed"
+    assert backup_utils.has_unrecovered_restore(slug)
+
+
+def test_successful_restore_leaves_no_journal(storage):
+
+    client, slug = register()
+    seed(slug)
+    good = client.get("/settings/backup").content
+
+    assert restore(client, good).status_code == 303
+    assert not backup_utils.has_unrecovered_restore(slug)
+
+
+def test_startup_hook_recovers_and_records_status(storage, monkeypatch):
+
+    import auto_backup
+
+    client, slug = register()
+    seed(slug)
+    good = client.get("/settings/backup").content
+
+    kill_during_restore(client, good, monkeypatch, "between_uploads_moves")
+
+    monkeypatch.setattr(auto_backup, "account_slugs", lambda: [slug])
+
+    assert auto_backup.recover_interrupted_restores_on_startup() == {slug: "recovered"}
+    assert auto_backup.read_status(slug)["interrupted_restore"]["result"] == "recovered"
+    assert auto_backup.recover_interrupted_restores_on_startup() == {}

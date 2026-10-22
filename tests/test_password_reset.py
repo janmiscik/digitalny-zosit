@@ -385,3 +385,155 @@ def test_send_mail_never_raises_and_uses_starttls(monkeypatch):
 
     for name in ("SMTP_HOST", "SMTP_FROM", "APP_BASE_URL", "SMTP_USER", "SMTP_PASSWORD", "SMTP_PORT"):
         os.environ.pop(name, None)
+
+
+# ---------- HTTPS, súbežnosť, chyby SMTP ----------
+
+@pytest.mark.parametrize("url, enabled", [
+    ("https://appka.example.com", True),
+    ("HTTPS://appka.example.com", True),
+    ("http://appka.example.com", False),
+    ("http://localhost:8000", True),
+    ("http://127.0.0.1:8000", True),
+    ("http://localhost.evil.example", False),
+    ("http://localhost@evil.example", False),
+    ("https://", False),
+    ("ftp://appka.example.com", False),
+    ("appka.example.com", False),
+])
+def test_reset_requires_https_base_url(monkeypatch, url, enabled):
+
+    monkeypatch.setenv("APP_BASE_URL", url)
+
+    assert mailer.enabled() is enabled
+
+
+def test_http_base_url_disables_the_feature_everywhere(monkeypatch):
+
+    monkeypatch.setenv("APP_BASE_URL", "http://appka.example.com")
+
+    assert TestClient(app).get("/forgot-password").status_code == 404
+    assert TestClient(app).get("/reset-password/x").status_code == 404
+    assert "Zabudnuté heslo" not in TestClient(app).get("/login").text
+
+
+def test_concurrent_use_of_same_token_succeeds_only_once(monkeypatch):
+    """
+    Dve požiadavky overia ten istý odkaz ešte PRED zmenou hesla (obe vidia
+    pôvodný hash). Podmienený UPDATE zabezpečí, že heslo zmení len prvá.
+    """
+
+    from types import SimpleNamespace
+
+    client = register()
+    set_email(client)
+    request_reset()
+    token = token_from_mail()
+
+    real = auth_routes.account_from_reset_token
+    snapshot = {}
+
+    def stale(token_value, accounts_db):
+
+        account = real(token_value, accounts_db)
+
+        if account is None:
+            return snapshot.get("account")
+
+        snapshot.setdefault("account", SimpleNamespace(
+            id=account.id, slug=account.slug, username=account.username,
+            password_hash=account.password_hash, email=account.email,
+        ))
+
+        return snapshot["account"]
+
+    monkeypatch.setattr(auth_routes, "account_from_reset_token", stale)
+
+    first = do_reset(token, "prve-nove-heslo1")
+    second = do_reset(token, "druhe-nove-heslo2")
+
+    assert first.status_code == 303
+    assert second.status_code == 400
+    assert login("firma", "prve-nove-heslo1").status_code == 303
+    assert login("firma", "druhe-nove-heslo2").status_code == 401
+
+
+def test_reset_logs_out_other_devices():
+
+    first = register()
+    set_email(first)
+
+    other = TestClient(app)
+    other.post("/login", data={"csrf_token": csrf(other, "/login"), "username": "firma", "password": OLD})
+    assert other.get("/settings", follow_redirects=False).status_code == 200
+
+    request_reset()
+    assert do_reset(token_from_mail()).status_code == 303
+
+    assert other.get("/settings", follow_redirects=False).status_code == 303
+    assert first.get("/settings", follow_redirects=False).status_code == 303
+
+
+@pytest.mark.parametrize("error", [
+    "smtplib.SMTPAuthenticationError(535, b'zle heslo')",
+    "smtplib.SMTPConnectError(421, b'nedostupny')",
+    "smtplib.SMTPRecipientsRefused({'a@example.com': (550, b'nie')})",
+    "smtplib.SMTPServerDisconnected('spojenie padlo')",
+    "TimeoutError('timeout')",
+    "ConnectionRefusedError('odmietnute')",
+    "ssl.SSLError('certifikat')",
+    "OSError('siet')",
+])
+def test_smtp_errors_never_raise_and_return_false(monkeypatch, error):
+
+    import smtplib, ssl   # noqa: F401, E401
+
+    monkeypatch.undo()
+    for name, value in {"SMTP_HOST": "smtp.example.com", "SMTP_FROM": "z@example.com", "APP_BASE_URL": BASE}.items():
+        monkeypatch.setenv(name, value)
+
+    exception = eval(error)
+
+    class Broken:
+
+        def __init__(self, *args, **kwargs):
+            raise exception
+
+    monkeypatch.setattr(smtplib, "SMTP", Broken)
+    monkeypatch.setattr(smtplib, "SMTP_SSL", Broken)
+
+    assert mailer.send_mail("a@example.com", "Predmet", "Telo") is False
+
+
+def test_failed_send_keeps_neutral_response_and_is_logged_in_audit(monkeypatch, isolated):
+
+    client = register()
+    set_email(client)
+
+    monkeypatch.setattr(mailer, "send_mail", lambda to, subject, body: False)
+
+    response = request_reset()
+
+    assert response.status_code == 200 and "poslali sme" in response.text
+
+    audit = client.get("/audit-log").text
+
+    assert "odoslanie zlyhalo" in audit
+
+
+def test_send_failure_in_background_does_not_break_the_request(monkeypatch):
+
+    client = register()
+    set_email(client)
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("neočakávaná chyba")
+
+    monkeypatch.setattr(mailer, "send_mail", boom)
+
+    from fastapi.testclient import TestClient as TC
+
+    http = TC(app, raise_server_exceptions=False)
+    response = http.post("/forgot-password", data={"csrf_token": csrf(http, "/forgot-password"), "username": "firma"})
+
+    assert response.status_code == 200 and "poslali sme" in response.text

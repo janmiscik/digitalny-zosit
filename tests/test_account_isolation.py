@@ -336,10 +336,10 @@ def test_backup_restore_from_account_a_zip_does_not_touch_other_account(world):
     response = b.post(
         "/settings/restore",
         data={"csrf_token": token},
-        files={"file": ("zaloha.zip", path.read_bytes(), "application/zip")},
+        files={"backup_file": ("zaloha.zip", path.read_bytes(), "application/zip")},
         follow_redirects=False,
     )
 
-    assert response.status_code in (200, 303, 422)
+    assert response.status_code == 303
     assert a_counts() == before
     assert a.get(f"/invoices/{world['ids']['invoice_id']}").status_code == 200

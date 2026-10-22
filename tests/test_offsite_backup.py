@@ -409,3 +409,43 @@ def test_run_backup_reports_corrupted_remote_copy(s3):
     offsite = auto_backup.read_status(slug)["offsite"]
 
     assert offsite["ok"] is False and "SHA-256" in offsite["error"]
+
+
+def test_retention_failure_does_not_fail_a_verified_upload(s3, tmp_path, monkeypatch):
+    """Bucket so zámkom objektov nedovolí mazať - záloha je napriek tomu úspešná."""
+
+    monkeypatch.setenv("OFFSITE_BACKUP_KEEP", "1")
+
+    def locked(Bucket, Key):
+        raise PermissionError("AccessDenied: objekt je zamknutý")
+
+    offsite_backup.upload_backup("firma", local_file(tmp_path, name="a.zip"))
+    offsite_backup.upload_backup("firma", local_file(tmp_path, name="b.zip"))   # pokus o retenciu prebehne
+
+    s3.delete_object = locked
+
+    result = offsite_backup.upload_backup("firma", local_file(tmp_path, name="c.zip"))
+
+    assert result.ok and result.verified
+    assert "nepodarilo zmazať" in result.warning
+    assert ("moj-bucket", "digitalny-zosit/firma/c.zip") in s3.objects
+
+
+def test_run_backup_records_retention_warning_and_overview_shows_it(s3, monkeypatch):
+
+    monkeypatch.setenv("OFFSITE_BACKUP_KEEP", "1")
+
+    slug = make_account()
+    auto_backup.run_backup(slug, "manual")
+
+    def locked(Bucket, Key):
+        raise PermissionError("AccessDenied")
+
+    s3.delete_object = locked
+
+    auto_backup.run_backup(slug, "manual")
+
+    status = auto_backup.read_status(slug)["offsite"]
+
+    assert status["ok"] is True and status["warning"]
+    assert any("Kópia mimo servera" in w for w in auto_backup.backup_overview(slug)["warnings"])

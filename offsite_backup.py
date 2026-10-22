@@ -44,6 +44,7 @@ class OffsiteResult:
     removed: int = 0
     sha256: str | None = None
     verified: bool = False
+    warning: str | None = None
 
 
 def enabled() -> bool:
@@ -168,11 +169,27 @@ def upload_backup(
                     error=("Záloha stiahnutá z úložiska neprešla testom obnovy: " + "; ".join(problems))[:300],
                 )
 
-        removed = _apply_retention(client, bucket, slug)
+        # Záloha je nahraná a overená. Čistenie starých záloh je až druhotné:
+        # ak ho bucket zakáže (zámok objektov / verzie / chýbajúce právo na
+        # mazanie - čo je pri ochrane pred zmazaním žiaduce), záloha ostáva
+        # úspešná a len sa upozorní, že staré sa nemažú.
+        removed = 0
+        warning = None
+
+        try:
+
+            removed = _apply_retention(client, bucket, slug)
+
+        except Exception as exc:   # noqa: BLE001
+
+            logger.warning("Mazanie starých záloh v úložisku zlyhalo: %s", exc)
+            warning = f"staré zálohy sa v úložisku nepodarilo zmazať ({type(exc).__name__})"
 
         logger.info("Záloha %s nahraná mimo servera a overená (%s), zmazané staré: %s", path.name, key, removed)
 
-        return OffsiteResult(ok=True, key=key, removed=removed, sha256=local_hash, verified=True)
+        return OffsiteResult(
+            ok=True, key=key, removed=removed, sha256=local_hash, verified=True, warning=warning
+        )
 
     except Exception as exc:   # noqa: BLE001 - záloha nesmie zlyhať kvôli sieti
 

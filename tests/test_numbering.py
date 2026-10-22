@@ -144,7 +144,9 @@ def test_check_integrity_reports_gaps_for_invoices_and_quotes(db, patch_tenant_p
 
     report = check_integrity(db)
 
-    assert report.is_clean is False
+    # Medzery sú upozornenie na preverenie, nie chyba integrity dát.
+    assert report.is_clean is True
+    assert report.has_warnings is True
     assert {issue.series: issue.missing for issue in report.number_gaps} == {
         "Faktúry 2026": ["2026002"],
         "Cenové ponuky 2026": ["CP2026001"],

@@ -11,6 +11,11 @@ python diagnose_storage.py || true
 # 1. Master databáza kont (accounts.db)
 alembic -c alembic_accounts.ini upgrade head
 
+# 1a. Konto po prerušenej obnove zo zálohy (pád uprostred výmeny dát) sa
+#     vráti do stavu spred nej PRED akoukoľvek migráciou.
+python manage_accounts.py --recover-restores \
+    || echo "VAROVANIE: vrátenie prerušenej obnovy zlyhalo - pozri výpis vyššie."
+
 # 1b. Poistná záloha kont, ktorým čaká migrácia schémy (ak by migrácia
 #     pokazila dáta, je z čoho obnoviť). Zlyhanie zálohy nezastaví štart -
 #     varovanie je v logu (a appka zálohuje aj sama, viď auto_backup.py).

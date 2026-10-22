@@ -12,7 +12,7 @@ from csrf import verify_csrf
 from audit_log import log_action
 from auth import require_login_page
 from database import get_db
-from integrity_check import check_integrity, cleanup_orphan_files
+from integrity_check import GAP_ACK_ACTION, check_integrity, cleanup_orphan_files
 from auto_backup import backup_file_path, backup_overview, run_backup, verify_existing_backup
 from backup_utils import MAX_UPLOAD_SIZE_BYTES, create_backup_bytes, restore_from_upload
 from invoice_utils import NON_VAT_PAYER_NOTICE
@@ -574,6 +574,60 @@ def view_integrity_check(
         context={
             "report": report
         }
+    )
+
+
+@router.post("/settings/integrity-check/gap-ack")
+def acknowledge_number_gap(
+
+    number: str = Form(...),
+
+    note: str = Form(...),
+
+    db: Session = Depends(get_db),
+
+    user: str = Depends(require_login_page)
+
+):
+    """
+    Zapíše, že chýbajúce číslo v rade dokladov bolo PREVERENÉ (napr.
+    "zmazaný návrh, nikdy nevystavený") spolu s dôvodom. Medzera potom
+    prestane byť upozornením, ale dôvod ostáva dohľadateľný v kontrole
+    integrity aj v audit logu (účtovník sa na ňu môže opýtať). Preveriť sa
+    dá len číslo, ktoré v rade naozaj chýba.
+    """
+
+    note = note.strip()
+
+    if len(note) < 3 or len(note) > 200 or "|" in note or "\n" in note:
+
+        raise HTTPException(
+            status_code=422,
+            detail="Dôvod musí mať 3 až 200 znakov (bez znaku | a nového riadku)."
+        )
+
+    report = check_integrity(db)
+
+    open_numbers = {n for gap in report.number_gaps for n in gap.missing}
+
+    if number not in open_numbers:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Toto číslo v číselných radoch nechýba alebo už bolo preverené."
+        )
+
+    log_action(
+        db,
+        GAP_ACK_ACTION,
+        entity_type="number_gap",
+        detail=f"{number}|{note}"
+    )
+    db.commit()
+
+    return RedirectResponse(
+        url="/settings/integrity-check",
+        status_code=303
     )
 
 

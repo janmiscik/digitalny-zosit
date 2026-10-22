@@ -22,6 +22,7 @@ kopírovanie by mohlo zachytiť nekonzistentný stav.
 """
 
 import io
+import json
 import logging
 import os
 import shutil
@@ -589,6 +590,138 @@ def _rollback_to_safety_backup(safety_backup_path: Path) -> None:
             target_path.write_bytes(zf.read(member))
 
 
+# =========================================
+# ŽURNÁL OBNOVY (ochrana pred pádom procesu uprostred výmeny)
+#
+# Chyby (výnimky) počas výmeny dát rieši rollback v restore_from_upload.
+# Ak ale proces zomrie MEDZI výmenou databázy a výmenou uploads/ (OOM kill,
+# reštart kontajnera, výpadok), žiadny kód sa už nespustí. Preto sa tesne
+# pred prvou zmenou živých dát zapíše žurnál (kde je poistná záloha) a po
+# úspešnom konci alebo vrátení sa zmaže. Pri štarte appky (a v start.sh pred
+# migráciami) recover_interrupted_restore() nájde zostatok žurnálu a vráti
+# databázu aj súbory z poistnej zálohy - konto tak nikdy nezostane v
+# polovične obnovenom stave.
+# =========================================
+
+JOURNAL_NAME = "restore-journal.json"
+
+
+def journal_path(slug: str) -> Path:
+
+    return tenancy.account_dir(slug) / JOURNAL_NAME
+
+
+def _write_journal(slug: str, safety_backup_path: Path, staging: Path) -> None:
+
+    path = journal_path(slug)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    partial = path.with_name(path.name + ".part")
+
+    partial.write_text(
+        json.dumps({
+            "safety_backup": safety_backup_path.name,
+            "staging": staging.name,
+            "started_at": datetime.now(timezone.utc).isoformat(),
+        }),
+        encoding="utf-8",
+    )
+
+    with open(partial, "rb") as handle:
+        os.fsync(handle.fileno())
+
+    os.replace(partial, path)
+
+
+def _clear_journal(slug: str) -> None:
+
+    journal_path(slug).unlink(missing_ok=True)
+
+
+def has_unrecovered_restore(slug: str) -> bool:
+
+    return journal_path(slug).exists()
+
+
+def _cleanup_restore_leftovers(slug: str) -> None:
+
+    directory = tenancy.account_dir(slug)
+
+    if not directory.exists():
+        return
+
+    for item in directory.glob("restore-*"):
+
+        if item.is_dir():
+            shutil.rmtree(item, ignore_errors=True)
+
+
+def recover_interrupted_restore(slug: str) -> str | None:
+    """
+    Vráti konto do stavu spred prerušenej obnovy. Vráti None, ak nebolo čo
+    riešiť, "recovered" po úspešnom vrátení, "failed" ak vrátenie nevyšlo
+    (žurnál ostáva, aby sa to dalo riešiť ručne a monitoring to hlásil).
+    Dočasné adresáre po obnove (aj po páde ešte pred výmenou) sa upracú vždy.
+    """
+
+    path = journal_path(slug)
+
+    if not path.exists():
+
+        _cleanup_restore_leftovers(slug)
+        return None
+
+    try:
+
+        journal = json.loads(path.read_text(encoding="utf-8"))
+        safety = tenancy.account_backups_dir(slug) / journal["safety_backup"]
+
+        if not safety.is_file():
+            raise FileNotFoundError(journal["safety_backup"])
+
+        with tenancy.tenant_context(slug):
+
+            _rollback_to_safety_backup(safety)
+
+        _cleanup_restore_leftovers(slug)
+        _clear_journal(slug)
+
+        logger.warning("Prerušená obnova konta %s bola vrátená zo zálohy %s", slug, safety.name)
+
+        _audit(slug, "backup.restore_interrupted",
+               f"Obnova bola prerušená (pád procesu); stav vrátený zo zálohy {safety.name}.")
+
+        return "recovered"
+
+    except Exception:   # noqa: BLE001
+
+        logger.exception("Vrátenie prerušenej obnovy konta %s zlyhalo", slug)
+
+        return "failed"
+
+
+def _audit(slug: str, action: str, detail: str) -> None:
+    """Záznam do audit_log konta surovým SQL (chyba ho nesmie zhodiť)."""
+
+    try:
+
+        connection = sqlite3.connect(str(tenancy.account_database_path(slug)))
+
+        try:
+
+            connection.execute(
+                "INSERT INTO audit_log (created_at, action, entity_type, entity_id, detail) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (datetime.now(timezone.utc).isoformat(), action, "backup", None, detail),
+            )
+            connection.commit()
+
+        finally:
+            connection.close()
+
+    except sqlite3.Error:
+        pass
+
+
 def _stage_restore(zf: zipfile.ZipFile, db_bytes: bytes, staging: Path) -> tuple[Path, Path]:
     """
     Pripraví obnovu v DOČASNOM adresári, bez dotyku živých dát:
@@ -699,10 +832,15 @@ def restore_from_upload(file_bytes: bytes) -> Path:
 
             staged_db, staged_uploads = _stage_restore(zf, db_bytes, staging)
 
-        # Od tohto bodu sa menia živé dáta - každá chyba vracia pôvodný stav.
+        # Od tohto bodu sa menia živé dáta - každá chyba vracia pôvodný stav
+        # a pád procesu rieši žurnál (recover_interrupted_restore pri štarte).
+        slug = tenancy.get_current_tenant()
+
+        _write_journal(slug, safety_backup_path, staging)
+
         try:
 
-            tenancy.discard_account_engine(tenancy.get_current_tenant())
+            tenancy.discard_account_engine(slug)
 
             source = sqlite3.connect(str(staged_db))
             destination = sqlite3.connect(str(db_path))
@@ -722,6 +860,8 @@ def restore_from_upload(file_bytes: bytes) -> Path:
 
             shutil.move(str(staged_uploads), str(uploads_path))
 
+            _clear_journal(slug)
+
         except Exception as exc:
 
             logger.exception("Obnova zlyhala počas výmeny dát - vraciam pôvodný stav")
@@ -729,6 +869,7 @@ def restore_from_upload(file_bytes: bytes) -> Path:
             try:
 
                 _rollback_to_safety_backup(safety_backup_path)
+                _clear_journal(slug)
 
             except Exception:
 

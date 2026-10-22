@@ -22,10 +22,14 @@ Bez toho (5 minút týždenne):
 5. Skontroluj faktúry, zákazníkov a logo na PDF. Dáta sú v stave z času zálohy; doklady vystavené
    po zálohe treba vystaviť/zapísať znova.
 
+## Ak sa proces počas obnovy zabije
+Obnova zapisuje žurnál a po páde (OOM, reštart) sa pri štarte sama vráti z poistnej zálohy, takže konto
+nezostane napoly obnovené. Podrobnosti a ručný postup: `docs/PREVADZKA.md`.
+
 ## Čo test pokrýva
 `tests/test_disaster_recovery.py` simuluje presne tento postup: vymaže celé úložisko aj zoznam kont,
 zaregistruje konto znova, nahrá stiahnutú zálohu a porovná dáta, súbory a schému. Overuje aj poškodené
-zálohy, zálohu zo staršej verzie a rollback pri zlyhaní migrácie.
+zálohy, zálohu zo staršej verzie, rollback pri zlyhaní migrácie, poškodenú fotku v ZIP a simulovaný pád procesu v troch bodoch výmeny.
 
 ## Limity
 - Maximálna veľkosť nahrávanej zálohy je 200 MB.

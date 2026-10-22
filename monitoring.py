@@ -8,6 +8,7 @@ je na `/health/details`, chránený tajným tokenom `MONITOR_TOKEN`:
   * zálohy: posledná úspešná záloha každého konta nie je staršia než
     2 × interval + 1 h, posledný pokus nezlyhal,
   * kópia mimo servera (ak je zapnutá): posledné nahratie prešlo a nie je staré,
+  * obnova: žiadna prerušená obnova, ktorú sa nepodarilo vrátiť,
   * migrácie: databáza každého konta je na poslednej revízii.
 
 Odpoveď je 200 {"status": "ok"} alebo 503 {"status": "degraded", "problems": [...]}.
@@ -21,6 +22,7 @@ import os
 from datetime import timedelta
 
 import auto_backup
+import backup_utils
 import offsite_backup
 import tenancy
 
@@ -81,6 +83,9 @@ def collect(slugs: list[str]) -> dict:
 
                 if uploaded is None or now - uploaded > max_age:
                     problem(slug, "offsite", "kópia mimo servera je zastaraná")
+
+        if backup_utils.has_unrecovered_restore(slug):
+            problem(slug, "restore", "prerušená obnova nebola vrátená, treba zásah")
 
         try:
 

@@ -1,3 +1,4 @@
+import threading
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -5,6 +6,7 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+import tenancy
 from models import Invoice, Quote
 from schemas import InvoiceStatus, QuoteStatus
 
@@ -458,6 +460,31 @@ def _is_unique_violation(exc: IntegrityError) -> bool:
     return "unique" in message or "duplicate key" in message
 
 
+# Zámok na uloženie dokladu s číslom, samostatný pre každé konto. Appka beží
+# v jednom procese, takže stačí zámok v pamäti: kým jedna požiadavka
+# ukladá doklad a pri kolízii si číslo vygeneruje nanovo, žiadna iná z
+# toho istého konta neukladá doklad, a teda ďalšie číslo je vždy správne
+# (stačí najviac jeden opakovaný pokus). Pri viacerých inštanciách appky
+# ostáva poistkou UNIQUE obmedzenie a opakovanie nižšie.
+_number_locks: dict[str, threading.Lock] = {}
+_number_locks_guard = threading.Lock()
+
+
+def _number_lock_for(db: Session) -> threading.Lock:
+
+    try:
+        key = tenancy.get_current_tenant()
+
+    except Exception:   # noqa: BLE001 - mimo požiadavky (skripty, testy)
+        key = None
+
+    if not key:
+        key = str(getattr(db.get_bind(), "url", "default"))
+
+    with _number_locks_guard:
+        return _number_locks.setdefault(str(key), threading.Lock())
+
+
 def commit_with_number_retry(
     db: Session,
     regenerate_number,
@@ -484,25 +511,27 @@ def commit_with_number_retry(
     už dosť serózna na to, aby bola voči tomu odolná.
     """
 
-    for attempt in range(MAX_NUMBER_RETRY_ATTEMPTS):
+    with _number_lock_for(db):
 
-        try:
+        for attempt in range(MAX_NUMBER_RETRY_ATTEMPTS):
 
-            db.commit()
+            try:
 
-            return
+                db.commit()
 
-        except IntegrityError as exc:
+                return
 
-            db.rollback()
+            except IntegrityError as exc:
 
-            if (
-                not _is_unique_violation(exc)
-                or attempt == MAX_NUMBER_RETRY_ATTEMPTS - 1
-            ):
-                raise
+                db.rollback()
 
-            regenerate_number()
+                if (
+                    not _is_unique_violation(exc)
+                    or attempt == MAX_NUMBER_RETRY_ATTEMPTS - 1
+                ):
+                    raise
 
-            for instance in instances:
-                db.add(instance)
+                regenerate_number()
+
+                for instance in instances:
+                    db.add(instance)

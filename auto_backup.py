@@ -641,6 +641,7 @@ def run_backup(slug: str, kind: str = "auto") -> BackupResult:
                 "error": offsite.error,
                 "sha256": offsite.sha256,
                 "verified": offsite.verified,
+                "warning": offsite.warning,
             }
 
         _write_status(slug, status)
@@ -876,6 +877,9 @@ def backup_overview(slug: str) -> dict:
         elif not offsite.get("ok"):
             warnings.append(f"Nahratie zálohy mimo servera zlyhalo: {offsite.get('error')}")
 
+        elif offsite.get("warning"):
+            warnings.append(f"Kópia mimo servera: {offsite['warning']}.")
+
     else:
 
         warnings.append(
@@ -924,6 +928,39 @@ def backup_overview(slug: str) -> dict:
 # =========================================
 # MIGRÁCIE KONT PRI ŠTARTE APPKY
 # =========================================
+
+def recover_interrupted_restores_on_startup() -> dict[str, str]:
+    """
+    Kontám s prerušenou obnovou (pád procesu uprostred výmeny databázy a
+    uploads/) vráti pôvodný stav z poistnej zálohy - MUSÍ bežať pred
+    migráciami. Výsledok sa zapíše do stavu konta. Zlyhanie jedného konta
+    nezastaví štart.
+    """
+
+    results = {}
+
+    for slug in account_slugs():
+
+        try:
+
+            outcome = backup_utils.recover_interrupted_restore(slug)
+
+        except Exception:   # noqa: BLE001
+
+            logger.exception("Kontrola prerušenej obnovy konta %s zlyhala", slug)
+            outcome = "failed"
+
+        if outcome is None:
+            continue
+
+        results[slug] = outcome
+
+        status = read_status(slug)
+        status["interrupted_restore"] = {"at": utc_now().isoformat(), "result": outcome}
+        _write_status(slug, status)
+
+    return results
+
 
 def upgrade_accounts_on_startup() -> list[str]:
     """
