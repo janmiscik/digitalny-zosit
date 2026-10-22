@@ -617,16 +617,18 @@ def _write_journal(slug: str, safety_backup_path: Path, staging: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     partial = path.with_name(path.name + ".part")
 
-    partial.write_text(
-        json.dumps({
-            "safety_backup": safety_backup_path.name,
-            "staging": staging.name,
-            "started_at": datetime.now(timezone.utc).isoformat(),
-        }),
-        encoding="utf-8",
-    )
+    payload = json.dumps({
+        "safety_backup": safety_backup_path.name,
+        "staging": staging.name,
+        "started_at": datetime.now(timezone.utc).isoformat(),
+    }).encode("utf-8")
 
-    with open(partial, "rb") as handle:
+    # Otvor súbor na zápis, flushni Python buffer a až potom fsyncni
+    # zapisovateľný file descriptor. Otvorenie len na čítanie spôsobovalo
+    # na Windows OSError: [Errno 9] Bad file descriptor.
+    with open(partial, "wb") as handle:
+        handle.write(payload)
+        handle.flush()
         os.fsync(handle.fileno())
 
     os.replace(partial, path)

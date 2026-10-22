@@ -116,7 +116,7 @@ def test_every_page_template_has_viewport_meta():
     # čiastkové šablóny (bez <html>) sa preskakujú
     for template in sorted((PROJECT_ROOT / "templates").glob("*.html")):
 
-        text = template.read_text()
+        text = template.read_text(encoding="utf-8")
 
         if "<html" not in text:
             continue
@@ -172,7 +172,7 @@ def test_item_cells_have_no_label_on_remove_button_column():
 
 def test_stylesheet_contains_key_mobile_rules():
 
-    css = (PROJECT_ROOT / "static" / "style.css").read_text()
+    css = (PROJECT_ROOT / "static" / "style.css").read_text(encoding="utf-8")
 
     mobile = css[css.index("MOBIL - OVLÁDANIE PRSTAMI"):]
 

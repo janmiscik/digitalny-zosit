@@ -27,8 +27,20 @@ PASSWORD = "heslo1234"
 PREVIOUS_REVISION = "d7f9b1c3e546"          # revízia pred customer_notes (head e8a0b2c4d657)
 
 
+def _dispose_cached_account_engines():
+    """Zatvorí neaktívne SQLite spojenia pred vymazaním testovacích súborov (Windows)."""
+
+    for account_engine in list(tenancy._engine_cache.values()):
+        account_engine.dispose()
+
+    tenancy._engine_cache.clear()
+
+
 @pytest.fixture(autouse=True)
 def storage(tmp_path, monkeypatch):
+
+    # Pred ďalším testom uvoľni spojenia z predchádzajúceho testu.
+    _dispose_cached_account_engines()
 
     monkeypatch.setattr(tenancy, "ACCOUNTS_DATA_DIR", tmp_path / "accounts")
     monkeypatch.setenv("BACKUP_MIN_FREE_MB", "1")
@@ -53,7 +65,7 @@ def storage(tmp_path, monkeypatch):
     yield Session
 
     app.dependency_overrides.clear()
-    tenancy._engine_cache.clear()
+    _dispose_cached_account_engines()
 
 
 def csrf(client, path):
@@ -158,9 +170,11 @@ def test_full_storage_loss_recovery_from_downloaded_backup(storage, tmp_path):
 
     downloaded = response.content           # stiahnutá a uložená mimo servera
 
-    # --- strata celého Volume: zmizne accounts.db aj priečinky kont (aj zálohy) ---
+    # --- strata celého Volume: najprv uvoľni SQLite spojenia, potom zmaž úložisko ---
+    # SQLAlchemy môže mať po skončení požiadavky otvorené spojenie v poole.
+    # Windows nedovolí zmazať database.db, kým také spojenie zostáva otvorené.
+    _dispose_cached_account_engines()
     shutil.rmtree(tmp_path / "accounts")
-    tenancy._engine_cache.clear()
 
     db = storage()
     db.query(Account).delete()
@@ -229,7 +243,7 @@ def test_damaged_backup_is_rejected_and_live_data_untouched(storage, make_bad):
 
 # ---------- záloha zo staršej verzie appky ----------
 
-def downgrade_backup(zip_bytes):
+def downgrade_backup(zip_bytes, tmp_path):
     """Z hotovej zálohy spraví zálohu „zo staršej verzie“: bez customer_notes."""
 
     source = zipfile.ZipFile(io.BytesIO(zip_bytes))
@@ -243,7 +257,9 @@ def downgrade_backup(zip_bytes):
 
             if name == "database.db" or name.endswith(".db"):
 
-                tmp = Path(os.environ.get("TMPDIR", "/tmp")) / "old_schema_backup.db"
+                # Použi pytest tmp_path namiesto natvrdo zadanej /tmp cesty;
+                # funguje rovnako na Windows aj Unix a je izolovaná pre test.
+                tmp = tmp_path / "old_schema_backup.db"
                 tmp.write_bytes(data)
 
                 conn = sqlite3.connect(str(tmp))
@@ -260,12 +276,12 @@ def downgrade_backup(zip_bytes):
     return out.getvalue()
 
 
-def test_restore_of_older_schema_backup_is_migrated_to_head(storage):
+def test_restore_of_older_schema_backup_is_migrated_to_head(storage, tmp_path):
 
     client, slug = register()
     seed(slug)
 
-    old_backup = downgrade_backup(client.get("/settings/backup").content)
+    old_backup = downgrade_backup(client.get("/settings/backup").content, tmp_path)
 
     assert restore(client, old_backup).status_code == 303
 
