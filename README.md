@@ -107,6 +107,7 @@ Appka sa nasadzuje cez `Dockerfile` (`railway.json` ho vyberie a nastaví health
 - **Obnova zabudnutého hesla cez e-mail** (voliteľná, vypnutá, kým nie je nastavený SMTP): používateľ si v Nastaveniach zadá e-mail konta (vyžaduje súčasné heslo), na prihlasovacej stránke sa potom ukáže „Zabudnuté heslo?". Odkaz je podpísaný, platí 1 hodinu a funguje len raz (po zmene hesla prestane platiť). Odpoveď je rovnaká pre existujúce aj neexistujúce konto a e-mail sa odosiela na pozadí, takže sa z odpovede ani z jej času nedá zistiť, ktoré mená existujú. Žiadosti sú limitované na 5 za hodinu z jednej IP. Zapne sa premennými `SMTP_HOST`, `SMTP_PORT` (587 = STARTTLS, 465 = SSL), `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` a `APP_BASE_URL` (verejná adresa appky, z nej sa skladá odkaz; hlavička Host sa zámerne nepoužíva). Konto bez e-mailu sa týmto spôsobom obnoviť nedá (ostáva `manage_accounts.py`).
 - **Zmena alebo obnova hesla odhlási ostatné zariadenia** (session nesie odtlačok hashu hesla, ktorý sa pri každej požiadavke overuje voči `accounts.db`; zmazané konto prestane platiť okamžite).
 - **SQLite v režime WAL** (`journal_mode=WAL`, `synchronous=NORMAL`): čitatelia neblokujú zapisovateľa, čím ubudne "database is locked" pri súbežných požiadavkách. Pri databáze pribudnú súbory `database.db-wal` a `-shm`; zálohy a obnova používajú SQLite backup API, takže s tým počítajú. Súbor `.db` nikdy nekopíruj ručne bez týchto dvoch súborov.
+- **Monitoring záloh a migrácií** (`/health/details`, vypnuté, kým nenastavíš `MONITOR_TOKEN`): vráti 200 `{"status": "ok"}` alebo 503 `{"status": "degraded", "problems": [...]}`, ak niektoré konto nemá čerstvú zálohu (staršiu než 2 × interval + 1 h), posledný pokus o zálohu zlyhal, kópia mimo servera chýba/zlyhala/je stará alebo databáza konta nie je na poslednej migrácii. Problémy obsahujú len konto, druh a pevný popis (žiadne cesty ani texty chýb). Token sa posiela v hlavičke `Authorization: Bearer <token>` (alebo `?token=` pre nástroje bez hlavičiek). Obyčajný `/health` zostáva len kontrola "appka žije", aby Railway kvôli zastaranej zálohe nezastavil nasadenie. V UptimeRobote: monitor typu HTTP(s) na `https://<appka>/health/details?token=<MONITOR_TOKEN>` (503 = poplach, e-mail príde sám).
 - **Session** sa pri prihlásení vymení (ochrana proti session fixation), takže starý CSRF token po prihlásení neplatí.
 - **Bezpečnostné hlavičky** na každej odpovedi: `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy` a pri HTTPS aj `Strict-Transport-Security`. K HTML stránkam sa posiela aj **Content-Security-Policy**: skripty, štýly, obrázky, formuláre a spojenia len z vlastnej domény (výnimka: písma Google Fonts), žiadne `<object>`, žiadne vloženie do cudzieho rámu. Povolené je `'unsafe-inline'`, lebo šablóny majú inline skripty a handlery; striktná CSP by vyžadovala presun do `static/`. PDF a JSON odpovede CSP nenesú.
 - **Interaktívna dokumentácia API** (`/docs`, `/redoc`, `/openapi.json`) je v produkcii vypnutá; na vývoj ju zapne `ENABLE_API_DOCS=true`.
@@ -307,7 +308,7 @@ pip install -r requirements-dev.txt   # raz, pytest sa do produkčného obrazu n
 python -m pytest tests/ -q
 ```
 
-Aktuálne **840 testov**, rozdelených podľa oblasti:
+Aktuálne **865 testov**, rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|
@@ -338,6 +339,8 @@ Aktuálne **840 testov**, rozdelených podľa oblasti:
 | `test_password_reset.py` | Obnova hesla cez e-mail: zapnutie podľa SMTP, nastavenie e-mailu, celý priebeh, rovnaká odpoveď pre neexistujúce konto, jednorazový/expirovaný/cudzí token, limit žiadostí, audit |
 | `test_numbering.py` | Číslovanie dokladov: číselné poradie aj nad 999, nezávislé rady, hľadanie medzier v rade |
 | `test_wal.py` | SQLite v režime WAL (journal_mode, synchronous, cudzie kľúče), čitateľ nie je blokovaný otvorenou zápisovou transakciou |
+| `test_account_isolation.py` | Izolácia kont: dve skutočné kontá, konto B skúša KAŽDÚ trasu s ID a názvami súborov konta A (faktúry, ponuky, zákazky, fotky, logo, zálohy, exporty), path traversal, obnova cudzej zálohy; A ostáva nezmenené |
+| `test_monitoring.py` | `/health/details`: token, zastaraná/chýbajúca záloha, zlyhanie, off-site, migrácie, žiadny únik textov chýb |
 | `test_session_invalidation.py` | Odhlásenie ostatných zariadení po zmene hesla, zmazané konto, cookie bez odtlačku |
 | `test_change_password.py` | Zmena hesla: úspech, nové prihlásenie, zlé súčasné heslo, validácia, limit pokusov, CSRF, vyžaduje prihlásenie, izolácia kont, audit log |
 | `test_offsite_backup.py` | Nahrávanie záloh mimo servera: zapnutie podľa premenných, kľúče/predpona, kontrola veľkosti, SHA-256 a stiahnutie späť, test obnovy stiahnutej kópie, retencia po kontách, chyba siete nezhodí lokálnu zálohu, upozornenia v Nastaveniach |

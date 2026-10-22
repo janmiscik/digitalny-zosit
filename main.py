@@ -33,7 +33,9 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-from accounts_db import accounts_engine
+import monitoring
+from accounts_db import accounts_engine, get_accounts_db
+from accounts_models import Account
 from auto_backup import start_scheduler, stop_scheduler, upgrade_accounts_on_startup
 from auth import require_login_page
 from dashboard_utils import (
@@ -416,6 +418,36 @@ def health():
         )
 
     return {"status": "ok"}
+
+
+@app.get("/health/details", include_in_schema=False)
+def health_details(
+    request: Request,
+    accounts_db: Session = Depends(get_accounts_db),
+):
+    """
+    Podrobný stav záloh a migrácií pre externý monitoring. Bez nastaveného
+    MONITOR_TOKEN neexistuje (404); token sa posiela v hlavičke
+    `Authorization: Bearer <token>` (alebo ako `?token=` pre nástroje, ktoré
+    hlavičky nevedia - ten sa však môže objaviť v logoch).
+    """
+
+    if not monitoring.monitor_token():
+
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    header = request.headers.get("authorization", "")
+    provided = header[7:].strip() if header.lower().startswith("bearer ") else request.query_params.get("token")
+
+    if not monitoring.token_matches(provided):
+
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    slugs = [row.slug for row in accounts_db.query(Account.slug).order_by(Account.id).all()]
+
+    report = monitoring.collect(slugs)
+
+    return JSONResponse(report, status_code=200 if report["status"] == "ok" else 503)
 
 
 # =========================================

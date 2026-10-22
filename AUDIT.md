@@ -62,3 +62,8 @@ Kontrola veľkosti objektu v bucketi nestačí (dve rovnako veľké súbory mô�
 ## Dodatok: WAL a upratanie
 
 SQLite engine kont aj `accounts.db` teraz používa `journal_mode=WAL` a `synchronous=NORMAL` (spolu s existujúcim `busy_timeout` 15 s). Režim sa do súboru zapíše pri prvom otvorení a je trvalý. Zálohy aj obnova idú cez SQLite backup API, takže s WAL fungujú a kompletná testovacia sada (vrátane obnovy po strate úložiska) prešla bez zmeny. Zmazaný bol osamotený `invoice_detail.html` v koreni projektu (staršia, neúplná kópia `templates/invoice_detail.html`: bez CSRF polí a pripomienok platby).
+
+## Dodatok: izolácia kont a monitoring
+
+- **Izolácia kont:** `tests/test_account_isolation.py` vytvorí dve skutočné kontá a z konta B skúsi každú trasu appky s ID alebo názvom súboru, ktoré patria kontu A (faktúry, ponuky, zákazky, náklady, fotky, logo, stiahnutie záloh, exporty, obnova), vrátane path traversal. Test overuje, že nič z A neuniklo, A zostalo nezmenené a B nič nevzniklo. Zoznam trás sa zbiera z aplikácie automaticky, takže nová trasa s ID sa do testu dostane sama (poistka počtu trás zabráni nepovšimnutému zúženiu). Overené mutáciou: keď `get_db` vždy otvorí databázu konta A, test padne.
+- **Monitoring:** `/health/details` (chránený `MONITOR_TOKEN`) hlási zastarané alebo zlyhané zálohy, off-site kópiu a nezmigrované databázy kont pre externý nástroj (503 = poplach). `/health` ostáva jednoduchý, aby Railway kvôli záloham neblokoval nasadenie.
