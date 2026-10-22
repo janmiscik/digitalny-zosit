@@ -145,6 +145,45 @@ def test_cleanup_drops_expired_entries(monkeypatch):
     assert "2.2.2.2" not in auth._lockout_until
 
 
+def test_cleanup_drops_expired_reset_requests_but_keeps_fresh(monkeypatch):
+
+    auth._reset_requests["stara"] = [0.0, 10.0]
+    auth._reset_requests["zmiesana"] = [0.0, 9_000.0]
+    auth._reset_requests["cerstva"] = [9_500.0]
+    monkeypatch.setattr(auth, "_last_cleanup", 0.0)
+
+    auth._cleanup(10_000.0)         # okno žiadostí o obnovu je 3600 s
+
+    assert "stara" not in auth._reset_requests
+    assert auth._reset_requests["zmiesana"] == [9_000.0]
+    assert auth._reset_requests["cerstva"] == [9_500.0]
+
+
+def test_reset_request_check_itself_cleans_other_ips(monkeypatch):
+    """Upratanie sa spúšťa pri samotnej žiadosti o obnovu, nielen pri prihlásení/registrácii."""
+
+    now = 100_000.0
+    monkeypatch.setattr(auth.time, "time", lambda: now)
+    monkeypatch.setattr(auth, "_last_cleanup", 0.0)
+
+    for number in range(500):
+        auth._reset_requests[f"10.0.{number // 250}.{number % 250}"] = [now - auth.RESET_WINDOW_SECONDS - 1]
+
+    assert auth.reset_request_allowed(fake_request(ip="9.9.9.9")) is True
+
+    assert list(auth._reset_requests) == ["9.9.9.9"]
+
+
+def test_reset_request_limit_still_enforced_after_cleanup(monkeypatch):
+
+    monkeypatch.setattr(auth, "_last_cleanup", 0.0)
+    request = fake_request(ip="8.8.8.8")
+
+    results = [auth.reset_request_allowed(request) for _ in range(auth.MAX_RESET_REQUESTS_PER_IP + 1)]
+
+    assert results == [True] * auth.MAX_RESET_REQUESTS_PER_IP + [False]
+
+
 # ---------- session ----------
 
 def test_login_rotates_session_content():

@@ -19,4 +19,4 @@ jobs:
       - run: python -m pytest tests/ -q
         env:
           SECRET_KEY: ci-test-secret
-      - run: pip install pip-audit && pip-audit -r requirements.txt
+      - run: pip install pip-audit && pip-audit -r requirements-dev.txt

@@ -323,14 +323,19 @@ def _cleanup(now: float) -> None:
             if until[key] <= now:
                 until.pop(key, None)
 
-    for key in list(_registrations):
+    for store, window in (
+        (_registrations, REGISTRATION_WINDOW_SECONDS),
+        (_reset_requests, RESET_WINDOW_SECONDS),
+    ):
 
-        fresh = [t for t in _registrations[key] if now - t < REGISTRATION_WINDOW_SECONDS]
+        for key in list(store):
 
-        if fresh:
-            _registrations[key] = fresh
-        else:
-            _registrations.pop(key, None)
+            fresh = [t for t in store[key] if now - t < window]
+
+            if fresh:
+                store[key] = fresh
+            else:
+                store.pop(key, None)
 
 
 def _rate_limit_key(request: Request) -> str:
@@ -464,6 +469,10 @@ def reset_request_allowed(request: Request) -> bool:
     """Žiadosti o obnovu hesla: max. 5 za hodinu z jednej IP (proti spamovaniu e-mailov)."""
 
     now = time.time()
+
+    # Pravidelné upratanie starých záznamov (inak by pri veľkom počte rôznych
+    # IP adries ostávali v pamäti neobmedzene dlho).
+    _cleanup(now)
 
     key = _rate_limit_key(request)
 

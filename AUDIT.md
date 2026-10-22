@@ -77,3 +77,9 @@ SQLite engine kont aj `accounts.db` teraz používa `journal_mode=WAL` a `synchr
 - **Obnova hesla:** len cez https `APP_BASE_URL`; atomická jednorazovosť odkazu (podmienený UPDATE) aj pri súbežných požiadavkách; testované chyby SMTP (autentifikácia, spojenie, odmietnutý príjemca, timeout, TLS); zmena hesla odhlási ostatné zariadenia.
 - **Externé zálohy:** zámok objektov/verzie v bucketi neznemožnia úspešnú zálohu (chyba mazania starých = upozornenie); odporúčané nastavenie v `docs/PREVADZKA.md`.
 - **Prevádzka:** `docs/PREVADZKA.md` popisuje poplachy `/health/details` a postup pri každom z nich. Poznámka: skutočné zapnutie zámku objektov a verzovania v bucketi je nastavenie u poskytovateľa a nedá sa vynútiť z appky.
+
+## Dodatok: závislosti, limity a SECRET_KEY
+
+- **Závislosti:** `pip-audit` (teraz nad `requirements-dev.txt`, ktorý zahŕňa aj produkčné) našiel zraniteľné verzie `pypdf` 5.9.0 (dev), `Pillow` 12.3.0 (produkcia, 35 upozornení) a `certifi` 2026.7.22. Aktualizované na `pypdf` 6.21.2, `Pillow` 13.0.0, `certifi` 2026.10.19, celá sada prechádza a `pip-audit` hlási „No known vulnerabilities found". CI kontroluje aj vývojové závislosti. Pillow je produkčná knižnica (spracovanie nahratých obrázkov), preto táto aktualizácia stojí za nasadenie aj bez ohľadu na ostatné zmeny.
+- **Limity obnovy hesla:** `_reset_requests` sa nečistil; teraz ho čistí `_cleanup()` aj samotná žiadosť o obnovu.
+- **SECRET_KEY:** v produkcii sa odmietne chýbajúci, krátky (< 32), predvolený/ukážkový (`change-me`, `secret`, `test-secret-key`...) alebo nenáhodný kľúč. `.env.example` už neobsahuje `change-me`. Ak je kľúč v Railway náhodný reťazec z `token_hex(32)` alebo `token_urlsafe(48)`, nič sa nemení; slabý kľúč by znamenal, že appka nenaštartuje.

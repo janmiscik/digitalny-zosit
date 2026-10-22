@@ -34,6 +34,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 import monitoring
+from security_config import validate_secret_key
 from accounts_db import accounts_engine, get_accounts_db
 from accounts_models import Account
 from auto_backup import (
@@ -143,12 +144,6 @@ app = FastAPI(
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 
-if not SECRET_KEY:
-    raise RuntimeError(
-        "SECRET_KEY nie je nastavený v .env - pozri .env.example"
-    )
-
-
 # Session cookie sa štandardne posiela iba cez HTTPS (https_only=True).
 # Lokálne pri vývoji cez obyčajné http://localhost by to zablokovalo
 # prihlásenie, preto sa dá dočasne vypnúť cez SESSION_HTTPS_ONLY=false
@@ -156,6 +151,10 @@ if not SECRET_KEY:
 SESSION_HTTPS_ONLY = os.getenv("SESSION_HTTPS_ONLY", "true").strip().lower() not in (
     "false", "0", "no",
 )
+
+# V produkcii (HTTPS-only) sa appka so slabým alebo predvoleným SECRET_KEY
+# nespustí; lokálne len zaloguje varovanie (viď security_config.py).
+validate_secret_key(SECRET_KEY, enforce=SESSION_HTTPS_ONLY)
 
 app.add_middleware(
     SessionMiddleware,
