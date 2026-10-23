@@ -56,3 +56,13 @@ Zálohy obsahujú dáta zákazníkov a sú posledná poistka pri strate Volume. 
 `start.sh`: migrácia `accounts.db` → návrat prerušených obnov → poistná záloha kont s čakajúcou migráciou →
 migrácie kont → štart appky. Návrat prerušenej obnovy je pred migráciami zámerne, aby sa migrovala
 konzistentná databáza.
+
+## Kontajner, proxy a logy
+- **Používateľ:** kontajner štartuje ako root len na opravu vlastníka `/app/data` a potom beží ako `app`.
+  V logu hľadaj `[SPUSTENIE] Appka beží pod používateľom app`. Ak tam je `VAROVANIE ... beží ako root`,
+  platforma zakázala `chown` na Volume; nastav na Railway `RAILWAY_RUN_UID=0`/skontroluj práva Volume, alebo
+  nechaj appku bežať ako root a ber to ako známe obmedzenie. S `REQUIRE_NON_ROOT=true` sa taká appka nespustí.
+- **Proxy:** `FORWARDED_ALLOW_IPS=*` je v poriadku len za Railway proxy. Mimo Railway nastav IP/CIDR proxy,
+  inak sa dá podvrhnutím `X-Forwarded-For` obísť limit pokusov o prihlásenie.
+- **Tokeny v logoch:** odkaz na obnovu hesla appka z vlastných logov skrýva; logy reverse proxy platformy
+  (Railway) môžu URL obsahovať, preto je token jednorazový a platí 1 hodinu.

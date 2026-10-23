@@ -116,6 +116,9 @@ Appka sa nasadzuje cez `Dockerfile` (`railway.json` ho vyberie a nastaví health
 - **Kontrola SECRET_KEY pri štarte** (`security_config.py`): v produkcii (HTTPS-only cookie) sa appka so slabým, krátkym (< 32 znakov), predvoleným alebo nenáhodným kľúčom nespustí a vypíše, ako vygenerovať nový. Pri zmene kľúča sú všetci raz odhlásení.
 - **Limity obnovy hesla sa čistia:** staré záznamy žiadostí (okno 1 h) sa pravidelne zahadzujú aj pri samotnej žiadosti o obnovu, pamäť teda nerastie pri množstve rôznych IP.
 - **Závislosti:** `pip-audit` v CI kontroluje aj vývojové závislosti (`requirements-dev.txt`), nielen produkčné.
+- **Kontajner beží pod neprivilegovaným používateľom** (`app`): `docker-entrypoint.sh` pri štarte opraví vlastníka Volume `/app/data` a zníži oprávnenia. `REQUIRE_NON_ROOT=true` odmietne štart, ak sa to nepodarí (inak appka s varovaním pobeží ako root, aby sa deploy nerozbil). Po nasadení hľadaj v logu `[SPUSTENIE] Appka beží pod používateľom app`.
+- **Dôvera proxy:** `FORWARDED_ALLOW_IPS=*` (predvolené v obraze) je určené pre Railway, kde je appka dostupná len cez ich proxy. Pri inom hostingu nastav na IP/CIDR svojej proxy; `start.sh` pri `*` mimo Railway vypíše varovanie.
+- **Token obnovy hesla v logoch:** `log_filters.py` ho z prístupových logov appky odstráni, stránky obnovy majú `Cache-Control: no-store` a `Referrer-Policy: no-referrer`.
 - **Session** sa pri prihlásení vymení (ochrana proti session fixation), takže starý CSRF token po prihlásení neplatí.
 - **Bezpečnostné hlavičky** na každej odpovedi: `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy` a pri HTTPS aj `Strict-Transport-Security`. K HTML stránkam sa posiela aj **Content-Security-Policy**: skripty, štýly, obrázky, formuláre a spojenia len z vlastnej domény (výnimka: písma Google Fonts), žiadne `<object>`, žiadne vloženie do cudzieho rámu. Povolené je `'unsafe-inline'`, lebo šablóny majú inline skripty a handlery; striktná CSP by vyžadovala presun do `static/`. PDF a JSON odpovede CSP nenesú.
 - **Interaktívna dokumentácia API** (`/docs`, `/redoc`, `/openapi.json`) je v produkcii vypnutá; na vývoj ju zapne `ENABLE_API_DOCS=true`.
@@ -316,7 +319,7 @@ pip install -r requirements-dev.txt   # raz, pytest sa do produkčného obrazu n
 python -m pytest tests/ -q
 ```
 
-Aktuálne **956 testov**, rozdelených podľa oblasti:
+Aktuálne **973 testov**, rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|
@@ -347,6 +350,7 @@ Aktuálne **956 testov**, rozdelených podľa oblasti:
 | `test_password_reset.py` | Obnova hesla cez e-mail: zapnutie podľa SMTP, nastavenie e-mailu, celý priebeh, rovnaká odpoveď pre neexistujúce konto, jednorazový/expirovaný/cudzí token, limit žiadostí, audit |
 | `test_numbering.py` | Číslovanie dokladov: číselné poradie aj nad 999, nezávislé rady, hľadanie medzier v rade |
 | `test_wal.py` | SQLite v režime WAL (journal_mode, synchronous, cudzie kľúče), čitateľ nie je blokovaný otvorenou zápisovou transakciou |
+| `test_deploy_hardening.py` | Docker: neprivilegovaný používateľ, entrypoint (oprava Volume, odmietnutie štartu), `.dockerignore`; proxy varovanie; token obnovy hesla (hlavičky, filter logov) |
 | `test_secret_key.py` | Kontrola SECRET_KEY: chýbajúci, krátky, predvolený, nenáhodný; skutočný štart appky v produkcii a lokálne |
 | `test_concurrent_numbering.py` | 20 súbežných požiadaviek na vytvorenie faktúr/ponúk dostane jedinečné čísla bez chyby |
 | `test_gap_warnings.py` | Medzery v číslovaní ako upozornenie: preverenie s dôvodom, audit, izolácia kont |

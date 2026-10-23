@@ -5,6 +5,12 @@
 # než appka nad čiastočne zmigrovanými databázami.
 set -e
 
+# Dôvera hlavičkám proxy (X-Forwarded-For) - `*` je v poriadku len za Railway proxy.
+if [ "${FORWARDED_ALLOW_IPS:-}" = "*" ] && [ -z "${RAILWAY_ENVIRONMENT_NAME:-}${RAILWAY_PROJECT_ID:-}" ]; then
+    echo "VAROVANIE: FORWARDED_ALLOW_IPS=* dôveruje hlavičkám proxy zo všetkých zdrojov." \
+         "Mimo Railway ho nastav na IP adresu/CIDR svojej proxy (inak sa dá obísť limit pokusov o prihlásenie)."
+fi
+
 # 0. Diagnostika úložiska (len výpis do logu, nič nemení)
 python diagnose_storage.py || true
 

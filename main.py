@@ -33,6 +33,7 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+import log_filters
 import monitoring
 from security_config import validate_secret_key
 from accounts_db import accounts_engine, get_accounts_db
@@ -142,6 +143,9 @@ app = FastAPI(
 )
 
 
+# Token z odkazu na obnovu hesla sa nesmie zapisovať do prístupových logov.
+log_filters.install()
+
 SECRET_KEY = os.getenv("SECRET_KEY")
 
 # Session cookie sa štandardne posiela iba cez HTTPS (https_only=True).
@@ -202,10 +206,20 @@ CONTENT_SECURITY_POLICY = "; ".join([
 ])
 
 
+SENSITIVE_URL_PREFIXES = ("/reset-password/", "/forgot-password")
+
+
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
 
     response = await call_next(request)
+
+    # Stránky obnovy hesla nesú token v URL: nesmú sa ukladať do cache
+    # prehliadača ani proxy a prehliadač nesmie posielať adresu ako Referer.
+    if request.url.path.startswith(SENSITIVE_URL_PREFIXES):
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Referrer-Policy"] = "no-referrer"
 
     for name, value in SECURITY_HEADERS.items():
         response.headers.setdefault(name, value)

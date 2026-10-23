@@ -1,12 +1,12 @@
 # Technický audit (krok 10)
 
-Rozsah: bezpečnosť, databázy, trvalé úložisko, testy, závislosti. Stav k 19. 10. 2026, 723 testov prechádza.
+Rozsah: bezpečnosť, databázy, trvalé úložisko, testy, závislosti. Pôvodný stav k 19. 10. 2026 (v čase auditu 723 testov). Odvtedy pribudli dodatky nižšie; aktuálny počet testov je v README. Odporúčania v tomto zozname, ktoré sa medzitým vyriešili, sú označené ako vyriešené.
 
 ## Opravené
 
 | Oblasť | Nález | Oprava |
 |---|---|---|
-| Závislosti | Pillow 12.1.1 a pypdf 5.9.0 mali známe zraniteľnosti (`pip-audit`); do produkčného obrazu sa inštalovali aj pytest, pypdf a pod. | Pillow 12.3.0; pypdf už nie je v produkčnom obraze; testovacie balíky presunuté do `requirements-dev.txt`. `pip-audit`: žiadne známe zraniteľnosti. |
+| Závislosti | Pillow 12.1.1 a pypdf 5.9.0 mali známe zraniteľnosti (`pip-audit`); do produkčného obrazu sa inštalovali aj pytest, pypdf a pod. | Pillow 12.3.0 (neskôr 13.0.0, pozri dodatok o závislostiach); pypdf už nie je v produkčnom obraze; testovacie balíky presunuté do `requirements-dev.txt`. `pip-audit`: žiadne známe zraniteľnosti. |
 | Heslá | PBKDF2 len 200 000 iterácií, bez verzie formátu | 600 000 iterácií, formát `pbkdf2_sha256$iter$soľ$hash`; staré hashe fungujú a pri prihlásení sa prehashujú; poškodený hash nikdy nespadne ani nespustí extrémny výpočet |
 | Prihlásenie | Limit len podľa IP (za proxy sa dá obchádzať) | Pridaný limit podľa mena konta (20 pokusov / 15 min) |
 | Registrácia | Neobmedzené zakladanie kont (každé = databáza + drahé hashovanie) | Max. 5 kont / hodinu / IP |
@@ -29,13 +29,13 @@ Rozsah: bezpečnosť, databázy, trvalé úložisko, testy, závislosti. Stav k 
 
 ## Odporúčania (nerobil som ich)
 
-1. **Záloha mimo Railway.** Zálohy ležia na tom istom Volume ako dáta. Pri strate Volume zmiznú spolu s dátami. Pravidelne si sťahuj zálohu v Nastaveniach, alebo doplň odosielanie do S3/Backblaze.
+1. **Záloha mimo Railway** (vyriešené: pribudlo voliteľné nahrávanie do S3/R2 s kontrolou SHA-256, pozri dodatky). Pôvodný nález: zálohy ležia na tom istom Volume ako dáta. Pri strate Volume zmiznú spolu s dátami. Pravidelne si sťahuj zálohu v Nastaveniach, alebo doplň odosielanie do S3/Backblaze.
 2. **Overenie Volume.** V Railway logu hľadaj riadky `[ULOZISKE]`: musí tam byť „OK: /app/data je samostatný disk (Volume)“. Ak je tam VAROVANIE, dáta sa po redeployi stratia.
 3. **Jedna replika.** Limity pokusov a plánovač záloh sú v pamäti procesu; pri škálovaní na viac replík by sa nezdieľali (a SQLite na Volume by aj tak nezvládla viac zapisovateľov). Nechaj 1 repliku.
 4. **CSP.** Zavedená je praktická CSP (cudzie domény zakázané, výnimka Google Fonts), overená v prehliadači na 16 stránkach. Striktná verzia bez `'unsafe-inline'` vyžaduje prepísať 23 šablón (inline skripty) a 57 inline handlerov do súborov v `static/`; zatiaľ sa to neoplatí, lebo Jinja escapuje výstup a `|safe` sa nikde nepoužíva.
 5. **Zmena hesla** v Nastaveniach pribudla. **Obnova zabudnutého hesla cez e-mail** pribudla ako voliteľná (zapne sa nastavením `SMTP_*` a `APP_BASE_URL`); konto bez nastaveného e-mailu sa obnovuje manuálne cez `manage_accounts.py`. Zmena aj obnova hesla odhlásia ostatné zariadenia (pozri dodatok o platnosti prihlásení).
-6. **WAL režim SQLite** by zlepšil súbeh čítania a zápisu, ale mení správanie záloh a obnovy (súbory `-wal`/`-shm`), preto som ho nezapínal bez samostatného testu na Railway.
-7. V koreni projektu leží osamotený `invoice_detail.html` (starý duplikát `templates/invoice_detail.html`); appka ho nepoužíva, dá sa zmazať.
+6. **WAL režim SQLite** (vyriešené: zapnutý, pozri Dodatok: WAL a upratanie). Pôvodný nález: by zlepšil súbeh čítania a zápisu, ale mení správanie záloh a obnovy (súbory `-wal`/`-shm`), preto som ho nezapínal bez samostatného testu na Railway.
+7. Osamotený `invoice_detail.html` (vyriešené: zmazaný, pozri Dodatok: WAL a upratanie). Pôvodný nález: v koreni projektu ležal (starý duplikát `templates/invoice_detail.html`); appka ho nepoužíva, dá sa zmazať.
 
 ## Dodatok: nálezy z externého posúdenia
 
@@ -83,3 +83,14 @@ SQLite engine kont aj `accounts.db` teraz používa `journal_mode=WAL` a `synchr
 - **Závislosti:** `pip-audit` (teraz nad `requirements-dev.txt`, ktorý zahŕňa aj produkčné) našiel zraniteľné verzie `pypdf` 5.9.0 (dev), `Pillow` 12.3.0 (produkcia, 35 upozornení) a `certifi` 2026.7.22. Aktualizované na `pypdf` 6.21.2, `Pillow` 13.0.0, `certifi` 2026.10.19, celá sada prechádza a `pip-audit` hlási „No known vulnerabilities found". CI kontroluje aj vývojové závislosti. Pillow je produkčná knižnica (spracovanie nahratých obrázkov), preto táto aktualizácia stojí za nasadenie aj bez ohľadu na ostatné zmeny.
 - **Limity obnovy hesla:** `_reset_requests` sa nečistil; teraz ho čistí `_cleanup()` aj samotná žiadosť o obnovu.
 - **SECRET_KEY:** v produkcii sa odmietne chýbajúci, krátky (< 32), predvolený/ukážkový (`change-me`, `secret`, `test-secret-key`...) alebo nenáhodný kľúč. `.env.example` už neobsahuje `change-me`. Ak je kľúč v Railway náhodný reťazec z `token_hex(32)` alebo `token_urlsafe(48)`, nič sa nemení; slabý kľúč by znamenal, že appka nenaštartuje.
+
+## Dodatok: kontajner, proxy a token obnovy hesla
+
+| Oblasť | Nález | Oprava |
+|---|---|---|
+| Docker | Appka bežala ako `root`. | Obraz má používateľa `app` (uid 10001). `docker-entrypoint.sh` štartuje ako root len na opravu vlastníka Railway Volume (`/app/data`, jednorazovo, len ak niečo nepatrí `app`), overí zápis pod `app` a spustí `start.sh` cez `setpriv` pod `app`. Ak platforma `chown` zakáže, appka radšej beží ako root s varovaním; `REQUIRE_NON_ROOT=true` v takom prípade štart odmietne. Bytekód je skompilovaný pri zostavení. **Overené len skriptom a testami, nie na skutočnom Railway Volume** (v tomto prostredí nie je Docker démon); po nasadení skontroluj v logu riadok `[SPUSTENIE] Appka beží pod používateľom app`. |
+| Proxy | `FORWARDED_ALLOW_IPS=*` dôveruje hlavičkám `X-Forwarded-For` z ľubovoľného zdroja. | Na Railway ostáva (appka je dostupná len cez ich proxy; inak by všetci zdieľali jeden limit pokusov). `start.sh` pri `*` mimo Railway vypíše varovanie; pre iný hosting nastav premennú na IP/CIDR svojej proxy. |
+| Docker build | `.dockerignore` nevylúčil zálohy, nahrané súbory ani lokálne tajné súbory. | Doplnené `.env.*`, `*.pem`, `*.key`, `backups/`, `uploads/`, `accounts/`, `*.db` (aj `-wal`/`-shm`), `*.zip`, žurnál obnovy, `.github/`, logy; test overuje, že nič potrebné pre beh appky nie je vylúčené. |
+| Obnova hesla | Token je v URL, takže sa mohol dostať do prístupových logov a cache. | Odpovede na `/reset-password/*` a `/forgot-password` majú `Cache-Control: no-store`, `Pragma: no-cache` a `Referrer-Policy: no-referrer`; filter logov (`log_filters.py`) nahradí token v `uvicorn.access` textom `[skryte]`. Logy samotnej platformy (reverse proxy) appka ovplyvniť nevie, preto je token jednorazový a platí 1 hodinu. |
+| Účtovníctvo | Testy DPH, dobropisov a číslovania treba zachovať a pravidlá overiť. | Testy ostávajú súčasťou sady (`test_accounting.py`, `test_numbering.py`, `test_concurrent_numbering.py`, `test_invoices.py`). **Overenie pravidiel s účtovníkom je úloha pre človeka**, nie pre kód; pred reálnym účtovným nasadením ho treba urobiť. |
+| Dokumentácia | `AUDIT.md` uvádzal 723 testov a staré odporúčania o WAL a `invoice_detail.html`. | Hlavička upravená, vyriešené odporúčania označené. |

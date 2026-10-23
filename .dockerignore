@@ -1,10 +1,46 @@
+# Verzovanie a nástroje
+.git/
+.github/
+.gitignore
+.idea/
+.vscode/
+
+# Python
 __pycache__/
+**/__pycache__/
 *.pyc
+**/*.pyc
 .pytest_cache/
 .venv/
 venv/
 tests/
-data/
-*.db
+requirements-dev.txt
+
+# Citlivé a lokálne súbory - nikdy nepatria do obrazu
 .env
-.git/
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Dáta, nahrané súbory a zálohy
+data/
+backups/
+uploads/
+accounts/
+*.db
+**/*.db
+*.db-wal
+*.db-shm
+**/*.db-wal
+**/*.db-shm
+*.sqlite
+*.sqlite3
+*.zip
+restore-journal.json
+restore-*/
+
+# Logy a dočasné súbory
+*.log
+tmp/
+scratch/
