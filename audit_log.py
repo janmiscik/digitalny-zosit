@@ -17,7 +17,12 @@ vynucovaný databázou):
     invoice.status_change    invoice.credit_note        invoice.duplicate
     quote.create              quote.edit                 quote.delete
     quote.status_change       quote.convert_to_invoice
+    invoice.paid_date_change   export.download
     company.update             backup.restore
+
+Storno faktúry vyžaduje dôvod (zapíše sa do detailu). Tabuľka audit_log je v DB
+chránená triggermi proti UPDATE/DELETE (migrácia a1b2c3d4e5f6); appka nemá
+žiadny endpoint na úpravu ani mazanie záznamov.
 """
 
 from sqlalchemy.orm import Session

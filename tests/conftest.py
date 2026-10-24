@@ -19,6 +19,8 @@ import sys
 from pathlib import Path
 
 os.environ.setdefault("SESSION_HTTPS_ONLY", "false")
+# testy bežia ako lokálny vývoj (slabý testovací kľúč, http klient)
+os.environ.setdefault("APP_ENV", "test")
 
 # automatické zálohy na pozadí sa v testoch nespúšťajú
 os.environ.setdefault("BACKUP_ENABLED", "false")

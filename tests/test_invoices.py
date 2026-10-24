@@ -993,7 +993,7 @@ def test_allowed_status_transitions_succeed(current_status, new_status):
 
     response = client.post(
         f"/invoices/{invoice_id}/status",
-        data={"status": new_status},
+        data={"status": new_status, "reason": "test dôvod storna"},
         follow_redirects=False
     )
 
@@ -2825,7 +2825,10 @@ def test_paid_date_not_overwritten_if_already_set():
     db.commit()
     db.close()
 
-    post_form(f"/invoices/{invoice_id}/status", [("status", "Stornovaná")])
+    post_form(
+        f"/invoices/{invoice_id}/status",
+        [("status", "Stornovaná"), ("reason", "test dôvod storna")]
+    )
 
     db = TestingSessionLocal()
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()

@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 import log_filters
 import monitoring
-from security_config import validate_secret_key
+from security_config import validate_environment
 from accounts_db import accounts_engine, get_accounts_db
 from accounts_models import Account
 from auto_backup import (
@@ -156,9 +156,10 @@ SESSION_HTTPS_ONLY = os.getenv("SESSION_HTTPS_ONLY", "true").strip().lower() not
     "false", "0", "no",
 )
 
-# V produkcii (HTTPS-only) sa appka so slabým alebo predvoleným SECRET_KEY
-# nespustí; lokálne len zaloguje varovanie (viď security_config.py).
-validate_secret_key(SECRET_KEY, enforce=SESSION_HTTPS_ONLY)
+# Produkčný režim určuje APP_ENV (nenastavené = production), nie cookie:
+# v produkcii sa vynucuje silný SECRET_KEY aj SESSION_HTTPS_ONLY=true;
+# lokálne (APP_ENV=development) slabý kľúč len zaloguje varovanie.
+APP_ENV = validate_environment(os.getenv("APP_ENV"), SECRET_KEY, SESSION_HTTPS_ONLY)
 
 app.add_middleware(
     SessionMiddleware,

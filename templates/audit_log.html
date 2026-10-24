@@ -111,12 +111,27 @@
                 </h2>
 
                 <p>
-                    Posledných {{ page_size }} udalostí, najnovšie hore.
+                    {{ total }} udalostí, najnovšie hore. Záznamy sa v appke nedajú upraviť ani zmazať.
                 </p>
 
             </div>
 
         </div>
+
+        <form method="get" action="/audit-log" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px;">
+
+            <select name="typ" aria-label="Typ udalosti">
+                <option value="">Všetko</option>
+                {% for key, label in categories.items() %}
+                    <option value="{{ key }}" {% if key == typ %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+
+            <input type="search" name="q" value="{{ q }}" placeholder="Hľadať (číslo faktúry, dôvod...)" aria-label="Hľadať">
+
+            <button type="submit" class="back-button">Filtrovať</button>
+
+        </form>
 
 
         {% if entries %}
@@ -151,6 +166,18 @@
                 Zatiaľ tu nič nie je.
             </div>
 
+        {% endif %}
+
+        {% if pages > 1 %}
+            <div style="display:flex; gap:12px; justify-content:center; padding:16px 0;">
+                {% if page > 1 %}
+                    <a class="back-button" href="/audit-log?typ={{ typ|urlencode }}&q={{ q|urlencode }}&strana={{ page - 1 }}">← Novšie</a>
+                {% endif %}
+                <span>Strana {{ page }} z {{ pages }}</span>
+                {% if page < pages %}
+                    <a class="back-button" href="/audit-log?typ={{ typ|urlencode }}&q={{ q|urlencode }}&strana={{ page + 1 }}">Staršie →</a>
+                {% endif %}
+            </div>
         {% endif %}
 
     </section>

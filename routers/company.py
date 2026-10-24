@@ -510,10 +510,26 @@ async def upload_restore(
 # AUDIT LOG (história zmien)
 # =========================================
 
+AUDIT_CATEGORIES = {
+    "invoice": ("Faktúry", "invoice."),
+    "quote": ("Ponuky", "quote."),
+    "export": ("Exporty", "export."),
+    "backup": ("Zálohy a obnova", "backup."),
+    "auth": ("Prihlásenia", "auth."),
+    "company": ("Nastavenia", "company."),
+}
+
+
 @router.get("/audit-log")
 def view_audit_log(
 
     request: Request,
+
+    typ: str = "",
+
+    q: str = "",
+
+    strana: int = 1,
 
     db: Session = Depends(get_db),
 
@@ -521,15 +537,35 @@ def view_audit_log(
 
 ):
     """
-    Zobrazí posledných AUDIT_LOG_PAGE_SIZE záznamov, najnovšie prvé.
-    Appka je jednopoužívateľská a bez potreby ďalšieho filtrovania,
-    takže zatiaľ zámerne bez stránkovania/vyhľadávania - len jednoduchý
-    prehľad "čo sa nedávno dialo".
+    História zmien: kto/kedy/čo sa zmenilo (vystavenie, úhrada, storno,
+    dobropis, export, obnova zo zálohy...). Dá sa filtrovať podľa typu a
+    hľadať v texte, stránkuje sa po AUDIT_LOG_PAGE_SIZE záznamoch.
+    Záznamy sa cez appku nedajú upraviť ani zmazať.
     """
 
+    query = db.query(AuditLog)
+
+    if typ in AUDIT_CATEGORIES:
+        query = query.filter(AuditLog.action.like(AUDIT_CATEGORIES[typ][1] + "%"))
+    else:
+        typ = ""
+
+    q = q.strip()[:100]
+
+    if q:
+        pattern = f"%{q}%"
+        query = query.filter(
+            AuditLog.detail.ilike(pattern) | AuditLog.action.ilike(pattern)
+        )
+
+    total = query.count()
+    pages = max(1, -(-total // AUDIT_LOG_PAGE_SIZE))
+    strana = min(max(1, strana), pages)
+
     entries = (
-        db.query(AuditLog)
+        query
         .order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
+        .offset((strana - 1) * AUDIT_LOG_PAGE_SIZE)
         .limit(AUDIT_LOG_PAGE_SIZE)
         .all()
     )
@@ -539,7 +575,13 @@ def view_audit_log(
         name="audit_log.html",
         context={
             "entries": entries,
-            "page_size": AUDIT_LOG_PAGE_SIZE
+            "page_size": AUDIT_LOG_PAGE_SIZE,
+            "total": total,
+            "page": strana,
+            "pages": pages,
+            "typ": typ,
+            "q": q,
+            "categories": {key: value[0] for key, value in AUDIT_CATEGORIES.items()},
         }
     )
 

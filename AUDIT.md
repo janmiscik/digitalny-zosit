@@ -94,3 +94,10 @@ SQLite engine kont aj `accounts.db` teraz používa `journal_mode=WAL` a `synchr
 | Obnova hesla | Token je v URL, takže sa mohol dostať do prístupových logov a cache. | Odpovede na `/reset-password/*` a `/forgot-password` majú `Cache-Control: no-store`, `Pragma: no-cache` a `Referrer-Policy: no-referrer`; filter logov (`log_filters.py`) nahradí token v `uvicorn.access` textom `[skryte]`. Logy samotnej platformy (reverse proxy) appka ovplyvniť nevie, preto je token jednorazový a platí 1 hodinu. |
 | Účtovníctvo | Testy DPH, dobropisov a číslovania treba zachovať a pravidlá overiť. | Testy ostávajú súčasťou sady (`test_accounting.py`, `test_numbering.py`, `test_concurrent_numbering.py`, `test_invoices.py`). **Overenie pravidiel s účtovníkom je úloha pre človeka**, nie pre kód; pred reálnym účtovným nasadením ho treba urobiť. |
 | Dokumentácia | `AUDIT.md` uvádzal 723 testov a staré odporúčania o WAL a `invoice_detail.html`. | Hlavička upravená, vyriešené odporúčania označené. |
+
+
+## Dodatok: APP_ENV a audit stopa (23. 10. 2026)
+
+- **Produkčný režim** určuje `APP_ENV` (nenastavené = `production`), nie `SESSION_HTTPS_ONLY`. V produkcii sa vždy vynucuje silný `SECRET_KEY` a zapnuté HTTPS cookie; `SESSION_HTTPS_ONLY=false` už kontrolu kľúča neobíde. Lokálne: `APP_ENV=development`. Na Railway nastav `APP_ENV=production`.
+- **Audit stopa:** storno faktúry vyžaduje dôvod, zmena dátumu úhrady sa loguje, `/audit-log` má filter podľa typu, hľadanie a stránkovanie. Tabuľka `audit_log` má triggery proti UPDATE/DELETE. Nejde o nemenný archív ani náhradu zákonných povinností: kto má priamy prístup k súboru databázy, vie triggery zrušiť.
+- **Nerobí sa bez Railway:** reálna obnova zo zálohy z R2, test non-root na skutočnom Volume, šifrovanie záloh pred nahratím a ochrana proti zmazaniu v R2 (Object Lock) sú prevádzkové kroky, nie kód.

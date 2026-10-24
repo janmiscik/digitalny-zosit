@@ -242,12 +242,14 @@
                     style="display: inline-flex; align-items: center; gap: 8px;"
                 >
                 <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                <input type="hidden" name="reason" value="">
 
                     {% if can_change_status %}
 
                         <select
                             name="status"
-                            onchange="this.form.submit()"
+                            data-current="{{ invoice.status }}"
+                            onchange="submitStatusChange(this)"
                             class="job-status status-{{ invoice.status | lower | replace(' ', '-') }}"
                         >
 
@@ -472,6 +474,30 @@
 
 
 <script>
+
+function submitStatusChange(select) {
+
+    const form = select.form;
+
+    if (select.value === "Stornovaná") {
+
+        const reason = (window.prompt(
+            "Dôvod stornovania faktúry (povinné, zapíše sa do histórie zmien):"
+        ) || "").trim();
+
+        if (reason.length < 3) {
+
+            // bez dôvodu sa stav nezmení
+            select.value = select.dataset.current;
+            return;
+        }
+
+        form.elements["reason"].value = reason;
+    }
+
+    form.submit();
+}
+
 
 function applyTheme(theme) {
 

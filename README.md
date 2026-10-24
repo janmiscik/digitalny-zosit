@@ -36,13 +36,15 @@ copy .env.example .env
 
 Potom v `.env` nastav:
 
-- **`SECRET_KEY`** – náhodný reťazec pre podpis prihlasovacej session a odkazov na obnovu hesla (povinné, appka bez neho nenaštartuje; min. 32 znakov, v produkcii sa odmietne aj predvolená či ukážková hodnota ako `change-me` alebo nenáhodný kľúč – lokálne pri `SESSION_HTTPS_ONLY=false` sa slabý kľúč iba zaloguje):
+- **`SECRET_KEY`** – náhodný reťazec pre podpis prihlasovacej session a odkazov na obnovu hesla (povinné, appka bez neho nenaštartuje; min. 32 znakov, v produkcii sa odmietne aj predvolená či ukážková hodnota ako `change-me` alebo nenáhodný kľúč – lokálne pri `APP_ENV=development` sa slabý kľúč iba zaloguje):
 
   ```powershell
   python -c "import secrets; print(secrets.token_hex(32))"
   ```
 
-- **`SESSION_HTTPS_ONLY`** – či sa prihlasovacia cookie posiela iba cez HTTPS (predvolené `true`). Nechaj `true` v produkcii (Railway a pod.). Iba ak appku spúšťaš lokálne cez obyčajné `http://localhost`, nastav na `false` - inak sa neprihlásiš (prehliadač cookie s príznakom `Secure` cez obyčajné http vôbec neuloží).
+- **`APP_ENV`** – `production` (predvolené, aj keď premennú nenastavíš) alebo `development`. V produkcii appka vždy vyžaduje silný `SECRET_KEY` a zapnuté `SESSION_HTTPS_ONLY`, bez ohľadu na iné nastavenia. Lokálne vývoj: `APP_ENV=development`. Neplatná hodnota (preklep) appku nespustí.
+
+- **`SESSION_HTTPS_ONLY`** – či sa prihlasovacia cookie posiela iba cez HTTPS (predvolené `true`). Nechaj `true` v produkcii (Railway a pod.). Iba ak appku spúšťaš lokálne cez obyčajné `http://localhost`, nastav `APP_ENV=development` a `false` - v produkcii `false` appku nespustí. Inak sa neprihlásiš (prehliadač cookie s príznakom `Secure` cez obyčajné http vôbec neuloží).
 
 - **`ACCOUNTS_DATABASE_URL`** – master databáza kont (predvolené `sqlite:///./data/accounts.db`).
 
@@ -80,7 +82,7 @@ Aplikácia beží na `http://127.0.0.1:8000`, pri prvom vstupe ťa presmeruje na
 
 Appka sa nasadzuje cez `Dockerfile` (`railway.json` ho vyberie a nastaví healthcheck).
 
-1. **Premenné služby (Variables):** `SECRET_KEY` (povinné) a `SESSION_HTTPS_ONLY=true`. `ACCOUNTS_DATABASE_URL` a `ACCOUNTS_DATA_DIR` sú v Dockerfile už nastavené na `/app/data/...`, netreba ich meniť.
+1. **Premenné služby (Variables):** `SECRET_KEY` (povinné), `APP_ENV=production` a `SESSION_HTTPS_ONLY=true`. `ACCOUNTS_DATABASE_URL` a `ACCOUNTS_DATA_DIR` sú v Dockerfile už nastavené na `/app/data/...`, netreba ich meniť.
 2. **Volume:** v službe pridaj Volume s **Mount path `/app/data`**. Appka tam ukladá všetko trvalé:
 
    ```text
@@ -319,7 +321,7 @@ pip install -r requirements-dev.txt   # raz, pytest sa do produkčného obrazu n
 python -m pytest tests/ -q
 ```
 
-Aktuálne **973 testov**, rozdelených podľa oblasti:
+Aktuálne **1007 testov**, rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|

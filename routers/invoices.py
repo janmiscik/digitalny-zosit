@@ -42,6 +42,9 @@ from templates_config import templates
 
 router = APIRouter(dependencies=[Depends(verify_csrf)])
 
+MIN_CANCEL_REASON_LENGTH = 3
+MAX_REASON_LENGTH = 300
+
 
 def validate_invoice_dates(issue_date: date, due_date: date) -> None:
     """
@@ -1492,6 +1495,8 @@ def update_invoice_status(
 
     status: str = Form(...),
 
+    reason: str = Form(""),
+
     db: Session = Depends(get_db),
 
     user: str = Depends(require_login_page)
@@ -1555,6 +1560,24 @@ def update_invoice_status(
         )
 
 
+    # Storno je účtovne významná zmena - vyžaduje dôvod, ktorý sa zapíše do
+    # histórie zmien (kto/kedy/prečo sa dá neskôr dohľadať).
+    reason = " ".join((reason or "").split())
+
+    if new_status == InvoiceStatus.CANCELLED.value:
+
+        if len(reason) < MIN_CANCEL_REASON_LENGTH:
+
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "Pri stornovaní faktúry uveď dôvod "
+                    f"(aspoň {MIN_CANCEL_REASON_LENGTH} znaky)."
+                )
+            )
+
+        reason = reason[:MAX_REASON_LENGTH]
+
     old_status = invoice.status
 
     invoice.status = new_status
@@ -1576,6 +1599,7 @@ def update_invoice_status(
         detail=(
             f"Faktúra {invoice.invoice_number}: "
             f"{old_status} -> {new_status}"
+            + (f" (dôvod: {reason})" if new_status == InvoiceStatus.CANCELLED.value else "")
         )
     )
 
@@ -1627,7 +1651,23 @@ def update_invoice_paid_date(
             detail="Dátum úhrady nemôže byť v budúcnosti"
         )
 
+    old_paid_date = invoice.paid_date
+
     invoice.paid_date = parsed_date
+
+    if old_paid_date != parsed_date:
+
+        log_action(
+            db,
+            "invoice.paid_date_change",
+            entity_type="invoice",
+            entity_id=invoice.id,
+            detail=(
+                f"Faktúra {invoice.invoice_number}: dátum úhrady "
+                f"{old_paid_date.strftime('%d.%m.%Y') if old_paid_date else 'bez dátumu'} -> "
+                f"{parsed_date.strftime('%d.%m.%Y') if parsed_date else 'bez dátumu'}"
+            )
+        )
 
     db.commit()
 
