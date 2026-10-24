@@ -111,7 +111,10 @@ def open_tmp():
 
 def can_run_as_root():
 
-    return os.geteuid() == 0 and shutil.which("setpriv") and shutil.which("useradd")
+    # na Windows (bez os.geteuid) sa tieto testy preskočia
+    geteuid = getattr(os, "geteuid", None)
+
+    return bool(geteuid and geteuid() == 0 and shutil.which("setpriv") and shutil.which("useradd"))
 
 
 @pytest.mark.skipif(not can_run_as_root(), reason="vyžaduje root, setpriv a useradd")

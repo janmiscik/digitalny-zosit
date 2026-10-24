@@ -102,11 +102,10 @@ def start_app(tmp_path, secret, https_only, app_env=None):
         "SESSION_HTTPS_ONLY": https_only,
     })
 
-    if secret is not None:
-        env["SECRET_KEY"] = secret
-
-    if app_env is not None:
-        env["APP_ENV"] = app_env
+    # Prázdna hodnota (nie "nenastavené"): load_dotenv() by inak doplnil
+    # hodnoty z lokálneho .env vývojára a test by závisel od jeho počítača.
+    env["SECRET_KEY"] = secret if secret is not None else ""
+    env["APP_ENV"] = app_env if app_env is not None else ""
 
     # accounts.db musí mať schému, inak appka pri štarte upozorní na migrácie
     subprocess.run(
