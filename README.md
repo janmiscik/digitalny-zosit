@@ -326,7 +326,7 @@ pip install -r requirements-dev.txt   # raz, pytest sa do produkčného obrazu n
 python -m pytest tests/ -q
 ```
 
-Aktuálne **1372 testov**, rozdelených podľa oblasti:
+Aktuálne **1381 testov**, rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|
@@ -365,6 +365,7 @@ Aktuálne **1372 testov**, rozdelených podľa oblasti:
 | `test_monitoring.py` | `/health/details`: token, zastaraná/chýbajúca záloha, zlyhanie, off-site, migrácie, žiadny únik textov chýb |
 | `test_session_invalidation.py` | Odhlásenie ostatných zariadení po zmene hesla, zmazané konto, cookie bez odtlačku |
 | `test_change_password.py` | Zmena hesla: úspech, nové prihlásenie, zlé súčasné heslo, validácia, limit pokusov, CSRF, vyžaduje prihlásenie, izolácia kont, audit log |
+| `test_hosting_and_offsite_restore.py` | `docker-compose.yml` (production, dôvera proxy len v internej sieti), Caddyfile, CLI `offsite_restore.py`: zoznam, stiahnutie a rozšifrovanie zálohy, zlé heslo, neprepisovanie, nebezpečné názvy |
 | `test_route_policy.py` | Každá trasa vyžaduje prihlásenie (okrem zoznamu verejných) a každá meniaca trasa má CSRF; vypnutie/strop registrácie; slabé heslá |
 | `test_totals_property.py` | Náhodné kontroly súm faktúry (DPH po sadzbách, zaokrúhľovanie, dobropis = presný opak) |
 | `test_issued_invoice_protection.py` | Vystavenú faktúru nemožno zmazať ani cez cascade |
@@ -460,3 +461,9 @@ digitalny-zosit/
 ├── requirements-dev.txt     # + pytest, pypdf, httpx (na testy)
 └── README.md
 ```
+
+
+## Nasadenie mimo Railway
+
+Appka sa dá spustiť aj na vlastnom serveri (`docker-compose.yml` + Caddy s automatickým HTTPS) a dáta obnoviť
+zo zálohy v R2 (`python offsite_restore.py --download --account <konto>`). Celý postup: `docs/HOSTING.md`.

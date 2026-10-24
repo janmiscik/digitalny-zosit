@@ -1,0 +1,5 @@
+# Caddy si sám vybaví a obnovuje HTTPS certifikát (Let's Encrypt) pre {$DOMAIN}.
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy app:8000
+}

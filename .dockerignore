@@ -47,3 +47,8 @@ scratch/
 
 .pytest_tmp/
 server-errors.log
+
+# Nasadenie mimo Railway a stiahnuté zálohy (citlivé!)
+docker-compose.yml
+Caddyfile
+obnova/

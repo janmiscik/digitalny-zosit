@@ -1,0 +1,61 @@
+# Nasadenie mimo Railway na vlastnom serveri (VPS) s automatickým HTTPS cez Caddy.
+# Postup: docs/HOSTING.md
+#
+#   1. cp .env.example .env   a vyplň SECRET_KEY, APP_ENV=production, OFFSITE_BACKUP_*, BACKUP_ENCRYPTION_KEY
+#   2. DOMAIN=zosit.example.com docker compose up -d --build
+#
+# Appka nie je vystavená priamo do internetu - len Caddy (porty 80/443).
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      APP_ENV: production
+      SESSION_HTTPS_ONLY: "true"
+      PORT: "8000"
+      # pevné cesty vo Volume (majú prednosť pred hodnotami z .env)
+      ACCOUNTS_DATABASE_URL: sqlite:////app/data/accounts.db
+      ACCOUNTS_DATA_DIR: /app/data/accounts
+      # dôveruj X-Forwarded-For len od Caddy v tejto internej sieti
+      FORWARDED_ALLOW_IPS: 172.30.0.0/24
+    volumes:
+      - zosit-data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    networks:
+      internal:
+        ipv4_address: 172.30.0.10
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?nastav DOMAIN, napr. DOMAIN=zosit.example.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      internal:
+        ipv4_address: 172.30.0.2
+
+volumes:
+  zosit-data:
+  caddy-data:
+  caddy-config:
+
+networks:
+  internal:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
