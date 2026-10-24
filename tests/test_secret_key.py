@@ -239,3 +239,23 @@ def test_app_refuses_start_in_production_with_https_off(tmp_path):
 
     assert result.returncode != 0
     assert "SESSION_HTTPS_ONLY" in result.stderr
+
+
+# ---------- chybové hlásenia neprezradia tajné hodnoty ----------
+
+@pytest.mark.parametrize("secret", ["moje-tajne-slabe-heslo", "kratky-tajny", "abcabcabcabcabcabcabcabcabcabcabcabc"])
+def test_error_message_never_contains_the_secret_value(secret):
+
+    with pytest.raises(RuntimeError) as caught:
+        validate_environment("production", secret, True)
+
+    assert secret not in str(caught.value)
+
+
+def test_startup_error_for_weak_key_is_readable_and_has_no_secret(tmp_path):
+
+    result = start_app(tmp_path, "moje-tajne-slabe-heslo", "true", app_env="production")
+
+    assert result.returncode != 0
+    assert "SECRET_KEY je slabý" in result.stderr
+    assert "moje-tajne-slabe-heslo" not in result.stderr

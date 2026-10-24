@@ -326,7 +326,7 @@ pip install -r requirements-dev.txt   # raz, pytest sa do produkčného obrazu n
 python -m pytest tests/ -q
 ```
 
-Aktuálne **1363 testov**, rozdelených podľa oblasti:
+Aktuálne **1370 testov**, rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|

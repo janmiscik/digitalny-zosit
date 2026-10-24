@@ -118,3 +118,6 @@ SQLite engine kont aj `accounts.db` teraz používa `journal_mode=WAL` a `synchr
 - **Počítadlo chýb** sa ukladá aj do súboru vo Volume (prežije reštart). Pre viac replík alebo upozornenia by bolo treba externé logovanie.
 - **Testy:** skutočné HTTP požiadavky na citlivé trasy, hraničné prípady súm (nulové a malé množstvá, zľavy, zmiešané sadzby, polcent), rozšírený zoznam bežných hesiel. Sadzby DPH a režim treba overiť s účtovníkom; testovacie sadzby nie sú daňové potvrdenie.
 - **Hygiena archívu:** `.pytest_tmp/` a `server-errors.log` sú v `.gitignore` aj `.dockerignore`; archív pri odovzdaní nesmie obsahovať `.env`, databázy ani zálohy.
+
+- **Mazanie fotiek:** súbor sa maže až po úspešnom commite (pri rollbacku záznam aj súbor ostanú); trasa na zmazanie fotky už súbor nemaže vopred.
+- **Chybové hlásenia pri štarte** (slabý `SECRET_KEY`, neplatné `APP_ENV`, `MAX_ACCOUNTS`) nikdy neobsahujú hodnotu tajného kľúča; test to overuje.

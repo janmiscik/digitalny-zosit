@@ -734,8 +734,7 @@ def delete_job_photo_route(
             detail="Fotka neexistuje"
         )
 
-    delete_job_photo(photo.filename)
-
+    # Súbor sa zmaže až po úspešnom commite (hook v models.py), nie vopred.
     db.delete(photo)
     db.commit()
 

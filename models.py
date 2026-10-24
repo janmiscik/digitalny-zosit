@@ -1,5 +1,8 @@
 from datetime import datetime, timezone
 
+import logging
+
+from sqlalchemy.orm import Session, object_session
 from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, Integer, String, Text, ForeignKey, Date, Numeric, event
 from sqlalchemy.orm import relationship
 
@@ -883,12 +886,46 @@ def _refuse_deleting_issued_invoice(mapper, connection, target):
 # navždy zostal ako odpad v uploads/job_photos/.
 # =========================================
 
+PENDING_FILE_DELETES_KEY = "pending_job_photo_deletes"
+
+
 @event.listens_for(JobPhoto, "after_delete")
-def _delete_job_photo_file_on_row_delete(mapper, connection, target):
+def _remember_job_photo_file_for_deletion(mapper, connection, target):
+    """
+    Súbor sa NEMAŽE hneď (transakcia ešte nemusí byť potvrdená - pri rollbacku
+    by zostal záznam bez súboru). Názov sa len zapamätá a súbor sa zmaže až po
+    úspešnom commite (`_delete_pending_files_after_commit`).
+    """
+
+    session = object_session(target)
+
+    if session is not None and target.filename:
+        session.info.setdefault(PENDING_FILE_DELETES_KEY, []).append(target.filename)
+
+
+@event.listens_for(Session, "after_commit")
+def _delete_pending_files_after_commit(session):
+
+    filenames = session.info.pop(PENDING_FILE_DELETES_KEY, [])
+
+    if not filenames:
+        return
 
     from uploads_utils import delete_job_photo
 
-    delete_job_photo(target.filename)
+    for filename in filenames:
+
+        try:
+            delete_job_photo(filename)
+
+        except OSError:
+            logging.getLogger(__name__).exception("Súbor fotky %s sa nepodarilo zmazať", filename)
+
+
+@event.listens_for(Session, "after_soft_rollback")
+def _forget_pending_files_after_rollback(session, previous_transaction):
+
+    session.info.pop(PENDING_FILE_DELETES_KEY, None)
 
 
 # =========================================
