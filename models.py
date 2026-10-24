@@ -957,3 +957,9 @@ class AuditLog(Base):
         Text,
         nullable=True
     )
+
+
+# Ochrany na úrovni databázy (triggery) - viď db_guards.py
+import db_guards  # noqa: E402
+
+db_guards.attach_to_metadata(Base.metadata)

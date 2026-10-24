@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 
 import log_filters
 import monitoring
+from auth import check_registration_config
 from security_config import validate_environment
 from accounts_db import accounts_engine, get_accounts_db
 from accounts_models import Account
@@ -160,6 +161,9 @@ SESSION_HTTPS_ONLY = os.getenv("SESSION_HTTPS_ONLY", "true").strip().lower() not
 # v produkcii sa vynucuje silný SECRET_KEY aj SESSION_HTTPS_ONLY=true;
 # lokálne (APP_ENV=development) slabý kľúč len zaloguje varovanie.
 APP_ENV = validate_environment(os.getenv("APP_ENV"), SECRET_KEY, SESSION_HTTPS_ONLY)
+
+# REGISTRATION_ENABLED a MAX_ACCOUNTS: zlá hodnota appku nespustí (nie tichý "bez limitu")
+check_registration_config()
 
 app.add_middleware(
     SessionMiddleware,

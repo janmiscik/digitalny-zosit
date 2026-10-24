@@ -307,3 +307,36 @@ def test_dead_scheduler_is_reported(client, monkeypatch):
 
     assert response.status_code == 503
     assert any(p["kind"] == "scheduler" for p in response.json()["problems"])
+
+
+def test_error_counter_survives_restart(client, monkeypatch):
+
+    monitoring.record_server_error()
+    monitoring.record_server_error()
+
+    # simulácia reštartu: pamäť sa vynuluje, súbor ostane
+    monitoring._errors.clear()
+
+    assert monitoring.recent_server_errors() == 2
+
+
+def test_old_persisted_errors_are_ignored(client):
+
+    import time
+
+    monitoring._error_file().parent.mkdir(parents=True, exist_ok=True)
+    monitoring._error_file().write_text(f"1000.0\n{time.time()}\nnezmysel\n", encoding="utf-8")
+
+    assert monitoring.recent_server_errors() == 1
+
+
+def test_error_file_is_trimmed_and_write_failures_are_harmless(client, monkeypatch):
+
+    for _ in range(monitoring.ERROR_FILE_MAX_LINES + 50):
+        monitoring.record_server_error()
+
+    assert len(monitoring._read_error_file()) <= monitoring.ERROR_FILE_MAX_LINES
+
+    monkeypatch.setattr(monitoring, "_error_file", lambda: (_ for _ in ()).throw(OSError("disk")))
+
+    monitoring.record_server_error()   # nesmie vyhodiť výnimku

@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import os
 import shutil
+import threading
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
@@ -48,6 +49,7 @@ _DUMMY_PASSWORD_HASH = hash_password(hash_password(""))
 MIN_USERNAME_LENGTH = 3
 MAX_USERNAME_LENGTH = 50
 MIN_PASSWORD_LENGTH = 8
+_registration_lock = threading.Lock()
 REGISTRATION_CLOSED_MESSAGE = "Registrácia nových kont je na tomto serveri vypnutá."
 
 
@@ -190,27 +192,35 @@ def register_submit(
     # kontroluje kolíziu len voči tomu, čo accounts_db vidела PRED touto
     # požiadavkou; pri naozaj súbežnej registrácii rovnakého mena by
     # databázové UNIQUE obmedzenie na slug odchytilo zvyšok.
-    for _attempt in range(5):
+    # Kontrola stropu kont a vloženie nového konta sú pod jedným zámkom,
+    # aby dve súbežné registrácie neprekročili MAX_ACCOUNTS (appka beží v
+    # jednom procese; viac replík by vyžadovalo kontrolu v databáze).
+    with _registration_lock:
 
-        slug = tenancy.ensure_unique_slug(base_slug, slug_exists)
+        if limit and accounts_db.query(Account).count() >= limit:
+            return error(REGISTRATION_CLOSED_MESSAGE, status_code=403)
 
-        account = Account(
-            username=username,
-            slug=slug,
-            password_hash=hash_password(password)
-        )
+        for _attempt in range(5):
 
-        accounts_db.add(account)
+            slug = tenancy.ensure_unique_slug(base_slug, slug_exists)
 
-        try:
+            account = Account(
+                username=username,
+                slug=slug,
+                password_hash=hash_password(password)
+            )
 
-            accounts_db.commit()
-            break
+            accounts_db.add(account)
 
-        except IntegrityError:
+            try:
 
-            accounts_db.rollback()
-            account = None
+                accounts_db.commit()
+                break
+
+            except IntegrityError:
+
+                accounts_db.rollback()
+                account = None
 
     if account is None:
 

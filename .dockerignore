@@ -44,3 +44,6 @@ restore-*/
 *.log
 tmp/
 scratch/
+
+.pytest_tmp/
+server-errors.log

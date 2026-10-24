@@ -47,18 +47,74 @@ _errors: deque = deque(maxlen=1000)
 _errors_lock = threading.Lock()
 
 
+ERROR_FILE_NAME = "server-errors.log"
+ERROR_FILE_MAX_LINES = 1000
+
+
+def _error_file():
+    """Súbor s časmi chýb leží vo Volume vedľa dát, takže prežije reštart appky."""
+
+    return tenancy.ACCOUNTS_DATA_DIR / ERROR_FILE_NAME
+
+
+def _read_error_file() -> list[float]:
+
+    try:
+
+        moments = []
+
+        for line in _error_file().read_text(encoding="utf-8").splitlines():
+
+            try:
+                moments.append(float(line))
+
+            except ValueError:
+                continue
+
+        return moments
+
+    except OSError:
+        return []
+
+
 def record_server_error() -> None:
+    """Zapíše chybu do pamäte aj do súboru (chyba zápisu nikdy nezhodí požiadavku)."""
+
+    moment = time.time()
 
     with _errors_lock:
-        _errors.append(time.time())
+
+        _errors.append(moment)
+
+        try:
+
+            path = _error_file()
+            path.parent.mkdir(parents=True, exist_ok=True)
+
+            with open(path, "a", encoding="utf-8") as handle:
+                handle.write(f"{moment}\n")
+
+            if path.stat().st_size > ERROR_FILE_MAX_LINES * 16:
+
+                recent = _read_error_file()[-ERROR_FILE_MAX_LINES // 2:]
+                path.write_text("".join(f"{m}\n" for m in recent), encoding="utf-8")
+
+        except OSError:
+            logger.warning("Monitoring: chybu servera sa nepodarilo zapísať do súboru")
 
 
 def recent_server_errors(now: float | None = None) -> int:
+    """Počet chýb za poslednú hodinu - z pamäte aj zo súboru (prežije reštart)."""
 
     cutoff = (now if now is not None else time.time()) - ERROR_WINDOW_SECONDS
 
     with _errors_lock:
-        return sum(1 for moment in _errors if moment >= cutoff)
+
+        in_memory = {moment for moment in _errors if moment >= cutoff}
+
+    persisted = {moment for moment in _read_error_file() if moment >= cutoff}
+
+    return len(in_memory | persisted)
 
 
 def max_errors_per_hour() -> int:

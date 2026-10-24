@@ -18,7 +18,7 @@ sys.path.insert(
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from urllib.parse import urlencode
@@ -1081,7 +1081,10 @@ def test_overdue_status_cannot_be_set_manually_from_any_state():
         # create_sample_invoice() vždy použije rovnaké číslo faktúry -
         # pred ďalšou iterciou ju treba zmazať, inak spadne na
         # UNIQUE constraint pri ďalšom vytváraní.
+        # (DB trigger chráni vystavené faktúry pred zmazaním - pre upratanie testu
+        # sa na chvíľu vypne; v produkcii to nerobí žiadny kód.)
         db = TestingSessionLocal()
+        db.execute(text("DROP TRIGGER IF EXISTS invoices_no_delete_issued"))
         db.query(Invoice).filter(Invoice.id == invoice_id).delete()
         db.commit()
         db.close()

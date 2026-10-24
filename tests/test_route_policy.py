@@ -183,11 +183,132 @@ def test_account_cap_blocks_new_registrations(isolated, monkeypatch):
     assert account_count(isolated) == 2
 
 
-def test_invalid_cap_means_unlimited(isolated, monkeypatch):
+@pytest.mark.parametrize("value", ["abc", "-1", "1.5"])
+def test_invalid_account_cap_is_a_config_error_not_unlimited(monkeypatch, value):
 
-    monkeypatch.setenv("MAX_ACCOUNTS", "abc")
+    from auth import check_registration_config
 
-    assert register("firma-a").status_code == 303
+    monkeypatch.setenv("MAX_ACCOUNTS", value)
+
+    with pytest.raises(RuntimeError, match="MAX_ACCOUNTS"):
+        check_registration_config()
+
+
+@pytest.mark.parametrize("value", ["flase", "maybe", "2"])
+def test_invalid_registration_flag_is_a_config_error(monkeypatch, value):
+
+    from auth import check_registration_config
+
+    monkeypatch.setenv("REGISTRATION_ENABLED", value)
+
+    with pytest.raises(RuntimeError, match="REGISTRATION_ENABLED"):
+        check_registration_config()
+
+
+def test_valid_registration_config_passes(monkeypatch):
+
+    from auth import check_registration_config
+
+    monkeypatch.setenv("REGISTRATION_ENABLED", "false")
+    monkeypatch.setenv("MAX_ACCOUNTS", "0")
+    check_registration_config()
+
+
+def test_app_refuses_to_start_with_invalid_cap(tmp_path):
+
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    env = {**os.environ, "MAX_ACCOUNTS": "abc", "SECRET_KEY": "k" * 8 + "Zq9" * 10,
+           "APP_ENV": "development", "SESSION_HTTPS_ONLY": "false",
+           "ACCOUNTS_DATABASE_URL": f"sqlite:///{tmp_path / 'a.db'}",
+           "ACCOUNTS_DATA_DIR": str(tmp_path / "acc")}
+
+    result = subprocess.run([sys.executable, "-c", "import main"], cwd=root, env=env,
+                            capture_output=True, text=True)
+
+    assert result.returncode != 0 and "MAX_ACCOUNTS" in result.stderr
+
+
+def test_concurrent_registrations_never_exceed_the_cap(tmp_path, monkeypatch):
+
+    import threading
+
+    from accounts_models import Account  # noqa: F401
+
+    monkeypatch.setattr(tenancy, "ACCOUNTS_DATA_DIR", tmp_path / "accounts")
+    monkeypatch.setenv("MAX_ACCOUNTS", "2")
+
+    # súborová DB s oddelenými spojeniami (ako v produkcii), nie jedno zdieľané
+    engine = create_engine(f"sqlite:///{tmp_path / 'acc.db'}", connect_args={"check_same_thread": False, "timeout": 15})
+    accounts_db.AccountsBase.metadata.create_all(bind=engine)
+    Session = sessionmaker(bind=engine)
+
+    def override():
+
+        db = Session()
+
+        try:
+            yield db
+
+        finally:
+            db.close()
+
+    app.dependency_overrides[accounts_db.get_accounts_db] = override
+    tenancy._engine_cache.clear()
+
+    codes = []
+
+    def worker(index):
+
+        codes.append(register(f"firma-{index}").status_code)
+
+    try:
+
+        threads = [threading.Thread(target=worker, args=(i,)) for i in range(6)]
+
+        for thread in threads:
+            thread.start()
+
+        for thread in threads:
+            thread.join()
+
+        assert account_count(Session) == 2, codes
+        assert sorted(codes).count(303) == 2, codes
+
+    finally:
+
+        app.dependency_overrides.clear()
+        tenancy._engine_cache.clear()
+
+
+@pytest.mark.parametrize("password", ["  password  ", "PASSWORD123", "Heslo123", "ｐａｓｓｗｏｒｄ１２３"])
+def test_password_policy_ignores_case_padding_and_fullwidth(password):
+
+    assert password_problem(password, "firma") is not None
+
+
+def test_username_comparison_ignores_case_and_unicode_form():
+
+    assert password_problem("ＦＩＲＭＡ-Novák", "firma-novák") is not None
+
+
+def test_same_policy_applies_to_change_and_reset_passwords():
+
+    from routers import auth as auth_routes
+
+    # všetky tri cesty (registrácia, zmena, obnova) volajú tú istú funkciu
+    source = open(auth_routes.__file__, encoding="utf-8").read()
+
+    assert source.count("password_problem(") == 3
+
+
+def test_long_passphrases_and_unicode_are_allowed():
+
+    assert password_problem("Dlhé heslo s medzerami a diakritikou: žltá čerešňa 2026", "firma") is None
+    assert password_problem("pŽ1xQ" * 20, "firma") is None
 
 
 def test_weak_password_cannot_register(isolated):
@@ -196,3 +317,9 @@ def test_weak_password_cannot_register(isolated):
 
     assert response.status_code == 422
     assert account_count(isolated) == 0
+
+
+@pytest.mark.parametrize("password", ["Slovensko123", "  QWERTZ123 ", "1Q2W3E4R5T", "Leto2026", "ＰＡＳＳＷＯＲＤ１２３"])
+def test_extended_common_password_list(password):
+
+    assert password_problem(password, "firma") is not None

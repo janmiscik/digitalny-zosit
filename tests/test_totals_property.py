@@ -78,3 +78,67 @@ def test_item_order_does_not_change_totals():
     rng.shuffle(shuffled)
 
     assert calculate_invoice_totals(items) == calculate_invoice_totals(shuffled)
+
+
+# ---------- hraničné prípady ----------
+
+def totals_of(*rows):
+
+    return calculate_invoice_totals([
+        SimpleNamespace(quantity=Decimal(q), unit_price=Decimal(p), vat_rate=v) for q, p, v in rows
+    ])
+
+
+def test_zero_and_tiny_quantities():
+
+    assert totals_of(("0", "100", 23))["total_gross"] == Decimal("0.00")
+    assert totals_of(("0.001", "0.01", 23))["total_gross"] == Decimal("0.00")
+    assert totals_of(("0.001", "10", 23))["total_base"] == Decimal("0.01")
+
+
+def test_discount_as_negative_line_reduces_the_base_per_rate():
+
+    totals = totals_of(("1", "100", 23), ("1", "-10", 23), ("2", "50", 10))
+
+    by_rate = {e["rate"]: e for e in totals["vat_breakdown"]}
+
+    assert by_rate[23]["base"] == Decimal("90.00") and by_rate[23]["vat"] == Decimal("20.70")
+    assert by_rate[10]["base"] == Decimal("100.00") and by_rate[10]["vat"] == Decimal("10.00")
+    assert totals["total_gross"] == Decimal("220.70")
+
+
+def test_mixed_rates_on_one_invoice_are_rounded_per_rate_once():
+
+    totals = totals_of(*[("1", "0.33", 23)] * 3, *[("1", "0.33", 10)] * 3)
+
+    by_rate = {e["rate"]: e for e in totals["vat_breakdown"]}
+
+    # 0.99 * 23 % = 0.2277 -> 0.23 (nie 3 x 0.08 = 0.24 po riadkoch)
+    assert by_rate[23]["vat"] == Decimal("0.23")
+    assert by_rate[10]["vat"] == Decimal("0.10")
+
+
+def test_half_cent_rounds_up():
+
+    assert totals_of(("1", "0.50", 10))["total_vat"] == Decimal("0.05")
+    assert totals_of(("1", "0.05", 10))["total_vat"] == Decimal("0.01")   # 0.005 -> 0.01
+
+
+def test_recalculating_gives_identical_result_every_time():
+
+    items = random_items(random.Random(99))
+    first = calculate_invoice_totals(items)
+
+    for _ in range(5):
+        assert calculate_invoice_totals(items) == first
+
+
+def test_partial_credit_note_is_negative_of_its_own_items_only():
+
+    full = random_items(random.Random(5))
+    part = full[:2]
+
+    credit = SimpleNamespace(items=part, is_credit_note=True)
+
+    assert signed_invoice_total(credit) == -calculate_invoice_totals(part)["total_gross"]
+    assert -signed_invoice_total(credit) <= calculate_invoice_totals(full)["total_gross"]

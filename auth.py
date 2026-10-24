@@ -3,6 +3,7 @@ import hmac
 import os
 import secrets
 import time
+import unicodedata
 
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
@@ -500,18 +501,34 @@ COMMON_PASSWORDS = {
     "qwertyui", "qwerty123", "qwertyuiop", "11111111", "00000000", "iloveyou",
     "abcd1234", "abc12345", "heslo123", "heslo1234", "administrator", "admin123",
     "admin1234", "letmein1", "welcome1", "zosit123", "digitalnyzosit",
+    # slovenské a české zvyky, sezóny, klávesnicové rady a bežné vzory
+    "slovensko", "slovensko1", "slovensko123", "bratislava", "bratislava1", "kosice123",
+    "heslo12345", "mojeheslo", "mojeheslo1", "mojeheslo123", "tajneheslo", "tajne123",
+    "faktura123", "firma123", "firma1234", "zakaznik1", "kancelaria", "jahodka1",
+    "leto2024", "leto2025", "leto2026", "zima2024", "zima2025", "zima2026",
+    "jar2025", "jar2026", "jesen2025", "jesen2026", "heslo2024", "heslo2025", "heslo2026",
+    "password12", "password1!", "password2", "passw0rd1", "p@ssw0rd", "p@ssword1",
+    "qwertz123", "qwertzui", "asdfghjk", "asdfgh123", "zxcvbnm1", "zxcvbnm123",
+    "1q2w3e4r", "1q2w3e4r5t", "q1w2e3r4", "qazwsx123", "1qaz2wsx", "123qweasd",
+    "12341234", "123123123", "987654321", "98765432", "123456789a", "a1234567",
+    "iloveyou1", "monkey123", "dragon123", "football1", "baseball1", "sunshine1",
+    "princess1", "trustno1", "superman1", "master123", "shadow123", "michael1",
+    "login1234", "welcome123", "changeme1", "changeme123", "letmein123", "test1234",
+    "testtest", "testtest1", "user1234", "root1234", "temp1234", "guest1234",
 }
 
 
 def password_problem(password: str, username: str = "") -> str | None:
     """Vráti dôvod, prečo je heslo príliš slabé, alebo None (dĺžka sa kontroluje inde)."""
 
-    normalized = password.strip().lower()
+    # NFKC + casefold: celošírkové znaky, veľkosť písmen a okrajové medzery
+    # nemenia bežné heslo na "bezpečné"
+    normalized = unicodedata.normalize("NFKC", password).strip().casefold()
 
     if normalized in COMMON_PASSWORDS:
         return "Toto heslo je príliš bežné. Zvoľ iné."
 
-    if username and normalized == username.strip().lower():
+    if username and normalized == unicodedata.normalize("NFKC", username).strip().casefold():
         return "Heslo nesmie byť rovnaké ako používateľské meno."
 
     if len(set(password)) < 4:
@@ -520,17 +537,56 @@ def password_problem(password: str, username: str = "") -> str | None:
     return None
 
 
-def registration_enabled() -> bool:
-    """REGISTRATION_ENABLED=false vypne verejnú registráciu nových kont (predvolene zapnutá)."""
+_TRUE_VALUES = {"true", "1", "yes", "on"}
+_FALSE_VALUES = {"false", "0", "no", "off"}
 
-    return os.getenv("REGISTRATION_ENABLED", "true").strip().lower() not in ("false", "0", "no")
+
+def registration_enabled() -> bool:
+    """
+    REGISTRATION_ENABLED=false vypne verejnú registráciu nových kont (predvolene
+    zapnutá). Neznáma hodnota (preklep ako `flase`) je chyba konfigurácie, nie
+    tiché ponechanie registrácie otvorenej.
+    """
+
+    raw = os.getenv("REGISTRATION_ENABLED", "true").strip().lower()
+
+    if raw in _TRUE_VALUES or raw == "":
+        return True
+
+    if raw in _FALSE_VALUES:
+        return False
+
+    raise RuntimeError(
+        f"Neplatná hodnota REGISTRATION_ENABLED={raw!r}. Použi `true` alebo `false`."
+    )
 
 
 def max_accounts() -> int:
-    """MAX_ACCOUNTS: strop počtu kont na serveri (0 alebo nenastavené = bez limitu)."""
+    """
+    MAX_ACCOUNTS: strop počtu kont na serveri (nenastavené alebo 0 = bez limitu).
+    Neplatná hodnota (text, záporné číslo) je chyba konfigurácie - nezamieňa sa
+    za "bez limitu".
+    """
+
+    raw = os.getenv("MAX_ACCOUNTS", "").strip()
+
+    if not raw:
+        return 0
 
     try:
-        return max(0, int(os.getenv("MAX_ACCOUNTS", "0")))
+        value = int(raw)
 
     except ValueError:
-        return 0
+        value = -1
+
+    if value < 0:
+        raise RuntimeError(f"Neplatná hodnota MAX_ACCOUNTS={raw!r}. Použi celé číslo 0 alebo viac.")
+
+    return value
+
+
+def check_registration_config() -> None:
+    """Zavolá sa pri štarte: appka sa so zlou konfiguráciou registrácie nespustí."""
+
+    registration_enabled()
+    max_accounts()

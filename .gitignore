@@ -8,3 +8,6 @@ __pycache__/
 uploads/
 backups/
 data/
+
+.pytest_tmp/
+server-errors.log

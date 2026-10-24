@@ -110,3 +110,11 @@ SQLite engine kont aj `accounts.db` teraz používa `journal_mode=WAL` a `synchr
 3. **Fakturácia:** všetky súčty (PDF, export, dashboard, pripomienky, Peppol) idú cez jednu funkciu; zálohové faktúry sa do tržieb nezapočítavajú. Pridané náhodné testy invariantov (DPH po sadzbách, dobropis je presný opak). Čiastočné úhrady appka nepozná (faktúra je buď uhradená, alebo nie).
 4. **Databáza:** cudzie kľúče sú zapnuté, zápisy serializované, migrácie bežia pri štarte. Pridané: vystavenú faktúru nemožno zmazať ani cez cascade (ochrana na úrovni modelu). Appka nemá žiadnu trasu na mazanie zákazníkov ani zákaziek.
 5. **Prevádzka:** `/health/details` hlási aj veľa chýb 500 za hodinu, málo miesta na disku a nebežiaci plánovač záloh. Chyby sa logujú s tracebackom (Railway Deploy Logs). Notifikácie e-mailom appka neposiela; na upozornenia slúži externý monitoring (UptimeRobot).
+
+## Dodatok: ďalšie postrehy (24. 10. 2026)
+
+- **Strop kont:** kontrola a vloženie konta idú pod jedným zámkom; neplatné `MAX_ACCOUNTS` alebo `REGISTRATION_ENABLED` appku nespustia (nepovažujú sa za „bez limitu"). Zámok platí pre jeden proces; pri viacerých replikách by sa kontrola musela presunúť do databázy.
+- **Vystavené faktúry:** okrem ochrany v modeli aj databázové triggery (platia aj pri priamom SQL a hromadných operáciách): nemožno zmazať ani vrátiť do návrhu vystavenú faktúru, ani meniť jej položky. Kto má priamy prístup k súboru databázy, ich vie zrušiť.
+- **Počítadlo chýb** sa ukladá aj do súboru vo Volume (prežije reštart). Pre viac replík alebo upozornenia by bolo treba externé logovanie.
+- **Testy:** skutočné HTTP požiadavky na citlivé trasy, hraničné prípady súm (nulové a malé množstvá, zľavy, zmiešané sadzby, polcent), rozšírený zoznam bežných hesiel. Sadzby DPH a režim treba overiť s účtovníkom; testovacie sadzby nie sú daňové potvrdenie.
+- **Hygiena archívu:** `.pytest_tmp/` a `server-errors.log` sú v `.gitignore` aj `.dockerignore`; archív pri odovzdaní nesmie obsahovať `.env`, databázy ani zálohy.

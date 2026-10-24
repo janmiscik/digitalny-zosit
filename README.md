@@ -46,7 +46,7 @@ Potom v `.env` nastav:
 
 - **`REGISTRATION_ENABLED`** – `false` vypne verejnú registráciu nových kont (predvolene zapnutá). Ak appku používaš len ty, po vytvorení svojho konta ju vypni. **`MAX_ACCOUNTS`** – strop počtu kont na serveri (0 alebo nenastavené = bez limitu).
 
-- **`MONITOR_MAX_ERRORS_PER_HOUR`** – po koľkých neošetrených chybách servera (HTTP 500) za hodinu `/health/details` ohlási problém (predvolene 5). Monitoring ďalej hlási málo miesta na disku (pod 200 MB alebo 10 %) a nebežiaci plánovač záloh.
+- **`MONITOR_MAX_ERRORS_PER_HOUR`** – po koľkých neošetrených chybách servera (HTTP 500) za hodinu `/health/details` ohlási problém (predvolene 5). Počet chýb sa ukladá aj do súboru `server-errors.log` vo Volume, takže prežije reštart (appka beží v jednej replike). Monitoring ďalej hlási málo miesta na disku (pod 200 MB alebo 10 %) a nebežiaci plánovač záloh.
 
 - **`SESSION_HTTPS_ONLY`** – či sa prihlasovacia cookie posiela iba cez HTTPS (predvolené `true`). Nechaj `true` v produkcii (Railway a pod.). Iba ak appku spúšťaš lokálne cez obyčajné `http://localhost`, nastav `APP_ENV=development` a `false` - v produkcii `false` appku nespustí. Inak sa neprihlásiš (prehliadač cookie s príznakom `Secure` cez obyčajné http vôbec neuloží).
 
@@ -326,7 +326,7 @@ pip install -r requirements-dev.txt   # raz, pytest sa do produkčného obrazu n
 python -m pytest tests/ -q
 ```
 
-Aktuálne **1317 testov**, rozdelených podľa oblasti:
+Aktuálne **1363 testov**, rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|
