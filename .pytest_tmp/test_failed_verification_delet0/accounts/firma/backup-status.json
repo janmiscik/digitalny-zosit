@@ -1,0 +1,17 @@
+{
+  "last_attempt_at": "2026-10-24T13:44:29.331237+00:00",
+  "verification": {
+    "at": "2026-10-24T13:44:29.376789+00:00",
+    "file": "rucne-20261024-134429.zip",
+    "ok": false,
+    "problems": [
+      "vymyslená chyba"
+    ],
+    "counts": {},
+    "files_checked": 0,
+    "revision": null,
+    "schema_current": false
+  },
+  "last_error": "Záloha neprešla overením obnovy: vymyslená chyba",
+  "last_error_at": "2026-10-24T13:44:29.377265+00:00"
+}

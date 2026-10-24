@@ -854,6 +854,25 @@ class QuoteItem(Base):
 
 
 # =========================================
+# OCHRANA VYSTAVENÝCH FAKTÚR PRED ZMAZANÍM
+#
+# Vystavená faktúra (iný stav než Návrh) sa nesmie zmazať - ani omylom cez
+# cascade pri zmazaní zákazníka či zákazky, ani budúcim kódom. Opravuje sa
+# dobropisom/stornom. Návrhy sa mazať smú (route /invoices/{id}/delete).
+# =========================================
+
+@event.listens_for(Invoice, "before_delete")
+def _refuse_deleting_issued_invoice(mapper, connection, target):
+
+    if target.status != "Návrh":
+
+        raise ValueError(
+            f"Vystavenú faktúru {target.invoice_number} nemožno zmazať "
+            f"(stav: {target.status}). Použi storno alebo dobropis."
+        )
+
+
+# =========================================
 # AUTOMATICKÉ MAZANIE SÚBOROV PRI ZMAZANÍ ZÁZNAMU
 #
 # Explicitný endpoint na zmazanie fotky (routers/jobs.py) už fyzický

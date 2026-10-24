@@ -197,3 +197,113 @@ def test_unrecovered_interrupted_restore_is_degraded(client):
     body = get(client).json()
 
     assert any(p["kind"] == "restore" for p in body["problems"])
+
+
+# ---------- chyby servera, disk, plánovač ----------
+
+@pytest.fixture(autouse=True)
+def clean_error_counter():
+
+    monitoring._errors.clear()
+
+    yield
+
+    monitoring._errors.clear()
+
+
+def fresh_backup_status():
+
+    write_status(last_success_at=now_iso(), last_error=None)
+
+
+def test_many_server_errors_make_status_degraded(client, monkeypatch):
+
+    fresh_backup_status()
+    monkeypatch.setenv("MONITOR_MAX_ERRORS_PER_HOUR", "3")
+
+    for _ in range(2):
+        monitoring.record_server_error()
+
+    assert get(client).status_code == 200
+
+    monitoring.record_server_error()
+
+    response = get(client)
+
+    assert response.status_code == 503
+    assert any(p["kind"] == "errors" for p in response.json()["problems"])
+
+
+def test_old_errors_are_not_counted():
+
+    monitoring._errors.extend([1000.0, 1001.0])
+
+    assert monitoring.recent_server_errors() == 0
+    assert monitoring.recent_server_errors(now=1002.0) == 2
+
+
+def test_unhandled_exception_is_counted():
+
+    import main
+
+    boom = TestClient(main.app, raise_server_exceptions=False)
+
+    @main.app.get("/__boom_test", include_in_schema=False)
+    def boom_route():
+        raise RuntimeError("test")
+
+    try:
+
+        before = monitoring.recent_server_errors()
+        assert boom.get("/__boom_test").status_code in (303, 500)
+        assert monitoring.recent_server_errors() == before + 1
+
+    finally:
+
+        # testovacia trasa sa nesmie dostať do ostatných testov
+        main.app.router.routes[:] = [
+            route for route in main.app.router.routes if getattr(route, "path", "") != "/__boom_test"
+        ]
+
+
+def test_low_disk_space_is_reported(client, monkeypatch):
+
+    fresh_backup_status()
+
+    class Usage:
+        total = 1000 * 1024 * 1024
+        free = 50 * 1024 * 1024
+
+    monkeypatch.setattr(monitoring.shutil, "disk_usage", lambda path: Usage)
+
+    response = get(client)
+
+    assert response.status_code == 503
+    assert any(p["kind"] == "disk" for p in response.json()["problems"])
+
+
+def test_enough_disk_space_is_fine(client, monkeypatch):
+
+    class Usage:
+        total = 10_000 * 1024 * 1024
+        free = 5_000 * 1024 * 1024
+
+    monkeypatch.setattr(monitoring.shutil, "disk_usage", lambda path: Usage)
+
+    assert monitoring.disk_problem() is None
+
+
+def test_dead_scheduler_is_reported(client, monkeypatch):
+
+    fresh_backup_status()
+
+    class Dead:
+        def is_alive(self):
+            return False
+
+    monkeypatch.setattr(auto_backup, "_scheduler", Dead())
+
+    response = get(client)
+
+    assert response.status_code == 503
+    assert any(p["kind"] == "scheduler" for p in response.json()["problems"])

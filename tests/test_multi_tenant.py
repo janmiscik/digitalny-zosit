@@ -81,7 +81,7 @@ def _csrf_token(client: TestClient, path: str) -> str:
     return match.group(1)
 
 
-def register(client: TestClient, username: str, password: str = "heslo1234"):
+def register(client: TestClient, username: str, password: str = "Bezpecne-heslo-9"):
 
     csrf = _csrf_token(client, "/register")
 
@@ -159,7 +159,7 @@ def test_registration_rejects_mismatched_passwords():
         data={
             "csrf_token": csrf,
             "username": "firmaA",
-            "password": "heslo1234",
+            "password": "Bezpecne-heslo-9",
             "password_confirm": "ineHeslo"
         }
     )

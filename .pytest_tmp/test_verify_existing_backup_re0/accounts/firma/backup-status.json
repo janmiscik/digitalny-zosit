@@ -1,0 +1,19 @@
+{
+  "last_attempt_at": "2026-10-24T13:44:47.222382+00:00",
+  "verification": {
+    "at": "2026-10-24T13:44:47.348964+00:00",
+    "file": "rucne-20261024-134447.zip",
+    "ok": false,
+    "problems": [
+      "Záloha nie je platný ZIP archív."
+    ],
+    "counts": {},
+    "files_checked": 0,
+    "revision": null,
+    "schema_current": false
+  },
+  "last_success_at": "2026-10-24T13:44:47.326068+00:00",
+  "last_file": "rucne-20261024-134447.zip",
+  "last_kind": "manual",
+  "last_error": null
+}

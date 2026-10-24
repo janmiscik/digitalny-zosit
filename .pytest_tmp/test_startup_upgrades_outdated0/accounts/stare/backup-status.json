@@ -1,0 +1,24 @@
+{
+  "last_attempt_at": "2026-10-24T13:45:08.028618+00:00",
+  "verification": {
+    "at": "2026-10-24T13:45:08.119001+00:00",
+    "file": "pred-aktualizaciou-20261024-134508.zip",
+    "ok": true,
+    "problems": [],
+    "counts": {
+      "customers": 2,
+      "jobs": 0,
+      "invoices": 0,
+      "invoice_items": 0,
+      "quotes": 0,
+      "job_photos": 0
+    },
+    "files_checked": 0,
+    "revision": "b5d7f9a1c324",
+    "schema_current": false
+  },
+  "last_success_at": "2026-10-24T13:45:08.119029+00:00",
+  "last_file": "pred-aktualizaciou-20261024-134508.zip",
+  "last_kind": "pre-upgrade",
+  "last_error": null
+}

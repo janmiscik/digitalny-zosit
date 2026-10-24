@@ -101,3 +101,12 @@ SQLite engine kont aj `accounts.db` teraz používa `journal_mode=WAL` a `synchr
 - **Produkčný režim** určuje `APP_ENV` (nenastavené = `production`), nie `SESSION_HTTPS_ONLY`. V produkcii sa vždy vynucuje silný `SECRET_KEY` a zapnuté HTTPS cookie; `SESSION_HTTPS_ONLY=false` už kontrolu kľúča neobíde. Lokálne: `APP_ENV=development`. Na Railway nastav `APP_ENV=production`.
 - **Audit stopa:** storno faktúry vyžaduje dôvod, zmena dátumu úhrady sa loguje, `/audit-log` má filter podľa typu, hľadanie a stránkovanie. Tabuľka `audit_log` má triggery proti UPDATE/DELETE. Nejde o nemenný archív ani náhradu zákonných povinností: kto má priamy prístup k súboru databázy, vie triggery zrušiť.
 - **Nerobí sa bez Railway:** reálna obnova zo zálohy z R2, test non-root na skutočnom Volume, šifrovanie záloh pred nahratím a ochrana proti zmazaniu v R2 (Object Lock) sú prevádzkové kroky, nie kód.
+
+
+## Dodatok: päť auditov (24. 10. 2026)
+
+1. **Preskočené testy:** dva testy Docker entrypointu vyžadujú root a na GitHub Actions by sa potichu preskočili. Workflow ich teraz spúšťa cez sudo a zlyhá, ak sa preskočia; pribudla aj kontrola, že Docker obraz beží pod používateľom `app`.
+2. **Bezpečnosť:** test prejde všetky trasy a vyžaduje prihlásenie (okrem 11 verejných) a CSRF pri každej meniacej trase. Pridané: `REGISTRATION_ENABLED` a `MAX_ACCOUNTS` (verejná registrácia mohla plniť disk), odmietnutie bežných hesiel a hesla rovnakého ako meno. Upload, izolácia kont, session a CSP sa nemenili. CSP stále povoľuje `unsafe-inline`.
+3. **Fakturácia:** všetky súčty (PDF, export, dashboard, pripomienky, Peppol) idú cez jednu funkciu; zálohové faktúry sa do tržieb nezapočítavajú. Pridané náhodné testy invariantov (DPH po sadzbách, dobropis je presný opak). Čiastočné úhrady appka nepozná (faktúra je buď uhradená, alebo nie).
+4. **Databáza:** cudzie kľúče sú zapnuté, zápisy serializované, migrácie bežia pri štarte. Pridané: vystavenú faktúru nemožno zmazať ani cez cascade (ochrana na úrovni modelu). Appka nemá žiadnu trasu na mazanie zákazníkov ani zákaziek.
+5. **Prevádzka:** `/health/details` hlási aj veľa chýb 500 za hodinu, málo miesta na disku a nebežiaci plánovač záloh. Chyby sa logujú s tracebackom (Railway Deploy Logs). Notifikácie e-mailom appka neposiela; na upozornenia slúži externý monitoring (UptimeRobot).

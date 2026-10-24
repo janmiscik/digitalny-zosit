@@ -23,7 +23,7 @@ import tenancy
 from accounts_models import Account
 from main import app
 
-PASSWORD = "heslo1234"
+PASSWORD = "Bezpecne-heslo-9"
 PREVIOUS_REVISION = "d7f9b1c3e546"          # revízia pred customer_notes (head e8a0b2c4d657)
 
 

@@ -1,0 +1,34 @@
+{
+  "last_attempt_at": "2026-10-24T13:49:44.900241+00:00",
+  "verification": {
+    "at": "2026-10-24T13:49:45.005702+00:00",
+    "file": "rucne-20261024-134944-2.zip",
+    "ok": true,
+    "problems": [],
+    "counts": {
+      "customers": 1,
+      "jobs": 0,
+      "invoices": 0,
+      "invoice_items": 0,
+      "quotes": 0,
+      "job_photos": 0
+    },
+    "files_checked": 0,
+    "revision": "a1b2c3d4e5f6",
+    "schema_current": true
+  },
+  "last_success_at": "2026-10-24T13:49:45.005739+00:00",
+  "last_file": "rucne-20261024-134944-2.zip",
+  "last_kind": "manual",
+  "last_error": null,
+  "offsite": {
+    "at": "2026-10-24T13:49:45.078064+00:00",
+    "ok": true,
+    "file": "rucne-20261024-134944-2.zip",
+    "error": null,
+    "sha256": "5f6358a69d39ef576fb87e80c0f48fa8e515d5fa5699bf1c7692433900e683a4",
+    "verified": true,
+    "warning": "staré zálohy sa v úložisku nepodarilo zmazať (PermissionError)",
+    "encrypted": false
+  }
+}

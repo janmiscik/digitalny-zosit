@@ -44,6 +44,10 @@ Potom v `.env` nastav:
 
 - **`APP_ENV`** – `production` (predvolené, aj keď premennú nenastavíš) alebo `development`. V produkcii appka vždy vyžaduje silný `SECRET_KEY` a zapnuté `SESSION_HTTPS_ONLY`, bez ohľadu na iné nastavenia. Lokálne vývoj: `APP_ENV=development`. Neplatná hodnota (preklep) appku nespustí.
 
+- **`REGISTRATION_ENABLED`** – `false` vypne verejnú registráciu nových kont (predvolene zapnutá). Ak appku používaš len ty, po vytvorení svojho konta ju vypni. **`MAX_ACCOUNTS`** – strop počtu kont na serveri (0 alebo nenastavené = bez limitu).
+
+- **`MONITOR_MAX_ERRORS_PER_HOUR`** – po koľkých neošetrených chybách servera (HTTP 500) za hodinu `/health/details` ohlási problém (predvolene 5). Monitoring ďalej hlási málo miesta na disku (pod 200 MB alebo 10 %) a nebežiaci plánovač záloh.
+
 - **`SESSION_HTTPS_ONLY`** – či sa prihlasovacia cookie posiela iba cez HTTPS (predvolené `true`). Nechaj `true` v produkcii (Railway a pod.). Iba ak appku spúšťaš lokálne cez obyčajné `http://localhost`, nastav `APP_ENV=development` a `false` - v produkcii `false` appku nespustí. Inak sa neprihlásiš (prehliadač cookie s príznakom `Secure` cez obyčajné http vôbec neuloží).
 
 - **`ACCOUNTS_DATABASE_URL`** – master databáza kont (predvolené `sqlite:///./data/accounts.db`).
@@ -322,7 +326,7 @@ pip install -r requirements-dev.txt   # raz, pytest sa do produkčného obrazu n
 python -m pytest tests/ -q
 ```
 
-Aktuálne **1033 testov**, rozdelených podľa oblasti:
+Aktuálne **1317 testov**, rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|
@@ -361,6 +365,9 @@ Aktuálne **1033 testov**, rozdelených podľa oblasti:
 | `test_monitoring.py` | `/health/details`: token, zastaraná/chýbajúca záloha, zlyhanie, off-site, migrácie, žiadny únik textov chýb |
 | `test_session_invalidation.py` | Odhlásenie ostatných zariadení po zmene hesla, zmazané konto, cookie bez odtlačku |
 | `test_change_password.py` | Zmena hesla: úspech, nové prihlásenie, zlé súčasné heslo, validácia, limit pokusov, CSRF, vyžaduje prihlásenie, izolácia kont, audit log |
+| `test_route_policy.py` | Každá trasa vyžaduje prihlásenie (okrem zoznamu verejných) a každá meniaca trasa má CSRF; vypnutie/strop registrácie; slabé heslá |
+| `test_totals_property.py` | Náhodné kontroly súm faktúry (DPH po sadzbách, zaokrúhľovanie, dobropis = presný opak) |
+| `test_issued_invoice_protection.py` | Vystavenú faktúru nemožno zmazať ani cez cascade |
 | `test_backup_crypto.py` | Šifrovanie záloh: rozšifrovanie, zlé heslo, upravený/odrezaný/prehodený súbor, test obnovy nad rozšifrovanou kópiou, nič sa nenahrá pri zlom hesle, CLI `decrypt_backup.py` |
 | `test_offsite_backup.py` | Nahrávanie záloh mimo servera: zapnutie podľa premenných, kľúče/predpona, kontrola veľkosti, SHA-256 a stiahnutie späť, test obnovy stiahnutej kópie, retencia po kontách, chyba siete nezhodí lokálnu zálohu, upozornenia v Nastaveniach |
 | `test_accounting.py` | Zaokrúhľovanie DPH po sadzbách (nie po riadkoch), rekapitulácia, súlad s Peppol BR-CO-17 |

@@ -1,0 +1,24 @@
+{
+  "last_attempt_at": "2026-10-24T13:44:46.088889+00:00",
+  "verification": {
+    "at": "2026-10-24T13:44:46.273575+00:00",
+    "file": "rucne-20261024-134446.zip",
+    "ok": true,
+    "problems": [],
+    "counts": {
+      "customers": 2,
+      "jobs": 1,
+      "invoices": 0,
+      "invoice_items": 0,
+      "quotes": 0,
+      "job_photos": 1
+    },
+    "files_checked": 2,
+    "revision": "a1b2c3d4e5f6",
+    "schema_current": true
+  },
+  "last_success_at": "2026-10-24T13:44:46.200961+00:00",
+  "last_file": "rucne-20261024-134446.zip",
+  "last_kind": "manual",
+  "last_error": null
+}

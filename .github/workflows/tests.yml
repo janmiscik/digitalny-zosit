@@ -19,4 +19,21 @@ jobs:
       - run: python -m pytest tests/ -q
         env:
           SECRET_KEY: ci-test-secret
+      # Testy entrypointu (pod akým používateľom beží appka) vyžadujú root, setpriv a
+      # useradd; bez root práv by sa na CI potichu PRESKOČILI. Beh cez sudo + kontrola,
+      # že sa naozaj vykonali (0 skipped).
+      - name: Testy Docker entrypointu ako root (nesmú sa preskočiť)
+        run: |
+          sudo -E env "PATH=$PATH" python -m pytest tests/test_deploy_hardening.py -q -rs -k entrypoint | tee entry.log
+          ! grep -qi "skipped" entry.log
+        env:
+          SECRET_KEY: ci-test-secret
+      # Skutočný Docker obraz: appka sa nesmie spustiť ako root a Volume musí byť zapisovateľný
+      - name: Docker obraz beží pod používateľom app
+        run: |
+          docker build -t digitalny-zosit:ci .
+          dir="$(mktemp -d)"
+          out="$(docker run --rm -v "$dir:/app/data" digitalny-zosit:ci id -un)"
+          echo "$out"
+          echo "$out" | tail -1 | grep -qx app
       - run: pip install pip-audit && pip-audit -r requirements-dev.txt

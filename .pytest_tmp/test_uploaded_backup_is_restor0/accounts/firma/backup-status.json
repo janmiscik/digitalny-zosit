@@ -1,0 +1,34 @@
+{
+  "last_attempt_at": "2026-10-24T13:49:34.711152+00:00",
+  "verification": {
+    "at": "2026-10-24T13:49:34.847982+00:00",
+    "file": "rucne-20261024-134934.zip",
+    "ok": true,
+    "problems": [],
+    "counts": {
+      "customers": 1,
+      "jobs": 0,
+      "invoices": 0,
+      "invoice_items": 0,
+      "quotes": 0,
+      "job_photos": 0
+    },
+    "files_checked": 0,
+    "revision": "a1b2c3d4e5f6",
+    "schema_current": true
+  },
+  "last_success_at": "2026-10-24T13:49:34.848014+00:00",
+  "last_file": "rucne-20261024-134934.zip",
+  "last_kind": "manual",
+  "last_error": null,
+  "offsite": {
+    "at": "2026-10-24T13:49:34.942863+00:00",
+    "ok": true,
+    "file": "rucne-20261024-134934.zip",
+    "error": null,
+    "sha256": "65d00ea7c1cd667a20633ead67677a9ebf8f093e79bd299871b5d3c231ec694c",
+    "verified": true,
+    "warning": null,
+    "encrypted": false
+  }
+}

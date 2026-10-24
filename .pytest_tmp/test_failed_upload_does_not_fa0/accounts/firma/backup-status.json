@@ -1,0 +1,34 @@
+{
+  "last_attempt_at": "2026-10-24T13:49:33.541092+00:00",
+  "verification": {
+    "at": "2026-10-24T13:49:33.651364+00:00",
+    "file": "rucne-20261024-134933.zip",
+    "ok": true,
+    "problems": [],
+    "counts": {
+      "customers": 1,
+      "jobs": 0,
+      "invoices": 0,
+      "invoice_items": 0,
+      "quotes": 0,
+      "job_photos": 0
+    },
+    "files_checked": 0,
+    "revision": "a1b2c3d4e5f6",
+    "schema_current": true
+  },
+  "last_success_at": "2026-10-24T13:49:33.651388+00:00",
+  "last_file": "rucne-20261024-134933.zip",
+  "last_kind": "manual",
+  "last_error": null,
+  "offsite": {
+    "at": "2026-10-24T13:49:33.655012+00:00",
+    "ok": false,
+    "file": "rucne-20261024-134933.zip",
+    "error": "ConnectionError: sieť nedostupná",
+    "sha256": null,
+    "verified": false,
+    "warning": null,
+    "encrypted": false
+  }
+}

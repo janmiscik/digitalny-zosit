@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import os
 import secrets
 import time
 
@@ -488,3 +489,48 @@ def reset_request_allowed(request: Request) -> bool:
     _reset_requests[key] = attempts
 
     return True
+
+
+# =========================================
+# POLITIKA REGISTRÁCIE A HESIEL
+# =========================================
+
+COMMON_PASSWORDS = {
+    "12345678", "123456789", "1234567890", "password", "password1", "password123",
+    "qwertyui", "qwerty123", "qwertyuiop", "11111111", "00000000", "iloveyou",
+    "abcd1234", "abc12345", "heslo123", "heslo1234", "administrator", "admin123",
+    "admin1234", "letmein1", "welcome1", "zosit123", "digitalnyzosit",
+}
+
+
+def password_problem(password: str, username: str = "") -> str | None:
+    """Vráti dôvod, prečo je heslo príliš slabé, alebo None (dĺžka sa kontroluje inde)."""
+
+    normalized = password.strip().lower()
+
+    if normalized in COMMON_PASSWORDS:
+        return "Toto heslo je príliš bežné. Zvoľ iné."
+
+    if username and normalized == username.strip().lower():
+        return "Heslo nesmie byť rovnaké ako používateľské meno."
+
+    if len(set(password)) < 4:
+        return "Heslo je príliš jednoduché (málo rôznych znakov)."
+
+    return None
+
+
+def registration_enabled() -> bool:
+    """REGISTRATION_ENABLED=false vypne verejnú registráciu nových kont (predvolene zapnutá)."""
+
+    return os.getenv("REGISTRATION_ENABLED", "true").strip().lower() not in ("false", "0", "no")
+
+
+def max_accounts() -> int:
+    """MAX_ACCOUNTS: strop počtu kont na serveri (0 alebo nenastavené = bez limitu)."""
+
+    try:
+        return max(0, int(os.getenv("MAX_ACCOUNTS", "0")))
+
+    except ValueError:
+        return 0

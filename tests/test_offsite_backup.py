@@ -322,8 +322,8 @@ def test_settings_page_shows_offsite_state(s3):
     client = TestClient(app)
     token = re.search(r'name="csrf_token" value="([^"]+)"', client.get("/register").text).group(1)
 
-    client.post("/register", data={"csrf_token": token, "username": "offs", "password": "heslo1234",
-                                   "password_confirm": "heslo1234"}, follow_redirects=False)
+    client.post("/register", data={"csrf_token": token, "username": "offs", "password": "Bezpecne-heslo-9",
+                                   "password_confirm": "Bezpecne-heslo-9"}, follow_redirects=False)
 
     token = re.search(r'name="csrf_token" value="([^"]+)"', client.get("/settings").text).group(1)
     client.post("/settings/backups/run", data={"csrf_token": token}, follow_redirects=False)

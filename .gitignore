@@ -8,6 +8,3 @@ __pycache__/
 uploads/
 backups/
 data/
-.pytest_tmp
-.pytest_tmp/
-

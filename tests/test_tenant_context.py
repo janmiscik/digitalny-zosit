@@ -63,7 +63,7 @@ def logged_in_client(username):
     response = client.post(
         "/register",
         data={"csrf_token": token, "username": username,
-              "password": "heslo1234", "password_confirm": "heslo1234"},
+              "password": "Bezpecne-heslo-9", "password_confirm": "Bezpecne-heslo-9"},
         follow_redirects=False,
     )
 

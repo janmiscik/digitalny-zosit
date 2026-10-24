@@ -17,10 +17,13 @@ from auth import (
     is_login_locked,
     login_user,
     logout_user,
+    max_accounts,
     needs_rehash,
+    password_problem,
     register_failed_login,
     register_registration,
     register_successful_login,
+    registration_enabled,
     registration_retry_after,
     require_login_page,
     reset_request_allowed,
@@ -45,6 +48,7 @@ _DUMMY_PASSWORD_HASH = hash_password(hash_password(""))
 MIN_USERNAME_LENGTH = 3
 MAX_USERNAME_LENGTH = 50
 MIN_PASSWORD_LENGTH = 8
+REGISTRATION_CLOSED_MESSAGE = "Registrácia nových kont je na tomto serveri vypnutá."
 
 
 def _log_to_account_db(account_slug: str, action: str, detail: str | None = None) -> None:
@@ -74,6 +78,15 @@ def _log_to_account_db(account_slug: str, action: str, detail: str | None = None
 
 @router.get("/register")
 def register_form(request: Request):
+
+    if not registration_enabled():
+
+        return templates.TemplateResponse(
+            request=request,
+            name="register.html",
+            context={"error": REGISTRATION_CLOSED_MESSAGE},
+            status_code=403
+        )
 
     return templates.TemplateResponse(
         request=request,
@@ -107,6 +120,14 @@ def register_submit(
             status_code=status_code
         )
 
+    if not registration_enabled():
+        return error(REGISTRATION_CLOSED_MESSAGE, status_code=403)
+
+    limit = max_accounts()
+
+    if limit and accounts_db.query(Account).count() >= limit:
+        return error(REGISTRATION_CLOSED_MESSAGE, status_code=403)
+
     retry_after = registration_retry_after(request)
 
     if retry_after:
@@ -133,6 +154,12 @@ def register_submit(
     if password != password_confirm:
 
         return error("Heslá sa nezhodujú.")
+
+    weak = password_problem(password, username)
+
+    if weak:
+
+        return error(weak)
 
     existing = (
         accounts_db
@@ -398,12 +425,19 @@ def change_password(
             detail=f"Nové heslo musí mať aspoň {MIN_PASSWORD_LENGTH} znakov."
         )
 
+
     if len(new_password) > MAX_PASSWORD_LENGTH:
 
         raise HTTPException(
             status_code=422,
             detail=f"Nové heslo môže mať najviac {MAX_PASSWORD_LENGTH} znakov."
         )
+
+    weak = password_problem(new_password, account.username)
+
+    if weak:
+
+        raise HTTPException(status_code=422, detail=weak)
 
     if new_password != new_password_confirm:
 
@@ -666,9 +700,16 @@ def reset_password_submit(
 
         return fail(f"Heslo musí mať aspoň {MIN_PASSWORD_LENGTH} znakov.", 422)
 
+
     if len(new_password) > MAX_PASSWORD_LENGTH:
 
         return fail(f"Heslo môže mať najviac {MAX_PASSWORD_LENGTH} znakov.", 422)
+
+    weak = password_problem(new_password, account.username)
+
+    if weak:
+
+        return fail(weak, 422)
 
     if new_password != new_password_confirm:
 

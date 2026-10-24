@@ -323,6 +323,8 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
         request.url.path
     )
 
+    monitoring.record_server_error()
+
     wants_html = "text/html" in request.headers.get("accept", "")
 
     if not wants_html:

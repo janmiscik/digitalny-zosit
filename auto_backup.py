@@ -785,6 +785,10 @@ class BackupScheduler:
         self._thread = threading.Thread(target=self._loop, name="backup-scheduler", daemon=True)
         self._thread.start()
 
+    def is_alive(self) -> bool:
+
+        return self._thread is not None and self._thread.is_alive()
+
     def stop(self) -> None:
 
         self._stop.set()
