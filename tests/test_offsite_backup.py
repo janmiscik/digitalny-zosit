@@ -353,7 +353,7 @@ def test_upload_stores_sha256_and_marks_verified(s3, tmp_path):
 
     assert result.ok and result.verified
     assert result.sha256 == offsite_backup.file_sha256(path)
-    assert s3.objects[("moj-bucket", result.key)]["meta"] == {"sha256": result.sha256}
+    assert s3.objects[("moj-bucket", result.key)]["meta"] == {"sha256": result.sha256, "encrypted": "false"}
 
 
 def test_validator_failure_marks_backup_as_failed_and_keeps_old_ones(s3, tmp_path, monkeypatch):

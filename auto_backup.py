@@ -642,6 +642,7 @@ def run_backup(slug: str, kind: str = "auto") -> BackupResult:
                 "sha256": offsite.sha256,
                 "verified": offsite.verified,
                 "warning": offsite.warning,
+                "encrypted": offsite.encrypted,
             }
 
         _write_status(slug, status)

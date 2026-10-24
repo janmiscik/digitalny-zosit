@@ -292,6 +292,7 @@ Zálohy ležia na tom istom Volume ako dáta, takže pri jeho strate zmiznú spo
 | `OFFSITE_BACKUP_REGION` | región (predvolené `auto`) |
 | `OFFSITE_BACKUP_PREFIX` | predpona kľúčov (predvolené `digitalny-zosit`) |
 | `OFFSITE_BACKUP_KEEP` | koľko záloh na konto držať v bucketi (predvolené 30) |
+| `BACKUP_ENCRYPTION_KEY` | voliteľné heslo (min. 20 znakov): zálohy sa pred nahratím zašifrujú (AES-256-GCM) a v bucketi majú príponu `.enc`. **Ulož ho mimo Railway** (správca hesiel) - bez neho sa zálohy nedajú obnoviť. Rozšifrovanie: `python decrypt_backup.py zaloha.zip.enc zaloha.zip`, výsledok nahraj cez Nastavenia → Obnova zo zálohy. Pri zlom hesle sa nenahrá nič (nikdy nie nešifrovaná záloha). |
 
 Súbory sa ukladajú ako `<predpona>/<konto>/<názov zálohy>.zip`. Po nahratí appka overí veľkosť súboru v bucketi a poreže staré zálohy nad limit (len v priečinku daného konta). Chyba nahrávania nezhodí vytvorenie zálohy – zobrazí sa ako upozornenie v Nastaveniach. Bucket nastav ako **súkromný** (zálohy obsahujú dáta zákazníkov) a pre appku vytvor kľúč len s prístupom k tomuto bucketu.
 
@@ -321,7 +322,7 @@ pip install -r requirements-dev.txt   # raz, pytest sa do produkčného obrazu n
 python -m pytest tests/ -q
 ```
 
-Aktuálne **1007 testov**, rozdelených podľa oblasti:
+Aktuálne **1033 testov**, rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|
@@ -360,6 +361,7 @@ Aktuálne **1007 testov**, rozdelených podľa oblasti:
 | `test_monitoring.py` | `/health/details`: token, zastaraná/chýbajúca záloha, zlyhanie, off-site, migrácie, žiadny únik textov chýb |
 | `test_session_invalidation.py` | Odhlásenie ostatných zariadení po zmene hesla, zmazané konto, cookie bez odtlačku |
 | `test_change_password.py` | Zmena hesla: úspech, nové prihlásenie, zlé súčasné heslo, validácia, limit pokusov, CSRF, vyžaduje prihlásenie, izolácia kont, audit log |
+| `test_backup_crypto.py` | Šifrovanie záloh: rozšifrovanie, zlé heslo, upravený/odrezaný/prehodený súbor, test obnovy nad rozšifrovanou kópiou, nič sa nenahrá pri zlom hesle, CLI `decrypt_backup.py` |
 | `test_offsite_backup.py` | Nahrávanie záloh mimo servera: zapnutie podľa premenných, kľúče/predpona, kontrola veľkosti, SHA-256 a stiahnutie späť, test obnovy stiahnutej kópie, retencia po kontách, chyba siete nezhodí lokálnu zálohu, upozornenia v Nastaveniach |
 | `test_accounting.py` | Zaokrúhľovanie DPH po sadzbách (nie po riadkoch), rekapitulácia, súlad s Peppol BR-CO-17 |
 | `test_disaster_recovery.py` | Úplná strata úložiska a obnova zo stiahnutej zálohy, poškodené zálohy, záloha zo staršej verzie, rollback pri zlyhaní migrácie, poškodené logo v PDF |

@@ -34,3 +34,14 @@ zálohy, zálohu zo staršej verzie, rollback pri zlyhaní migrácie, poškoden�
 ## Limity
 - Maximálna veľkosť nahrávanej zálohy je 200 MB.
 - Záloha je po konte: obnova jedného konta sa nedotkne ostatných.
+
+
+## Obnova zo šifrovanej zálohy (súbor `.zip.enc`)
+
+Ak je nastavené `BACKUP_ENCRYPTION_KEY`, zálohy v bucketi sú zašifrované.
+
+1. Stiahni súbor `...zip.enc` z bucketu (R2 → bucket → konto → najnovší súbor).
+2. Na počítači s projektom: `python decrypt_backup.py zaloha.zip.enc zaloha.zip` (heslo sa opýta alebo ho vezme z `BACKUP_ENCRYPTION_KEY`).
+3. Výsledné `zaloha.zip` nahraj cez Nastavenia → Obnova zo zálohy.
+
+**Heslo musíš mať uložené mimo Railway.** Bez neho sa záloha nedá rozšifrovať. Po zmene hesla sa staré zálohy dajú otvoriť len starým heslom.

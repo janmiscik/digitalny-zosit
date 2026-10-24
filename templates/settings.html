@@ -420,7 +420,7 @@
                 <p class="backup-meta">
                     <strong>Kópia mimo servera:</strong>
                     {% if backup.offsite %}
-                        {% if backup.offsite.ok %}✅ nahratá a overená stiahnutím{% else %}❌ zlyhala{% endif %}
+                        {% if backup.offsite.ok %}✅ nahratá a overená stiahnutím{% if backup.offsite.encrypted %}, 🔒 šifrovaná{% endif %}{% else %}❌ zlyhala{% endif %}
                         ({{ backup.offsite.at_display }}, {{ backup.offsite.file }})
                         {% if backup.offsite.ok and backup.offsite.sha256 %}<br><small>SHA-256: {{ backup.offsite.sha256[:16] }}…</small>{% endif %}
                     {% else %}zatiaľ neprebehla{% endif %}

@@ -14,6 +14,11 @@ každá úspešne vytvorená a overená záloha sa nahrá aj do externého bucke
     OFFSITE_BACKUP_REGION             región (predvolené "auto")
     OFFSITE_BACKUP_PREFIX             predpona kľúčov (predvolené "digitalny-zosit")
     OFFSITE_BACKUP_KEEP               koľko záloh na konto držať v bucketi (predvolené 30)
+    BACKUP_ENCRYPTION_KEY             voliteľné heslo (min. 20 znakov): zálohy sa pred nahratím
+                                      zašifrujú (AES-256-GCM, viď backup_crypto.py) a v bucketi
+                                      majú príponu .enc. Bez hesla sa nedajú obnoviť - ulož ho
+                                      mimo Railway. Ak je heslo nastavené, ale nevyhovuje, nahrá
+                                      sa NIČ (nikdy sa nenahrá nešifrovaná záloha omylom).
 
 Zálohy obsahujú dáta zákazníkov - bucket musí byť SÚKROMNÝ (bez verejného prístupu).
 Po nahratí sa záloha z bucketu znova STIAHNE, porovná sa jej SHA-256 s lokálnym
@@ -31,6 +36,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+import backup_crypto
+
 logger = logging.getLogger(__name__)
 
 REQUIRED = ("OFFSITE_BACKUP_BUCKET", "OFFSITE_BACKUP_ACCESS_KEY_ID", "OFFSITE_BACKUP_SECRET_ACCESS_KEY")
@@ -45,6 +52,7 @@ class OffsiteResult:
     sha256: str | None = None
     verified: bool = False
     warning: str | None = None
+    encrypted: bool = False
 
 
 def enabled() -> bool:
@@ -117,8 +125,24 @@ def upload_backup(
     if not enabled():
         return OffsiteResult(ok=False, error="Nahrávanie mimo servera nie je nastavené.")
 
-    key = _prefix_for(slug) + path.name
+    secret = backup_crypto.passphrase()
+    encrypted = secret is not None
+
+    if encrypted:
+
+        problems = backup_crypto.passphrase_problems(secret)
+
+        if problems:
+            return OffsiteResult(
+                ok=False, encrypted=True,
+                error="Šifrovanie záloh je zle nastavené, nič sa nenahralo: " + "; ".join(problems),
+            )
+
+    key = _prefix_for(slug) + path.name + (backup_crypto.SUFFIX if encrypted else "")
     downloaded: Path | None = None
+    upload_source: Path = path
+    encrypted_tmp: Path | None = None
+    decrypted_tmp: Path | None = None
 
     try:
 
@@ -127,18 +151,28 @@ def upload_backup(
 
         local_hash = file_sha256(path)
 
+        if encrypted:
+
+            fd, tmp_name = tempfile.mkstemp(suffix=".zip.enc")
+            os.close(fd)
+            encrypted_tmp = Path(tmp_name)
+            backup_crypto.encrypt_file(path, encrypted_tmp, secret)
+            upload_source = encrypted_tmp
+
+        upload_hash = file_sha256(upload_source)
+
         client.upload_file(
-            str(path), bucket, key,
-            ExtraArgs={"Metadata": {"sha256": local_hash}},
+            str(upload_source), bucket, key,
+            ExtraArgs={"Metadata": {"sha256": upload_hash, "encrypted": "true" if encrypted else "false"}},
         )
 
         remote_size = client.head_object(Bucket=bucket, Key=key)["ContentLength"]
 
-        if remote_size != path.stat().st_size:
+        if remote_size != upload_source.stat().st_size:
 
             return OffsiteResult(
-                ok=False, key=key, sha256=local_hash,
-                error=f"Veľkosť v úložisku ({remote_size} B) sa nezhoduje s lokálnou ({path.stat().st_size} B).",
+                ok=False, key=key, sha256=local_hash, encrypted=encrypted,
+                error=f"Veľkosť v úložisku ({remote_size} B) sa nezhoduje s lokálnou ({upload_source.stat().st_size} B).",
             )
 
         # Obsah z bucketu sa stiahne späť a porovná - dve rovnako veľké
@@ -151,21 +185,50 @@ def upload_backup(
 
         remote_hash = file_sha256(downloaded)
 
-        if remote_hash != local_hash:
+        if remote_hash != upload_hash:
 
             return OffsiteResult(
-                ok=False, key=key, sha256=local_hash,
+                ok=False, key=key, sha256=local_hash, encrypted=encrypted,
                 error="Obsah zálohy v úložisku sa nezhoduje s lokálnym súborom (iný SHA-256).",
             )
 
+        validated = downloaded
+
+        if encrypted:
+
+            # Test obnovy ide nad ROZŠIFROVANOU kópiou stiahnutou z bucketu:
+            # overí sa, že heslo a šifrovanie naozaj dávajú pôvodnú zálohu.
+            fd, tmp_name = tempfile.mkstemp(suffix=".zip")
+            os.close(fd)
+            decrypted_tmp = Path(tmp_name)
+
+            try:
+                backup_crypto.decrypt_file(downloaded, decrypted_tmp, secret)
+
+            except backup_crypto.DecryptionError as exc:
+
+                return OffsiteResult(
+                    ok=False, key=key, sha256=local_hash, encrypted=True,
+                    error=f"Zašifrovanú zálohu z úložiska sa nepodarilo rozšifrovať: {exc}"[:300],
+                )
+
+            if file_sha256(decrypted_tmp) != local_hash:
+
+                return OffsiteResult(
+                    ok=False, key=key, sha256=local_hash, encrypted=True,
+                    error="Rozšifrovaná záloha sa nezhoduje s pôvodnou (iný SHA-256).",
+                )
+
+            validated = decrypted_tmp
+
         if validator is not None:
 
-            problems = validator(downloaded)
+            problems = validator(validated)
 
             if problems:
 
                 return OffsiteResult(
-                    ok=False, key=key, sha256=local_hash,
+                    ok=False, key=key, sha256=local_hash, encrypted=encrypted,
                     error=("Záloha stiahnutá z úložiska neprešla testom obnovy: " + "; ".join(problems))[:300],
                 )
 
@@ -188,19 +251,22 @@ def upload_backup(
         logger.info("Záloha %s nahraná mimo servera a overená (%s), zmazané staré: %s", path.name, key, removed)
 
         return OffsiteResult(
-            ok=True, key=key, removed=removed, sha256=local_hash, verified=True, warning=warning
+            ok=True, key=key, removed=removed, sha256=local_hash, verified=True,
+            warning=warning, encrypted=encrypted,
         )
 
     except Exception as exc:   # noqa: BLE001 - záloha nesmie zlyhať kvôli sieti
 
         logger.exception("Nahrávanie zálohy %s mimo servera zlyhalo", path.name)
 
-        return OffsiteResult(ok=False, key=key, error=f"{type(exc).__name__}: {exc}"[:300])
+        return OffsiteResult(ok=False, key=key, encrypted=encrypted, error=f"{type(exc).__name__}: {exc}"[:300])
 
     finally:
 
-        if downloaded is not None:
-            downloaded.unlink(missing_ok=True)
+        for temp in (downloaded, encrypted_tmp, decrypted_tmp):
+
+            if temp is not None:
+                temp.unlink(missing_ok=True)
 
 
 def _apply_retention(client, bucket: str, slug: str) -> int:
