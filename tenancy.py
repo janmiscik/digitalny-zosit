@@ -24,7 +24,7 @@ import re
 from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
-from threading import Lock
+from threading import Lock, RLock
 
 from alembic import command
 from alembic.config import Config
@@ -143,13 +143,22 @@ def upgrade_database_file(path) -> None:
     _upgrade_url(f"sqlite:///{Path(path).as_posix()}")
 
 
+# Alembic (`alembic.op`, kontext migrácie) drží stav v globálnych premenných,
+# nie je bezpečný pre súbežné spustenie vo viacerých vláknach jedného procesu.
+# Dve súčasné registrácie alebo migrácie (napr. registrácia počas štartovej
+# migrácie) by si navzájom miešali operácie a jedna by zlyhala uprostred.
+# Preto sa všetky migrácie v procese vykonávajú jedna po druhej.
+_migration_lock = RLock()
+
+
 def _upgrade_url(url: str) -> None:
 
     cfg = Config(str(PROJECT_ROOT / "alembic.ini"))
     cfg.set_main_option("script_location", str(PROJECT_ROOT / "alembic"))
     cfg.set_main_option("sqlalchemy.url", url)
 
-    command.upgrade(cfg, "head")
+    with _migration_lock:
+        command.upgrade(cfg, "head")
 
 
 # =========================================

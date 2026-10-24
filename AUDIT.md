@@ -121,3 +121,5 @@ SQLite engine kont aj `accounts.db` teraz používa `journal_mode=WAL` a `synchr
 
 - **Mazanie fotiek:** súbor sa maže až po úspešnom commite (pri rollbacku záznam aj súbor ostanú); trasa na zmazanie fotky už súbor nemaže vopred.
 - **Chybové hlásenia pri štarte** (slabý `SECRET_KEY`, neplatné `APP_ENV`, `MAX_ACCOUNTS`) nikdy neobsahujú hodnotu tajného kľúča; test to overuje.
+
+- **Súbežné migrácie (nájdené v CI):** Alembic nie je bezpečný pre súbežný beh vo vláknach jedného procesu. Dve súčasné registrácie (alebo registrácia počas štartovej migrácie) mohli nechať konto s polovičnou schémou. Všetky migrácie v procese teraz bežia jedna po druhej (`tenancy._migration_lock`); test s pôvodným chovaním zlyháva, s opravou prechádza.
