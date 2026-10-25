@@ -31,7 +31,7 @@ from invoice_utils import (
     signed_invoice_total,
     validate_invoice_vat,
 )
-from models import Company, Customer, Invoice, InvoiceItem, Job, Quote
+from models import AuditLog, Company, Customer, Invoice, InvoiceItem, Job, Quote
 from routers.company import get_or_create_company
 from peppol_xml import generate_peppol_xml
 from peppol_validation import validate_peppol_invoice_xml
@@ -43,6 +43,7 @@ from templates_config import templates
 router = APIRouter(dependencies=[Depends(verify_csrf)])
 
 MIN_CANCEL_REASON_LENGTH = 3
+INVOICE_HISTORY_LIMIT = 50
 MAX_REASON_LENGTH = 300
 
 
@@ -641,7 +642,15 @@ def invoice_detail(
 
             "today": date.today(),
 
-            "peppol_issues": peppol_issues
+            "peppol_issues": peppol_issues,
+
+            "history": (
+                db.query(AuditLog)
+                .filter(AuditLog.entity_type == "invoice", AuditLog.entity_id == invoice.id)
+                .order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
+                .limit(INVOICE_HISTORY_LIMIT)
+                .all()
+            )
 
         }
 
@@ -837,6 +846,14 @@ async def update_invoice(
             )
         )
 
+
+    log_action(
+        db,
+        "invoice.edit",
+        entity_type="invoice",
+        entity_id=invoice.id,
+        detail=f"Návrh faktúry {invoice.invoice_number} upravený"
+    )
 
     db.commit()
 

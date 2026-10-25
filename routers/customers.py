@@ -305,6 +305,16 @@ def create_customer(
 
     db.add(new_customer)
 
+    db.flush()
+
+    log_action(
+        db,
+        "customer.create",
+        entity_type="customer",
+        entity_id=new_customer.id,
+        detail=f"Zákazník {new_customer.name}"
+    )
+
     db.commit()
 
 
@@ -460,10 +470,25 @@ def update_customer(
         )
 
 
+    changed = []
+
     for field, value in customer_data.model_dump().items():
+
+        if getattr(customer, field) != value:
+            changed.append(field)
 
         setattr(customer, field, value)
 
+    if changed:
+
+        # zapisujú sa len NÁZVY zmenených polí, nie osobné údaje samotné
+        log_action(
+            db,
+            "customer.edit",
+            entity_type="customer",
+            entity_id=customer.id,
+            detail=f"Zákazník {customer.name}: zmenené polia {', '.join(sorted(changed))}"
+        )
 
     db.commit()
 

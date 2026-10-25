@@ -328,3 +328,86 @@ def test_migration_makes_audit_log_append_only(tmp_path):
     connection.commit()
     assert connection.execute("SELECT COUNT(*) FROM audit_log").fetchone()[0] == 2
     connection.close()
+
+
+# ---------- úpravy konceptov, zákazníci, história na detaile ----------
+
+def test_editing_draft_invoice_is_logged():
+
+    invoice_id, number = make_invoice(status="Návrh")
+
+    response = post_form(
+        f"/invoices/{invoice_id}/edit",
+        [
+            ("issue_date", date.today().isoformat()),
+            ("due_date", (date.today() + timedelta(days=14)).isoformat()),
+            ("description", "Nová práca"), ("quantity", "2"), ("unit", "hod"),
+            ("unit_price", "30.00"), ("vat_rate", "23"),
+        ],
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+
+    entry = latest_log_entry()
+    assert entry.action == "invoice.edit" and entry.entity_id == invoice_id
+    assert number in entry.detail
+
+
+def test_customer_create_and_edit_are_logged_without_personal_values():
+
+    post_form("/customers", [("name", "Jozef Mrkvička"), ("email", "tajny@example.com")], follow_redirects=False)
+
+    entry = latest_log_entry()
+    assert entry.action == "customer.create" and "Jozef Mrkvička" in entry.detail
+
+    customer_id = entry.entity_id
+
+    post_form(
+        f"/customers/{customer_id}/edit",
+        [("name", "Jozef Mrkvička"), ("email", "novy-tajny@example.com"), ("phone", "0900123456")],
+        follow_redirects=False,
+    )
+
+    entry = latest_log_entry()
+    assert entry.action == "customer.edit"
+    assert "email" in entry.detail and "phone" in entry.detail
+    assert "novy-tajny@example.com" not in entry.detail and "0900123456" not in entry.detail
+
+
+def test_customer_edit_without_changes_writes_nothing():
+
+    post_form("/customers", [("name", "Bez zmeny")], follow_redirects=False)
+    customer_id = latest_log_entry().entity_id
+    count = len(all_log_actions())
+
+    post_form(f"/customers/{customer_id}/edit", [("name", "Bez zmeny")], follow_redirects=False)
+
+    assert len(all_log_actions()) == count
+
+
+def test_invoice_detail_shows_its_own_history_only():
+
+    first_id, first_number = make_invoice()
+    second_id, second_number = make_invoice()
+
+    post_form(f"/invoices/{first_id}/status", [("status", "Stornovaná"), ("reason", "Zlá suma na doklade")],
+              follow_redirects=False)
+
+    page = client.get(f"/invoices/{first_id}").text
+
+    assert "História zmien" in page and "Zlá suma na doklade" in page
+    assert "Celá história" in page
+
+    other = client.get(f"/invoices/{second_id}").text
+    assert "Zlá suma na doklade" not in other
+
+
+def test_audit_page_can_filter_customers():
+
+    post_form("/customers", [("name", "Filtrovaný Zákazník")], follow_redirects=False)
+    make_invoice()
+
+    page = client.get("/audit-log?typ=customer").text
+
+    assert "Filtrovaný Zákazník" in page

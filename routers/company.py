@@ -543,6 +543,7 @@ AUDIT_CATEGORIES = {
     "export": ("Exporty", "export."),
     "backup": ("Zálohy a obnova", "backup."),
     "auth": ("Prihlásenia", "auth."),
+    "customer": ("Zákazníci", "customer."),
     "company": ("Nastavenia", "company."),
 }
 

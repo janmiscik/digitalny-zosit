@@ -127,3 +127,5 @@ SQLite engine kont aj `accounts.db` teraz používa `journal_mode=WAL` a `synchr
 - **Poistka proti výpadku hostingu:** `docker-compose.yml` + `Caddyfile` (HTTPS) a `offsite_restore.py` (stiahnutie a rozšifrovanie zálohy z bucketu) umožňujú spustiť appku inde a obnoviť dáta (`docs/HOSTING.md`). Postup je overený testami konfigurácie a CLI; samotné nasadenie na cudzom serveri som nespúšťal.
 
 - **Obnova šifrovanej zálohy v appke:** `.zip.enc` sa dá nahrať priamo v Nastaveniach; rozpozná sa podľa obsahu, dešifruje sa mimo hlavného vlákna, pri zlom hesle sa dáta nezmenia a heslo sa nezobrazuje (testy v `tests/test_backup.py`).
+
+- **Audit stopa, dokončenie:** loguje sa aj úprava konceptu faktúry, vytvorenie zákazníka a zmena zákazníka (len názvy zmenených polí, nie osobné údaje). Detail faktúry má sekciu „História zmien" s jej udalosťami (storno s dôvodom, úhrada, úprava) a odkaz na celý prehľad; prehľad má filter „Zákazníci".

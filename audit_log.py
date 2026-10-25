@@ -18,6 +18,7 @@ vynucovaný databázou):
     quote.create              quote.edit                 quote.delete
     quote.status_change       quote.convert_to_invoice
     invoice.paid_date_change   export.download
+    invoice.edit               customer.create            customer.edit
     company.update             backup.restore
 
 Storno faktúry vyžaduje dôvod (zapíše sa do detailu). Tabuľka audit_log je v DB

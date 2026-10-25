@@ -470,6 +470,25 @@
     </section>
 
 
+    {% if history %}
+    <section class="edit-customer-card" id="historia">
+
+        <h3 style="margin-top: 0;">História zmien</h3>
+
+        {% for entry in history %}
+            <div style="display:flex; justify-content:space-between; gap:12px; padding:6px 0; border-bottom:1px solid var(--border);">
+                <span>{{ entry.detail or entry.action }}</span>
+                <span style="color: var(--text-secondary); white-space: nowrap; font-size: 0.85em;">
+                    {{ entry.created_at.strftime("%d.%m.%Y %H:%M") }}
+                </span>
+            </div>
+        {% endfor %}
+
+        <p style="margin: 10px 0 0;"><a href="/audit-log?q={{ invoice.invoice_number | urlencode }}">Celá história →</a></p>
+
+    </section>
+    {% endif %}
+
 </main>
 
 
