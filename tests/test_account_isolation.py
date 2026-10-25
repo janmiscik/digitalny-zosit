@@ -343,3 +343,177 @@ def test_backup_restore_from_account_a_zip_does_not_touch_other_account(world):
     assert response.status_code == 303
     assert a_counts() == before
     assert a.get(f"/invoices/{world['ids']['invoice_id']}").status_code == 200
+
+
+# =========================================
+# POSILNENÝ SWEEP: platné formuláre, odtlačok celého konta A
+# =========================================
+# Prvý sweep posiela len csrf_token, takže veľa trás skončí na 422 ešte pred
+# kontrolou vlastníka. Tu B posiela platné hodnoty všetkých polí, ktoré appka
+# pozná (handler sa teda naozaj vykoná), a kontroluje sa, že CELÁ databáza,
+# súbory a zálohy konta A ostali bajt po bajte rovnaké.
+
+import hashlib
+
+
+def account_fingerprint(slug):
+
+    import sqlite3
+
+    root = tenancy.ACCOUNTS_DATA_DIR / slug
+    digest = hashlib.sha256()
+
+    connection = sqlite3.connect(str(root / "database.db")) if (root / "database.db").exists() else None
+
+    if connection is not None:
+
+        try:
+            for line in connection.iterdump():
+                digest.update(line.encode("utf-8"))
+
+        finally:
+            connection.close()
+
+    for path in sorted(p for p in root.rglob("*") if p.is_file() and not p.name.endswith(("-wal", "-shm", ".db"))):
+        digest.update(str(path.relative_to(root)).encode())
+        digest.update(path.read_bytes())
+
+    return digest.hexdigest()
+
+
+def valid_form_payload(world_, token):
+
+    ids = world_["ids"]
+    today = date.today().isoformat()
+
+    return {
+        "csrf_token": token,
+        "name": "B-utok", "title": "B-utok", "description": "B-utok", "note": "B-utok", "text": "B-utok",
+        "reason": "B-utok dôvod", "category": "ine", "status": "Uhradená",
+        "address": "Ulica 1", "city": "Mesto", "zip_code": "81101", "country_code": "SK",
+        "email": "b@example.com", "phone": "+421900000000", "website": "https://example.com",
+        "ico": "12345008", "dic": "", "ic_dph": "", "iban": "SK3112000000198742637541",
+        "swift_bic": "TATRSKBX", "number": "FA-B-1", "quantity": "1", "unit": "ks", "unit_price": "1.00",
+        "vat_rate": "0", "amount": "1.00", "hours": "1", "hourly_rate": "1",
+        "issue_date": today, "due_date": today, "delivery_date": today, "paid_date": today,
+        "cost_date": today, "valid_until": today,
+        "customer_id": str(ids["customer_id"]), "job_id": str(ids["job_id"]),
+        "is_proforma": "false", "is_vat_payer": "true", "remove_logo": "true", "remove_signature": "true",
+    }
+
+
+def test_valid_payload_really_works_for_the_owner(world):
+    """Kontrola kontrolóra: ten istý payload majiteľ A prijme (inak by sweep B len naráža na 422)."""
+
+    a = world["a"]
+    payload = valid_form_payload(world, _csrf_token(a, "/settings"))
+    payload["name"] = "A po zmene"
+
+    response = a.post(f"/customers/{world['ids']['customer_id']}/edit", data=payload, follow_redirects=False)
+
+    assert response.status_code == 303, response.text[:300]
+
+
+def test_account_b_with_valid_forms_leaves_account_a_byte_identical(world):
+
+    b = world["b"]
+    before = account_fingerprint(SLUG_A)
+    token = _csrf_token(b, "/settings")
+    payload = valid_form_payload(world, token)
+
+    statuses = {}
+    problems = []
+
+    for method, path in sensitive_routes():
+
+        if path.startswith("/settings/restore"):
+            continue
+
+        url = fill_path(path, world)
+
+        response = b.get(url, follow_redirects=False) if method == "GET" \
+            else b.request(method, url, data=payload, follow_redirects=False)
+
+        statuses[(method, path)] = response.status_code
+
+        if response.status_code >= 500:
+            problems.append(f"{method} {url}: server error {response.status_code}")
+
+        if [m for m in MARKERS if m in response.text]:
+            problems.append(f"{method} {url}: unikli dáta konta A")
+
+    assert not problems, "\n".join(problems)
+
+    # sweep sa musí dostať aj za validáciu, inak nič nedokazuje
+    mutating = [code for (method, _), code in statuses.items() if method != "GET"]
+    validated = [code for code in mutating if code != 422]
+
+    assert len(validated) >= len(mutating) * 0.6, f"príliš veľa 422: {sorted(set(mutating))}"
+
+    # niektoré zmeny B mohli legálne vzniknúť v B, ale A sa nesmie zmeniť ani o bajt
+    assert account_fingerprint(SLUG_A) == before
+
+
+def test_account_b_actions_are_logged_only_in_b(world):
+
+    from models import AuditLog
+
+    b = world["b"]
+    token = _csrf_token(b, "/settings")
+
+    db = account_session(SLUG_A)
+    audit_before = db.query(AuditLog).count()
+    db.close()
+
+    for method, path in sensitive_routes():
+
+        if path.startswith("/settings/restore"):
+            continue
+
+        url = fill_path(path, world)
+
+        if method == "GET":
+            b.get(url, follow_redirects=False)
+
+        else:
+            b.request(method, url, data=valid_form_payload(world, token), follow_redirects=False)
+
+    db = account_session(SLUG_A)
+
+    try:
+        assert db.query(AuditLog).count() == audit_before
+
+    finally:
+        db.close()
+
+
+def test_account_b_routes_without_id_in_path_do_not_touch_account_a(world):
+    """Trasy bez ID v ceste (POST /jobs s customer_id konta A, údržba, nastavenia) menia len konto B."""
+
+    b = world["b"]
+    before = account_fingerprint(SLUG_A)
+    token = _csrf_token(b, "/settings")
+    payload = valid_form_payload(world, token)
+
+    response = b.post("/jobs", data=payload, follow_redirects=False)
+
+    assert response.status_code in (303, 400, 404, 422), response.status_code
+
+    db = account_session(SLUG_B)
+
+    try:
+        # zákazka v B nesmie ukazovať na zákazníka, ktorý v B neexistuje (cudzie ID z A)
+        for job in db.query(Job).all():
+            assert db.query(Customer).filter(Customer.id == job.customer_id).count() == 1
+
+    finally:
+        db.close()
+
+    for path in ("/settings/backups/run", "/settings/backups/verify", "/settings/integrity-check/gap-ack",
+                 "/settings/integrity-check/cleanup", "/settings", "/settings/email"):
+
+        response = b.post(path, data=payload, follow_redirects=False)
+
+        assert response.status_code < 500, (path, response.status_code)
+
+    assert account_fingerprint(SLUG_A) == before

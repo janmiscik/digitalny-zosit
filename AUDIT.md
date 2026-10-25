@@ -134,3 +134,10 @@ SQLite engine kont aj `accounts.db` teraz používa `journal_mode=WAL` a `synchr
 1. **Etapa 1 (hotová):** report-only režim a `/csp-report`; inventúra: 28 inline `<script>` blokov, 59 inline handlerov.
 2. **Etapa 2 (hotová):** všetky skripty a handlery sú v `static/js/` (`app.js` + `pages/*.js`), obsluha cez `data-action`, `data-change-action`, `data-auto-submit`, `data-confirm`. Šablóny majú 0 inline skriptov a 0 handlerov; stráži to `test_csp_inline_budget.py`.
 3. **Etapa 3 (hotová):** vynucovaná politika má `script-src 'self'` a `script-src-attr 'none'` a `report-uri /csp-report`. Overené v reálnom prehliadači (Chromium): téma, formuláre zákazníka a zákazky, pridanie a odobratie riadkov faktúry bez porušenia CSP. Inline štýly (`style-src 'unsafe-inline'`) ostávajú povolené - nižšie riziko. Po nasadení sleduj v logu riadky `[CSP]`.
+
+## Kontrola priorít 1-5 (po CSP)
+1. **Izolácia kont:** nový sweep posiela z konta B platné formuláre na všetky trasy s ID konta A aj trasy bez ID a kontroluje, že databáza, súbory a zálohy konta A ostali bajt po bajte rovnaké a audit log A sa nezmenil. Kontrolný test overuje, že rovnaký payload majiteľ prijme (sweep teda nenarazí len na 422).
+2. **Triggery v existujúcich databázach:** test vyrobí databázu na revízii pred triggermi s dátami, zmigruje ju a overí všetkých 6 triggerov, ich účinok, zachované dáta, opakovateľnosť a obnovu starej zálohy. Nové: `db_guards.missing_triggers` a monitoring `guards` hlási chýbajúci alebo oslabený trigger.
+3. **Obnova zálohy:** 8 druhov chybného vstupu (zlé heslo, poškodený a skrátený `.enc`, odpad, skrátený zip, pokazená DB, cesta mimo adresára, prázdny súbor) nezmení živú DB ani uploads a nezanechá súbory; úspešná šifrovaná obnova dáta nahradí a vytvorí poistnú kópiu.
+4. **Súbežná registrácia:** nájdená a opravená chyba - súbežná registrácia rovnakého mena končila 500 (kontrola mena bola mimo zámku). Testy: 12 súbežných registrácií nad limitom 3 dajú presne 3 úplné kontá bez sirotských priečinkov a bez 5xx.
+5. **Monitoring:** `/health/details` hlási aj ochranné triggery a beh ako root v produkcii a vracia `runtime` (používateľ, prostredie).

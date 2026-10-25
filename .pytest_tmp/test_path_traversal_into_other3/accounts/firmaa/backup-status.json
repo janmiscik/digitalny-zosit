@@ -1,8 +1,8 @@
 {
-  "last_attempt_at": "2026-10-25T12:16:43.754591+00:00",
+  "last_attempt_at": "2026-10-25T18:26:22.774681+00:00",
   "verification": {
-    "at": "2026-10-25T12:16:43.898477+00:00",
-    "file": "rucne-20261025-121643.zip",
+    "at": "2026-10-25T18:26:23.022414+00:00",
+    "file": "rucne-20261025-182622.zip",
     "ok": true,
     "problems": [],
     "counts": {
@@ -17,8 +17,8 @@
     "revision": "b2c3d4e5f607",
     "schema_current": true
   },
-  "last_success_at": "2026-10-25T12:16:43.898501+00:00",
-  "last_file": "rucne-20261025-121643.zip",
+  "last_success_at": "2026-10-25T18:26:23.022459+00:00",
+  "last_file": "rucne-20261025-182622.zip",
   "last_kind": "manual",
   "last_error": null
 }

@@ -83,3 +83,34 @@ def attach_to_metadata(metadata) -> None:
         for statement in install_statements({table_name}):
 
             event.listen(table, "after_create", DDL(statement).execute_if(dialect="sqlite"))
+
+
+def _normalize(sql: str) -> str:
+
+    return " ".join((sql or "").split()).rstrip(";").lower()
+
+
+def missing_triggers(database_path) -> set[str]:
+    """
+    Názvy ochranných triggerov, ktoré v databáze chýbajú alebo majú pozmenenú
+    definíciu (oslabený trigger je nebezpečnejší než žiadny, lebo to nikto nezbadá).
+    Databázu len číta.
+    """
+
+    import sqlite3
+    from pathlib import Path
+
+    uri = f"file:{Path(database_path).as_posix()}?mode=ro"
+    connection = sqlite3.connect(uri, uri=True)
+
+    try:
+        present = {name: sql for name, sql in
+                   connection.execute("SELECT name, sql FROM sqlite_master WHERE type = 'trigger'")}
+
+    finally:
+        connection.close()
+
+    return {
+        name for name, (_, create) in TRIGGERS.items()
+        if name not in present or _normalize(present[name]) != _normalize(create)
+    }

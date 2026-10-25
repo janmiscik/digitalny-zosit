@@ -31,6 +31,7 @@ from datetime import timedelta
 
 import auto_backup
 import backup_utils
+import db_guards
 import offsite_backup
 import tenancy
 
@@ -161,6 +162,60 @@ def token_matches(provided: str | None) -> bool:
     return bool(expected) and bool(provided) and hmac.compare_digest(provided, expected)
 
 
+def runtime_info() -> dict:
+    """Pod akým používateľom a v akom prostredí appka beží (bez tajných údajov)."""
+
+    import security_config
+
+    geteuid = getattr(os, "geteuid", None)
+    uid = geteuid() if geteuid else None
+
+    try:
+        import pwd
+        user = pwd.getpwuid(uid).pw_name if uid is not None else None
+
+    except Exception:   # noqa: BLE001 - Windows alebo neznáme uid
+
+        user = str(uid) if uid is not None else None
+
+    try:
+        environment = security_config.resolve_environment(os.getenv("APP_ENV"))
+
+    except RuntimeError:
+        environment = "invalid"
+
+    return {"user": user, "uid": uid, "environment": environment}
+
+
+def runtime_problem(info: dict) -> str | None:
+
+    if info["environment"] == "production" and info["uid"] == 0:
+        return "aplikácia beží ako root (v produkcii má bežať pod bežným používateľom)"
+
+    return None
+
+
+def _check_guards(slug: str, problem) -> None:
+    """Ochranné triggery (audit log, vystavené faktúry) musia byť v databáze konta úplné."""
+
+    path = tenancy.account_database_path(slug)
+
+    if not path.exists() or tenancy.account_needs_migration(slug):
+        return    # chýbajúce triggery pri nedokončenej migrácii hlási "migration"
+
+    try:
+        missing = db_guards.missing_triggers(path)
+
+    except Exception:   # noqa: BLE001 - monitoring nesmie spadnúť na jednom konte
+
+        logger.exception("Monitoring: kontrola ochranných triggerov konta %s zlyhala", slug)
+        problem(slug, "guards", "ochranné triggery databázy sa nepodarilo skontrolovať")
+        return
+
+    if missing:
+        problem(slug, "guards", "chýbajú alebo sú pozmenené ochranné triggery: " + ", ".join(sorted(missing)))
+
+
 def collect(slugs: list[str]) -> dict:
 
     now = auto_backup.utc_now()
@@ -217,6 +272,9 @@ def collect(slugs: list[str]) -> dict:
             logger.exception("Monitoring: kontrola migrácie konta %s zlyhala", slug)
             problem(slug, "migration", "stav migrácie sa nepodarilo zistiť")
 
+        else:
+            _check_guards(slug, problem)
+
     error_count = recent_server_errors()
 
     if error_count >= max_errors_per_hour():
@@ -227,6 +285,12 @@ def collect(slugs: list[str]) -> dict:
     if disk:
         problem("-", "disk", disk)
 
+    runtime = runtime_info()
+    runtime_issue = runtime_problem(runtime)
+
+    if runtime_issue:
+        problem("-", "runtime", runtime_issue)
+
     scheduler = auto_backup._scheduler
 
     if auto_backup.backups_enabled() and scheduler is not None and not scheduler.is_alive():
@@ -235,5 +299,6 @@ def collect(slugs: list[str]) -> dict:
     return {
         "status": "degraded" if problems else "ok",
         "accounts": len(slugs),
+        "runtime": runtime,
         "problems": problems,
     }

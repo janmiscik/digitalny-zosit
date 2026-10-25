@@ -76,7 +76,9 @@ def test_ok_when_backup_is_fresh_and_schema_current(client):
     response = get(client)
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "accounts": 1, "problems": []}
+    body = response.json()
+
+    assert (body["status"], body["accounts"], body["problems"]) == ("ok", 1, [])
 
 
 def test_query_token_is_accepted(client):
@@ -148,6 +150,45 @@ def test_migration_check_error_does_not_crash_monitoring(client, monkeypatch):
 
     assert response.status_code == 503
     assert "tajna" not in response.text
+
+
+def _drop_trigger(sql):
+
+    import sqlite3
+
+    connection = sqlite3.connect(tenancy.account_database_path(SLUG))
+    connection.execute(sql)
+    connection.commit()
+    connection.close()
+
+
+def test_healthy_account_has_no_guard_problem(client):
+
+    write_status(last_success_at=now_iso())
+
+    assert not [p for p in get(client).json()["problems"] if p["kind"] == "guards"]
+
+
+def test_missing_guard_trigger_is_degraded(client):
+
+    write_status(last_success_at=now_iso())
+    _drop_trigger("DROP TRIGGER invoices_no_delete_issued")
+
+    body = get(client).json()
+    guards = [p for p in body["problems"] if p["kind"] == "guards"]
+
+    assert guards and "invoices_no_delete_issued" in guards[0]["detail"]
+
+
+def test_weakened_guard_trigger_is_degraded(client):
+
+    write_status(last_success_at=now_iso())
+    _drop_trigger("DROP TRIGGER audit_log_no_delete")
+    _drop_trigger("CREATE TRIGGER audit_log_no_delete BEFORE DELETE ON audit_log WHEN 0 BEGIN SELECT 1; END")
+
+    guards = [p for p in get(client).json()["problems"] if p["kind"] == "guards"]
+
+    assert guards and "audit_log_no_delete" in guards[0]["detail"]
 
 
 def configure_offsite(monkeypatch):
@@ -340,3 +381,37 @@ def test_error_file_is_trimmed_and_write_failures_are_harmless(client, monkeypat
     monkeypatch.setattr(monitoring, "_error_file", lambda: (_ for _ in ()).throw(OSError("disk")))
 
     monitoring.record_server_error()   # nesmie vyhodiť výnimku
+
+
+def test_runtime_info_is_reported(client):
+
+    write_status(last_success_at=now_iso())
+
+    runtime = get(client).json()["runtime"]
+
+    assert set(runtime) == {"user", "uid", "environment"}
+
+
+def test_production_running_as_root_is_degraded(client, monkeypatch):
+
+    write_status(last_success_at=now_iso())
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setattr(monitoring.os, "geteuid", lambda: 0, raising=False)
+
+    body = get(client).json()
+
+    assert any(p["kind"] == "runtime" for p in body["problems"])
+    assert body["runtime"]["environment"] == "production" and body["runtime"]["uid"] == 0
+
+
+def test_production_as_normal_user_and_dev_as_root_are_fine(client, monkeypatch):
+
+    write_status(last_success_at=now_iso())
+
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setattr(monitoring.os, "geteuid", lambda: 1000, raising=False)
+    assert not [p for p in get(client).json()["problems"] if p["kind"] == "runtime"]
+
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setattr(monitoring.os, "geteuid", lambda: 0, raising=False)
+    assert not [p for p in get(client).json()["problems"] if p["kind"] == "runtime"]

@@ -331,3 +331,116 @@ def test_weak_password_cannot_register(isolated):
 def test_extended_common_password_list(password):
 
     assert password_problem(password, "firma") is not None
+
+
+def _file_registry(tmp_path, monkeypatch):
+
+    monkeypatch.setattr(tenancy, "ACCOUNTS_DATA_DIR", tmp_path / "accounts")
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'acc.db'}", connect_args={"check_same_thread": False, "timeout": 15})
+    accounts_db.AccountsBase.metadata.create_all(bind=engine)
+    Session = sessionmaker(bind=engine)
+
+    def override():
+
+        db = Session()
+
+        try:
+            yield db
+
+        finally:
+            db.close()
+
+    app.dependency_overrides[accounts_db.get_accounts_db] = override
+    tenancy._engine_cache.clear()
+
+    return Session
+
+
+def _run_parallel(usernames):
+
+    import threading
+
+    results = {}
+
+    def worker(name, index):
+        results[(name, index)] = register(name).status_code
+
+    threads = [threading.Thread(target=worker, args=(name, index)) for index, name in enumerate(usernames)]
+
+    for thread in threads:
+        thread.start()
+
+    for thread in threads:
+        thread.join()
+
+    return results
+
+
+def test_parallel_registrations_leave_only_complete_accounts(tmp_path, monkeypatch):
+    """Pri veľa súbežných registráciách nad limitom: presne MAX_ACCOUNTS kont, žiadne 5xx,
+    každé konto je úplné (priečinky, migrovaná DB, ochranné triggery) a odmietnuté nič nezanechali."""
+
+    import sqlite3
+
+    import db_guards
+    from accounts_models import Account
+
+    monkeypatch.setenv("MAX_ACCOUNTS", "3")
+    Session = _file_registry(tmp_path, monkeypatch)
+
+    try:
+        results = _run_parallel([f"firma-{i}" for i in range(12)])
+
+        codes = list(results.values())
+
+        assert not [c for c in codes if c >= 500], codes
+        assert codes.count(303) == 3, codes
+        assert account_count(Session) == 3
+
+        db = Session()
+        slugs = sorted(a.slug for a in db.query(Account).all())
+        db.close()
+
+        directories = sorted(p.name for p in (tmp_path / "accounts").iterdir()) if (tmp_path / "accounts").exists() else []
+
+        assert directories == slugs, f"sirotské priečinky alebo chýbajúce kontá: {directories} vs {slugs}"
+
+        for slug in slugs:
+
+            assert not tenancy.account_needs_migration(slug), slug
+            assert tenancy.account_uploads_dir(slug).is_dir() and tenancy.account_backups_dir(slug).is_dir()
+            assert db_guards.missing_triggers(tenancy.account_database_path(slug)) == set()
+
+            connection = sqlite3.connect(tenancy.account_database_path(slug))
+
+            try:
+                assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+
+            finally:
+                connection.close()
+
+    finally:
+
+        app.dependency_overrides.clear()
+        tenancy._engine_cache.clear()
+
+
+def test_parallel_registrations_of_same_username_create_one_account(tmp_path, monkeypatch):
+
+    monkeypatch.setenv("MAX_ACCOUNTS", "50")
+    Session = _file_registry(tmp_path, monkeypatch)
+
+    try:
+        codes = list(_run_parallel(["rovnake-meno"] * 8).values())
+
+        assert not [c for c in codes if c >= 500], codes
+        assert codes.count(303) == 1, codes
+        assert account_count(Session) == 1
+
+        assert len(list((tmp_path / "accounts").iterdir())) == 1
+
+    finally:
+
+        app.dependency_overrides.clear()
+        tenancy._engine_cache.clear()

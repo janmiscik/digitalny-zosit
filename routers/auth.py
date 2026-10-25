@@ -200,6 +200,11 @@ def register_submit(
         if limit and accounts_db.query(Account).count() >= limit:
             return error(REGISTRATION_CLOSED_MESSAGE, status_code=403)
 
+        # Kontrola mena vyššie prebehla mimo zámku - súbežná registrácia
+        # rovnakého mena ju mohla obísť, preto ešte raz pod zámkom.
+        if accounts_db.query(Account).filter(Account.username == username).first() is not None:
+            return error("Toto používateľské meno je už obsadené.")
+
         for _attempt in range(5):
 
             slug = tenancy.ensure_unique_slug(base_slug, slug_exists)

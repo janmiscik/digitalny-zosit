@@ -778,3 +778,168 @@ def test_restore_corrupted_encrypted_file_is_refused(temp_env, monkeypatch):
     )
 
     assert response.status_code == 422
+
+
+# ---------- obnova: pôvodné dáta ostanú pri KAŽDOM zlyhaní, úspech ich naozaj nahradí ----------
+
+import hashlib
+
+
+def live_state(env):
+    """Odtlačok živých dát: všetky riadky DB + všetky súbory uploads."""
+
+    digest = hashlib.sha256()
+
+    connection = sqlite3.connect(str(env["db_path"]))
+
+    try:
+        for line in connection.iterdump():
+            digest.update(line.encode("utf-8"))
+
+    finally:
+        connection.close()
+
+    for path in sorted(p for p in env["uploads_dir"].rglob("*") if p.is_file()):
+        digest.update(str(path.relative_to(env["uploads_dir"])).encode())
+        digest.update(path.read_bytes())
+
+    return digest.hexdigest()
+
+
+def set_live_data(env, customer_name, upload_text):
+
+    connection = sqlite3.connect(str(env["db_path"]))
+    connection.execute("DELETE FROM customers")
+    connection.execute("INSERT INTO customers (name) VALUES (?)", (customer_name,))
+    connection.commit()
+    connection.close()
+
+    for path in env["uploads_dir"].glob("*"):
+        path.unlink()
+
+    (env["uploads_dir"] / "logo.png").write_text(upload_text)
+
+
+def customer_names(env):
+
+    connection = sqlite3.connect(str(env["db_path"]))
+
+    try:
+        return [row[0] for row in connection.execute("SELECT name FROM customers")]
+
+    finally:
+        connection.close()
+
+
+def broken_database_zip():
+
+    buffer = io.BytesIO()
+
+    with zipfile.ZipFile(buffer, "w") as zf:
+        zf.writestr("database.db", b"toto nie je sqlite databaza" * 50)
+
+    return buffer.getvalue()
+
+
+def truncated(data):
+
+    return data[: len(data) // 2]
+
+
+def traversal_zip():
+
+    buffer = io.BytesIO()
+
+    with zipfile.ZipFile(buffer, "w") as zf:
+        zf.writestr("database.db", b"x")
+        zf.writestr("../../vonku.txt", b"utek")
+
+    return buffer.getvalue()
+
+
+@pytest.mark.parametrize("case", [
+    "wrong_password", "corrupted_encrypted", "truncated_encrypted", "garbage", "truncated_zip",
+    "broken_database", "traversal", "empty",
+])
+def test_failed_restore_keeps_live_data_untouched(temp_env, monkeypatch, case):
+
+    monkeypatch.delenv("BACKUP_ENCRYPTION_KEY", raising=False)
+
+    set_live_data(temp_env, "PRODUKCNY-ZAKAZNIK", "produkcne-logo")
+    good_backup = backup_utils.create_backup_bytes()
+
+    payloads = {
+        "wrong_password": (encrypted_backup_bytes(), "zlé-heslo-ktoré-nie-je-to-pravé-1"),
+        "corrupted_encrypted": (bytes(bytearray(encrypted_backup_bytes())[:200]
+                                      + bytes([bytearray(encrypted_backup_bytes())[200] ^ 1])
+                                      + bytearray(encrypted_backup_bytes())[201:]), ENC_PASSWORD),
+        "truncated_encrypted": (truncated(encrypted_backup_bytes()), ENC_PASSWORD),
+        "garbage": (b"nahodny odpad" * 100, ""),
+        "truncated_zip": (truncated(good_backup), ""),
+        "broken_database": (broken_database_zip(), ""),
+        "traversal": (traversal_zip(), ""),
+        "empty": (b"", ""),
+    }
+
+    data, password = payloads[case]
+
+    # zálohu s inými dátami vyrobíme PRED poškodením - ostáva len živý stav na kontrolu
+    before = live_state(temp_env)
+    backups_before = sorted(p.name for p in temp_env["backups_dir"].glob("*")) if temp_env["backups_dir"].exists() else []
+
+    response = client.post(
+        "/settings/restore",
+        data={"backup_password": password},
+        files={"backup_file": ("zaloha.zip.enc", data, "application/octet-stream")},
+        follow_redirects=False,
+    )
+
+    assert response.status_code in (400, 422), (case, response.status_code, response.text[:200])
+    assert password not in response.text or not password
+
+    assert live_state(temp_env) == before, "živé dáta sa zmenili po neúspešnej obnove"
+    assert customer_names(temp_env) == ["PRODUKCNY-ZAKAZNIK"]
+    assert not (temp_env["uploads_dir"].parent / "vonku.txt").exists()
+    assert not (temp_env["uploads_dir"].parent.parent / "vonku.txt").exists()
+
+    backups_after = sorted(p.name for p in temp_env["backups_dir"].glob("*")) if temp_env["backups_dir"].exists() else []
+    assert backups_after == backups_before, "neúspešná obnova nesmie zanechať súbory"
+
+
+def test_successful_encrypted_restore_replaces_data_and_keeps_safety_copy(temp_env, monkeypatch):
+
+    monkeypatch.delenv("BACKUP_ENCRYPTION_KEY", raising=False)
+
+    set_live_data(temp_env, "STARY-STAV", "logo-zo-zalohy")
+    encrypted = encrypted_backup_bytes()
+
+    set_live_data(temp_env, "NOVSI-STAV-PRED-OBNOVOU", "ine-logo")
+
+    response = client.post(
+        "/settings/restore",
+        data={"backup_password": ENC_PASSWORD},
+        files={"backup_file": ("zaloha.zip.enc", encrypted, "application/octet-stream")},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+
+    assert customer_names(temp_env) == ["STARY-STAV"]
+    assert (temp_env["uploads_dir"] / "logo.png").read_text() == "logo-zo-zalohy"
+
+    # poistná kópia stavu tesne pred obnovou existuje a obsahuje novší stav
+    safety = sorted(temp_env["backups_dir"].glob("pred-obnovou-*.zip"))
+
+    assert safety
+
+    with zipfile.ZipFile(safety[-1]) as zf:
+        extracted = temp_env["uploads_dir"].parent / "safety.db"
+        extracted.write_bytes(zf.read("database.db"))
+
+    connection = sqlite3.connect(str(extracted))
+
+    try:
+        assert [row[0] for row in connection.execute("SELECT name FROM customers")] == ["NOVSI-STAV-PRED-OBNOVOU"]
+
+    finally:
+        connection.close()
