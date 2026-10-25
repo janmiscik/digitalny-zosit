@@ -1,8 +1,8 @@
 {
-  "last_attempt_at": "2026-10-25T18:27:13.437975+00:00",
+  "last_attempt_at": "2026-10-25T18:55:10.252480+00:00",
   "verification": {
-    "at": "2026-10-25T18:27:13.594666+00:00",
-    "file": "rucne-20261025-182713.zip",
+    "at": "2026-10-25T18:55:10.374865+00:00",
+    "file": "rucne-20261025-185510.zip",
     "ok": false,
     "problems": [
       "Záloha nie je platný ZIP archív."
@@ -12,8 +12,8 @@
     "revision": null,
     "schema_current": false
   },
-  "last_success_at": "2026-10-25T18:27:13.566654+00:00",
-  "last_file": "rucne-20261025-182713.zip",
+  "last_success_at": "2026-10-25T18:55:10.357670+00:00",
+  "last_file": "rucne-20261025-185510.zip",
   "last_kind": "manual",
   "last_error": null
 }

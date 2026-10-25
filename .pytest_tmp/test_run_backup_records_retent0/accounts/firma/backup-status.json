@@ -1,8 +1,8 @@
 {
-  "last_attempt_at": "2026-10-25T18:33:43.479179+00:00",
+  "last_attempt_at": "2026-10-25T19:01:46.727014+00:00",
   "verification": {
-    "at": "2026-10-25T18:33:43.642267+00:00",
-    "file": "rucne-20261025-183343-2.zip",
+    "at": "2026-10-25T19:01:46.838864+00:00",
+    "file": "rucne-20261025-190146-2.zip",
     "ok": true,
     "problems": [],
     "counts": {
@@ -17,16 +17,16 @@
     "revision": "b2c3d4e5f607",
     "schema_current": true
   },
-  "last_success_at": "2026-10-25T18:33:43.642309+00:00",
-  "last_file": "rucne-20261025-183343-2.zip",
+  "last_success_at": "2026-10-25T19:01:46.838891+00:00",
+  "last_file": "rucne-20261025-190146-2.zip",
   "last_kind": "manual",
   "last_error": null,
   "offsite": {
-    "at": "2026-10-25T18:33:43.759293+00:00",
+    "at": "2026-10-25T19:01:46.903435+00:00",
     "ok": true,
-    "file": "rucne-20261025-183343-2.zip",
+    "file": "rucne-20261025-190146-2.zip",
     "error": null,
-    "sha256": "54eb2adcf455d0a304670924c657c2ebfdee20b96c7f35236e6f7eba4291587d",
+    "sha256": "09563710a3b8840c53f418df5eff6f0a1a6471fc89502abbef5962944d36edcb",
     "verified": true,
     "warning": "staré zálohy sa v úložisku nepodarilo zmazať (PermissionError)",
     "encrypted": false

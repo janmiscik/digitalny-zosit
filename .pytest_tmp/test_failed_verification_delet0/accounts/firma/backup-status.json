@@ -1,8 +1,8 @@
 {
-  "last_attempt_at": "2026-10-25T18:26:54.445291+00:00",
+  "last_attempt_at": "2026-10-25T18:54:51.632750+00:00",
   "verification": {
-    "at": "2026-10-25T18:26:54.482695+00:00",
-    "file": "rucne-20261025-182654.zip",
+    "at": "2026-10-25T18:54:51.674986+00:00",
+    "file": "rucne-20261025-185451.zip",
     "ok": false,
     "problems": [
       "vymyslená chyba"
@@ -13,5 +13,5 @@
     "schema_current": false
   },
   "last_error": "Záloha neprešla overením obnovy: vymyslená chyba",
-  "last_error_at": "2026-10-25T18:26:54.483122+00:00"
+  "last_error_at": "2026-10-25T18:54:51.675436+00:00"
 }
