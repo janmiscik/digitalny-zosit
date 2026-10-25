@@ -779,3 +779,74 @@ def test_startup_upgrade_can_be_disabled(monkeypatch):
     monkeypatch.setattr(auto_backup, "account_slugs", lambda: pytest.fail("nemalo sa volať"))
 
     assert auto_backup.upgrade_accounts_on_startup() == []
+
+
+# =========================================
+# SKÚŠKA OBNOVY Z BUCKETU (offsite_restore --verify)
+# =========================================
+
+def _bucket_with(monkeypatch, objects):
+
+    import offsite_backup
+    from datetime import datetime, timezone
+    from tests.test_offsite_backup import ENV, FakeS3
+
+    for name, value in ENV.items():
+        monkeypatch.setenv(name, value)
+
+    fake = FakeS3()
+
+    for index, (account, name, data) in enumerate(objects):
+        fake.objects[("moj-bucket", f"digitalny-zosit/{account}/{name}")] = {
+            "data": data, "meta": {}, "modified": datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(minutes=index),
+        }
+
+    monkeypatch.setattr(offsite_backup, "_client", lambda: fake)
+
+
+def test_offsite_verify_ok_for_good_plain_and_encrypted_backup(monkeypatch, tmp_path, capsys):
+
+    import backup_crypto
+    import offsite_restore
+
+    make_account()
+    good = backup_zip()
+    passphrase = "toto-je-dlhe-nahodne-heslo-123"
+    backup_crypto.encrypt_file(good, tmp_path / "enc", passphrase)
+
+    _bucket_with(monkeypatch, [("admin", "stara.zip", b"nezmysel"), ("admin", "nova.zip.enc", (tmp_path / "enc").read_bytes()),
+                               ("firma", "plain.zip", good.read_bytes())])
+    monkeypatch.setenv("BACKUP_ENCRYPTION_KEY", passphrase)
+
+    assert offsite_restore.main(["x", "--verify"]) == 0
+
+    out = capsys.readouterr().out
+
+    assert "OK  admin" in out and "nova.zip.enc" in out and "stara.zip" not in out
+    assert "OK  firma" in out and "s chybou: 0" in out
+
+
+def test_offsite_verify_reports_broken_backup_and_leaves_no_files(monkeypatch, tmp_path, capsys):
+
+    import offsite_restore
+
+    _bucket_with(monkeypatch, [("admin", "rozbita.zip", b"toto nie je zip")])
+
+    assert offsite_restore.main(["x", "--verify", "--out", str(tmp_path / "nepouzite")]) == 1
+
+    assert "CHYBA admin" in capsys.readouterr().out
+    assert not (tmp_path / "nepouzite").exists()
+
+
+def test_offsite_verify_encrypted_without_key_is_an_error(monkeypatch, tmp_path, capsys):
+
+    import backup_crypto
+    import offsite_restore
+
+    (tmp_path / "p.zip").write_bytes(b"x" * 300)
+    backup_crypto.encrypt_file(tmp_path / "p.zip", tmp_path / "e", "toto-je-dlhe-nahodne-heslo-123")
+    _bucket_with(monkeypatch, [("admin", "a.zip.enc", (tmp_path / "e").read_bytes())])
+    monkeypatch.delenv("BACKUP_ENCRYPTION_KEY", raising=False)
+
+    assert offsite_restore.main(["x", "--verify"]) == 1
+    assert "CHYBA admin" in capsys.readouterr().out

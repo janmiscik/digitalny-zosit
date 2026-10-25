@@ -52,3 +52,14 @@ Nastavenia → Obnoviť zo zálohy → vyber súbor `.zip.enc` stiahnutý z buck
 zadaj heslo (ak ostane prázdne, použije sa `BACKUP_ENCRYPTION_KEY` zo servera) → Obnoviť. Šifrovanie sa
 rozpozná podľa obsahu súboru, nie podľa názvu. Pri zlom hesle alebo poškodenom súbore sa nič nezmení.
 Heslo sa nikam neukladá ani nezobrazuje. Príkaz `decrypt_backup.py` je potrebný len ak appka nebeží.
+
+## Skúška obnovy z bucketu (odporúčané raz mesačne)
+
+Overí, že zálohy v R2 sa dajú naozaj stiahnuť, rozšifrovať a obnoviť. Berie najnovšiu zálohu každého konta, nič nenahráva ani nemení a dočasné súbory zmaže:
+
+```
+python offsite_restore.py --verify
+python offsite_restore.py --verify --account admin
+```
+
+Potrebuje `OFFSITE_BACKUP_*` a pri šifrovaných zálohách `BACKUP_ENCRYPTION_KEY` (rovnaké ako na serveri). Výstup: `OK` alebo `CHYBA` s dôvodom pri každom konte; návratový kód je 1, ak niektoré konto zlyhalo.

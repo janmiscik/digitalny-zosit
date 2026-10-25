@@ -9,6 +9,8 @@ zašifrované, aj BACKUP_ENCRYPTION_KEY (alebo sa opýta na heslo).
     python offsite_restore.py --list --account admin      zoznam záloh jedného konta
     python offsite_restore.py --download --account admin  stiahne NAJNOVŠIU zálohu konta
     python offsite_restore.py --download --account admin --name rucne-2026-10-24.zip.enc
+    python offsite_restore.py --verify                    skúška obnovy: najnovšia záloha KAŻDÉHO konta
+                                                          sa stiahne, rozšifruje a overí (nič sa nenahrá)
     voliteľne: --out priečinok (predvolene ./obnova)
 
 Výsledné .zip sa potom nahrá v appke: Nastavenia -> Obnoviť zo zálohy
@@ -120,18 +122,51 @@ def download_backup(client, bucket: str, row: dict, out_dir: Path, secret: str |
     return final
 
 
+def verify_latest(client, bucket: str, secret: str | None, account: str | None = None) -> list[dict]:
+    """
+    Skúška obnovy: pre každé konto stiahne NAJNOVŠIU zálohu do dočasného
+    priečinka, rozšifruje ju a spustí rovnaký test obnovy ako appka
+    (integrita DB, počty riadkov, prílohy). Dočasné súbory zmaže.
+    """
+
+    import auto_backup    # ťažký import - až keď je naozaj treba
+
+    latest: dict[str, dict] = {}
+
+    for row in list_backups(client, bucket, account):    # zoradené od najnovšej
+        latest.setdefault(row["account"], row)
+
+    results = []
+
+    for name, row in sorted(latest.items()):
+
+        with tempfile.TemporaryDirectory() as tmp:
+
+            try:
+                path = download_backup(client, bucket, row, Path(tmp), secret)
+                problems = auto_backup.verify_backup_zip(path).problems
+
+            except (ValueError, FileExistsError, backup_crypto.DecryptionError, OSError) as exc:
+                problems = [str(exc)[:200]]
+
+        results.append({"account": name, "name": row["name"], "modified": row["modified"], "problems": list(problems)})
+
+    return results
+
+
 def main(argv: list[str]) -> int:
 
     parser = argparse.ArgumentParser(description="Stiahnutie záloh z bucketu mimo servera")
     parser.add_argument("--list", action="store_true")
     parser.add_argument("--download", action="store_true")
+    parser.add_argument("--verify", action="store_true")
     parser.add_argument("--account")
     parser.add_argument("--name")
     parser.add_argument("--out", default="obnova")
     args = parser.parse_args(argv[1:])
 
-    if args.list == args.download:
-        parser.error("Zvoľ presne jedno z --list alebo --download.")
+    if [args.list, args.download, args.verify].count(True) != 1:
+        parser.error("Zvoľ presne jedno z --list, --download alebo --verify.")
 
     if not offsite_backup.enabled():
         print("CHYBA: nastav OFFSITE_BACKUP_BUCKET, OFFSITE_BACKUP_ACCESS_KEY_ID a OFFSITE_BACKUP_SECRET_ACCESS_KEY.")
@@ -139,6 +174,26 @@ def main(argv: list[str]) -> int:
 
     client = offsite_backup._client()
     bucket = os.environ["OFFSITE_BACKUP_BUCKET"].strip()
+
+    if args.verify:
+
+        secret = backup_crypto.passphrase()
+        results = verify_latest(client, bucket, secret, args.account)
+
+        if not results:
+            print("CHYBA: v bucketi nie je žiadna záloha.")
+            return 1
+
+        for result in results:
+            state = "OK " if not result["problems"] else "CHYBA"
+            print(f"{state} {result['account']:20} {result['name']} ({result['modified']:%Y-%m-%d %H:%M})")
+
+            for problem in result["problems"]:
+                print(f"      - {problem}")
+
+        failed = sum(1 for result in results if result["problems"])
+        print(f"Overených kont: {len(results)}, s chybou: {failed}")
+        return 1 if failed else 0
 
     rows = list_backups(client, bucket, args.account)
 
