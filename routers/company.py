@@ -18,6 +18,8 @@ from backup_utils import MAX_UPLOAD_SIZE_BYTES, create_backup_bytes, restore_fro
 from invoice_utils import NON_VAT_PAYER_NOTICE
 from models import AuditLog, Company
 import tenancy
+import backup_crypto
+from starlette.concurrency import run_in_threadpool
 from templates_config import templates
 from validators import (
     validate_dic_format,
@@ -493,6 +495,31 @@ async def upload_restore(
         max_bytes=MAX_UPLOAD_SIZE_BYTES,
         too_large_detail="Nahraný súbor je príliš veľký."
     )
+
+    # Zašifrovanú zálohu (.zip.enc z bucketu) rozšifrujeme pred obnovou. Heslo
+    # sa berie z poľa formulára, ak je prázdne, z BACKUP_ENCRYPTION_KEY servera.
+    if backup_crypto.is_encrypted_backup(file_bytes):
+
+        password = str(form.get("backup_password") or "").strip() or backup_crypto.passphrase()
+
+        if not password:
+
+            raise HTTPException(
+                status_code=422,
+                detail="Záloha je zašifrovaná. Zadaj heslo k zálohe."
+            )
+
+        try:
+
+            # scrypt je náročný na CPU a pamäť - nesmie blokovať ostatné požiadavky
+            file_bytes = await run_in_threadpool(backup_crypto.decrypt_bytes, file_bytes, password)
+
+        except backup_crypto.DecryptionError:
+
+            raise HTTPException(
+                status_code=422,
+                detail="Zálohu sa nepodarilo rozšifrovať: zlé heslo alebo je súbor poškodený."
+            )
 
     restore_from_upload(file_bytes)
 

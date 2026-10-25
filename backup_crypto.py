@@ -168,3 +168,25 @@ def decrypt_file(source: Path, target: Path, secret: str) -> None:
             raise DecryptionError(
                 "Rozšifrovanie zlyhalo: zlé heslo alebo je súbor poškodený či upravený."
             ) from exc
+
+
+def is_encrypted_backup(data: bytes) -> bool:
+    """Zašifrovanú zálohu rozpoznáme podľa hlavičky, nie podľa prípony súboru."""
+
+    return data[:len(MAGIC)] == MAGIC
+
+
+def decrypt_bytes(data: bytes, secret: str) -> bytes:
+    """Rozšifruje zálohu držanú v pamäti (nahraný súbor); chyby ako DecryptionError."""
+
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="dzdec-") as directory:
+
+        source = Path(directory) / "in.enc"
+        target = Path(directory) / "out.zip"
+
+        source.write_bytes(data)
+        decrypt_file(source, target, secret)
+
+        return target.read_bytes()

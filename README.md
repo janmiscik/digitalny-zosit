@@ -296,7 +296,7 @@ Zálohy ležia na tom istom Volume ako dáta, takže pri jeho strate zmiznú spo
 | `OFFSITE_BACKUP_REGION` | región (predvolené `auto`) |
 | `OFFSITE_BACKUP_PREFIX` | predpona kľúčov (predvolené `digitalny-zosit`) |
 | `OFFSITE_BACKUP_KEEP` | koľko záloh na konto držať v bucketi (predvolené 30) |
-| `BACKUP_ENCRYPTION_KEY` | voliteľné heslo (min. 20 znakov): zálohy sa pred nahratím zašifrujú (AES-256-GCM) a v bucketi majú príponu `.enc`. **Ulož ho mimo Railway** (správca hesiel) - bez neho sa zálohy nedajú obnoviť. Rozšifrovanie: `python decrypt_backup.py zaloha.zip.enc zaloha.zip`, výsledok nahraj cez Nastavenia → Obnova zo zálohy. Pri zlom hesle sa nenahrá nič (nikdy nie nešifrovaná záloha). |
+| `BACKUP_ENCRYPTION_KEY` | voliteľné heslo (min. 20 znakov): zálohy sa pred nahratím zašifrujú (AES-256-GCM) a v bucketi majú príponu `.enc`. **Ulož ho mimo Railway** (správca hesiel) - bez neho sa zálohy nedajú obnoviť. Obnova: súbor `.zip.enc` sa dá nahrať priamo v Nastavenia → Obnoviť zo zálohy (s heslom); mimo appky `python decrypt_backup.py zaloha.zip.enc zaloha.zip`. Pri zlom hesle sa nenahrá nič (nikdy nie nešifrovaná záloha). |
 
 Súbory sa ukladajú ako `<predpona>/<konto>/<názov zálohy>.zip`. Po nahratí appka overí veľkosť súboru v bucketi a poreže staré zálohy nad limit (len v priečinku daného konta). Chyba nahrávania nezhodí vytvorenie zálohy – zobrazí sa ako upozornenie v Nastaveniach. Bucket nastav ako **súkromný** (zálohy obsahujú dáta zákazníkov) a pre appku vytvor kľúč len s prístupom k tomuto bucketu.
 
@@ -326,7 +326,7 @@ pip install -r requirements-dev.txt   # raz, pytest sa do produkčného obrazu n
 python -m pytest tests/ -q
 ```
 
-Aktuálne **1381 testov**, rozdelených podľa oblasti:
+Aktuálne **1388 testov**, rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|

@@ -653,3 +653,128 @@ def test_save_automatic_backup_does_not_overwrite_on_same_second_collision(
     safety_backups = sorted(backup_utils.backups_dir().glob("pred-obnovou-*.zip"))
 
     assert len(safety_backups) == 2
+
+
+# ---------- obnova zo šifrovanej zálohy (.zip.enc) ----------
+
+ENC_PASSWORD = "toto-je-dlhe-nahodne-heslo-123"
+
+
+def encrypted_backup_bytes(password=ENC_PASSWORD):
+
+    import tempfile
+
+    import backup_crypto
+
+    with tempfile.TemporaryDirectory() as directory:
+
+        plain = Path(directory) / "z.zip"
+        plain.write_bytes(backup_utils.create_backup_bytes())
+        encrypted = Path(directory) / "z.zip.enc"
+        backup_crypto.encrypt_file(plain, encrypted, password)
+
+        return encrypted.read_bytes()
+
+
+def test_restore_accepts_encrypted_backup_with_form_password(temp_env, monkeypatch):
+
+    monkeypatch.delenv("BACKUP_ENCRYPTION_KEY", raising=False)
+
+    response = client.post(
+        "/settings/restore",
+        data={"backup_password": ENC_PASSWORD},
+        files={"backup_file": ("zaloha.zip.enc", encrypted_backup_bytes(), "application/octet-stream")},
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert "restored=1" in response.headers["location"]
+
+
+def test_restore_uses_server_password_when_form_field_is_empty(temp_env, monkeypatch):
+
+    monkeypatch.setenv("BACKUP_ENCRYPTION_KEY", ENC_PASSWORD)
+
+    response = client.post(
+        "/settings/restore",
+        data={"backup_password": ""},
+        files={"backup_file": ("zaloha.zip.enc", encrypted_backup_bytes(), "application/octet-stream")},
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+
+
+def test_restore_detects_encryption_by_content_not_file_name(temp_env, monkeypatch):
+
+    monkeypatch.delenv("BACKUP_ENCRYPTION_KEY", raising=False)
+
+    response = client.post(
+        "/settings/restore",
+        data={"backup_password": ENC_PASSWORD},
+        files={"backup_file": ("premenovane.zip", encrypted_backup_bytes(), "application/zip")},
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+
+
+def test_restore_encrypted_without_any_password_is_refused(temp_env, monkeypatch):
+
+    monkeypatch.delenv("BACKUP_ENCRYPTION_KEY", raising=False)
+
+    response = client.post(
+        "/settings/restore",
+        files={"backup_file": ("zaloha.zip.enc", encrypted_backup_bytes(), "application/octet-stream")}
+    )
+
+    assert response.status_code == 422
+    assert "heslo" in response.text.lower()
+
+
+def test_restore_with_wrong_password_changes_nothing_and_does_not_echo_it(temp_env, monkeypatch):
+
+    monkeypatch.delenv("BACKUP_ENCRYPTION_KEY", raising=False)
+    wrong = "uplne-ine-heslo-uplne-ine-1"
+
+    before = backup_utils.create_backup_bytes()
+
+    response = client.post(
+        "/settings/restore",
+        data={"backup_password": wrong},
+        files={"backup_file": ("zaloha.zip.enc", encrypted_backup_bytes(), "application/octet-stream")}
+    )
+
+    assert response.status_code == 422
+    assert wrong not in response.text and ENC_PASSWORD not in response.text
+
+    # databáza ostala nedotknutá: ďalšia záloha je stále platná a obnoviteľná
+    assert zipfile.is_zipfile(io.BytesIO(before))
+
+
+def test_restore_plain_zip_ignores_a_password_field(temp_env):
+
+    response = client.post(
+        "/settings/restore",
+        data={"backup_password": "hocijake"},
+        files={"backup_file": ("zaloha.zip", backup_utils.create_backup_bytes(), "application/zip")},
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+
+
+def test_restore_corrupted_encrypted_file_is_refused(temp_env, monkeypatch):
+
+    monkeypatch.delenv("BACKUP_ENCRYPTION_KEY", raising=False)
+
+    blob = bytearray(encrypted_backup_bytes())
+    blob[len(blob) // 2] ^= 1
+
+    response = client.post(
+        "/settings/restore",
+        data={"backup_password": ENC_PASSWORD},
+        files={"backup_file": ("zaloha.zip.enc", bytes(blob), "application/octet-stream")}
+    )
+
+    assert response.status_code == 422

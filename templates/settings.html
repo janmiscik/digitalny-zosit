@@ -540,8 +540,21 @@
                 <input
                     type="file"
                     name="backup_file"
-                    accept=".zip"
+                    accept=".zip,.enc"
                     required
+                >
+
+                <p style="color: var(--text-muted); font-size: 0.85em; margin: 10px 0 4px;">
+                    Zašifrovaná záloha (súbor <code>.zip.enc</code> z úložiska mimo servera):
+                    zadaj heslo, ktorým bola zašifrovaná. Ak ostane prázdne, použije sa heslo
+                    nastavené na serveri.
+                </p>
+
+                <input
+                    type="password"
+                    name="backup_password"
+                    autocomplete="off"
+                    placeholder="Heslo k šifrovanej zálohe (len pre .enc)"
                 >
 
                 <button

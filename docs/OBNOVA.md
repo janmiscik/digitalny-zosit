@@ -45,3 +45,10 @@ Ak je nastavené `BACKUP_ENCRYPTION_KEY`, zálohy v bucketi sú zašifrované.
 3. Výsledné `zaloha.zip` nahraj cez Nastavenia → Obnova zo zálohy.
 
 **Heslo musíš mať uložené mimo Railway.** Bez neho sa záloha nedá rozšifrovať. Po zmene hesla sa staré zálohy dajú otvoriť len starým heslom.
+
+
+### Najjednoduchšie: obnova šifrovanej zálohy priamo v appke
+Nastavenia → Obnoviť zo zálohy → vyber súbor `.zip.enc` stiahnutý z bucketu → do poľa „Heslo k šifrovanej zálohe"
+zadaj heslo (ak ostane prázdne, použije sa `BACKUP_ENCRYPTION_KEY` zo servera) → Obnoviť. Šifrovanie sa
+rozpozná podľa obsahu súboru, nie podľa názvu. Pri zlom hesle alebo poškodenom súbore sa nič nezmení.
+Heslo sa nikam neukladá ani nezobrazuje. Príkaz `decrypt_backup.py` je potrebný len ak appka nebeží.

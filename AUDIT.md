@@ -125,3 +125,5 @@ SQLite engine kont aj `accounts.db` teraz používa `journal_mode=WAL` a `synchr
 - **Súbežné migrácie (nájdené v CI):** Alembic nie je bezpečný pre súbežný beh vo vláknach jedného procesu. Dve súčasné registrácie (alebo registrácia počas štartovej migrácie) mohli nechať konto s polovičnou schémou. Všetky migrácie v procese teraz bežia jedna po druhej (`tenancy._migration_lock`); test s pôvodným chovaním zlyháva, s opravou prechádza.
 
 - **Poistka proti výpadku hostingu:** `docker-compose.yml` + `Caddyfile` (HTTPS) a `offsite_restore.py` (stiahnutie a rozšifrovanie zálohy z bucketu) umožňujú spustiť appku inde a obnoviť dáta (`docs/HOSTING.md`). Postup je overený testami konfigurácie a CLI; samotné nasadenie na cudzom serveri som nespúšťal.
+
+- **Obnova šifrovanej zálohy v appke:** `.zip.enc` sa dá nahrať priamo v Nastaveniach; rozpozná sa podľa obsahu, dešifruje sa mimo hlavného vlákna, pri zlom hesle sa dáta nezmenia a heslo sa nezobrazuje (testy v `tests/test_backup.py`).
