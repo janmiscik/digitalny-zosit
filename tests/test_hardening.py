@@ -273,6 +273,8 @@ def test_csp_is_sent_with_html_pages_only():
         assert directive in csp
 
     assert "http:" not in csp and "*" not in csp.replace("'unsafe-inline'", "")
+    script_src = [d for d in csp.split("; ") if d.startswith("script-src ")][0]
+    assert "unsafe-inline" not in script_src
 
     # JSON a ostatné odpovede CSP nenesú (PDF viewer v prehliadači by mohol zlyhať)
     assert "content-security-policy" not in client.get("/health").headers

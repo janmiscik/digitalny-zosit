@@ -100,7 +100,7 @@
             type="button"
             class="theme-button"
             id="themeButton"
-            onclick="toggleTheme()"
+            data-action="toggle-theme"
         >
             🌙
         </button>
@@ -211,7 +211,7 @@
                                 </td>
 
                                 <td>
-                                    <button type="button" class="invoice-item-remove" onclick="removeItemRow(this)" title="Odstrániť položku">×</button>
+                                    <button type="button" class="invoice-item-remove" data-action="remove-item-row" title="Odstrániť položku">×</button>
                                 </td>
 
                             </tr>
@@ -222,7 +222,7 @@
 
                 </table>
 
-                <button type="button" class="add-item-button" onclick="addItemRow()">
+                <button type="button" class="add-item-button" data-action="add-item-row">
                     + Pridať položku
                 </button>
 
@@ -280,7 +280,7 @@
         </td>
 
         <td>
-            <button type="button" class="invoice-item-remove" onclick="removeItemRow(this)" title="Odstrániť položku">×</button>
+            <button type="button" class="invoice-item-remove" data-action="remove-item-row" title="Odstrániť položku">×</button>
         </td>
 
     </tr>
@@ -288,56 +288,8 @@
 </template>
 
 
-<script>
-
-function addItemRow() {
-
-    const template = document.getElementById("itemRowTemplate");
-    const clone = template.content.cloneNode(true);
-
-    document.getElementById("itemsBody").appendChild(clone);
-
-}
-
-
-function removeItemRow(button) {
-
-    const rows = document.querySelectorAll(".invoice-item-row");
-
-    if (rows.length <= 1) {
-        return;
-    }
-
-    button.closest("tr").remove();
-
-}
-
-
-function applyTheme(theme) {
-
-    document.documentElement.setAttribute("data-theme", theme);
-
-    const button = document.getElementById("themeButton");
-    button.textContent = theme === "dark" ? "☀️" : "🌙";
-
-}
-
-
-function toggleTheme() {
-
-    const currentTheme = document.documentElement.getAttribute("data-theme");
-    const newTheme = currentTheme === "dark" ? "light" : "dark";
-
-    localStorage.setItem("digitalnyZositTheme", newTheme);
-    applyTheme(newTheme);
-
-}
-
-
-const savedTheme = localStorage.getItem("digitalnyZositTheme");
-applyTheme(savedTheme === "dark" ? "dark" : "light");
-
-</script>
+<script src="{{ url_for('static', path='js/app.js') }}"></script>
+<script src="{{ url_for('static', path='js/pages/credit_note_form.js') }}"></script>
 
 
 </body>

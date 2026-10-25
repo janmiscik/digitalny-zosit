@@ -1,16 +1,14 @@
 """
-Sprísnenie CSP po etapách: počet inline skriptov a handlerov v šablónach sa nesmie ZVYŠOVAŤ.
-Pri presune do static/ sa limity znižujú; cieľ je 0 (potom sa môže zrušiť 'unsafe-inline' v script-src).
+CSP etapa 3: šablóny nesmú obsahovať inline skripty ani inline handlery (onclick...).
+Všetka logika je v static/js/ a obsluhuje sa delegovane cez data-action atribúty.
 """
 
 import re
 from pathlib import Path
 
-TEMPLATES = Path(__file__).resolve().parents[1] / "templates"
-
-# aktuálny stav (etapa 1) - pri každom kroku presunu hodnoty zníž
-MAX_INLINE_SCRIPT_BLOCKS = 28
-MAX_INLINE_HANDLERS = 59
+ROOT = Path(__file__).resolve().parents[1]
+TEMPLATES = ROOT / "templates"
+JS = ROOT / "static" / "js"
 
 
 def read_all():
@@ -18,25 +16,42 @@ def read_all():
     return {path.name: path.read_text(encoding="utf-8") for path in TEMPLATES.glob("*.html")}
 
 
-def inline_script_blocks(text: str) -> int:
+def test_no_inline_script_blocks():
 
-    return len(re.findall(r"<script(?![^>]*\bsrc=)[^>]*>", text, flags=re.IGNORECASE))
+    bad = {n: len(re.findall(r"<script(?![^>]*\bsrc=)[^>]*>", t, flags=re.I)) for n, t in read_all().items()}
 
-
-def inline_handlers(text: str) -> int:
-
-    return len(re.findall(r"\son[a-z]+\s*=", text, flags=re.IGNORECASE))
+    assert not {n: c for n, c in bad.items() if c}
 
 
-def test_inline_scripts_do_not_grow():
+def test_no_inline_handlers():
 
-    total = sum(inline_script_blocks(text) for text in read_all().values())
+    bad = {n: len(re.findall(r"\son[a-z]+\s*=", t, flags=re.I)) for n, t in read_all().items()}
 
-    assert total <= MAX_INLINE_SCRIPT_BLOCKS, f"inline <script> blokov: {total} (limit {MAX_INLINE_SCRIPT_BLOCKS})"
+    assert not {n: c for n, c in bad.items() if c}
 
 
-def test_inline_handlers_do_not_grow():
+def test_every_template_loads_app_js():
 
-    total = sum(inline_handlers(text) for text in read_all().values())
+    missing = [n for n, t in read_all().items() if "js/app.js" not in t and "{% extends" not in t and "{% include" not in t]
 
-    assert total <= MAX_INLINE_HANDLERS, f"inline handlerov (onclick...): {total} (limit {MAX_INLINE_HANDLERS})"
+    assert not missing, missing
+
+
+def test_script_files_exist():
+
+    for name, text in read_all().items():
+        for match in re.findall(r"url_for\('static',\s*path='([^']+\.js)'\)", text):
+            assert (ROOT / "static" / match).exists(), f"{name}: chýba {match}"
+
+
+def test_every_data_action_is_registered():
+
+    registered = set()
+    for path in JS.rglob("*.js"):
+        registered |= set(re.findall(r'["\']?([a-z][a-z0-9-]+)["\']?\s*:\s*(?:\(|function|async|\w+)', path.read_text(encoding="utf-8")))
+
+    used = set()
+    for text in read_all().values():
+        used |= set(re.findall(r'data-(?:change-)?action="([a-z0-9-]+)"', text))
+
+    assert not (used - registered), sorted(used - registered)

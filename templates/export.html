@@ -34,7 +34,7 @@
             type="button"
             class="theme-button"
             id="themeButton"
-            onclick="toggleTheme()"
+            data-action="toggle-theme"
             title="Prepnúť tému"
         >
             🌙
@@ -190,93 +190,11 @@
 </main>
 
 
-<script>
-
-(function () {
-
-    const preset = document.getElementById("exportPreset");
-
-    preset.addEventListener("change", function () {
-
-        document.querySelectorAll(".export-custom").forEach(function (el) {
-            el.hidden = preset.value !== "custom";
-        });
-
-        if (preset.value !== "custom") {
-            document.getElementById("exportForm").submit();
-        }
-
-    });
-
-})();
-
-</script>
+<script src="{{ url_for('static', path='js/app.js') }}"></script>
+<script src="{{ url_for('static', path='js/pages/export.js') }}"></script>
 
 
-<script>
 
-function applyTheme(theme) {
-
-    document.documentElement.setAttribute(
-        "data-theme",
-        theme
-    );
-
-    const button =
-        document.getElementById("themeButton");
-
-    if (theme === "dark") {
-
-        button.textContent = "☀️";
-
-    } else {
-
-        button.textContent = "🌙";
-
-    }
-
-}
-
-
-function toggleTheme() {
-
-    const currentTheme =
-        document.documentElement.getAttribute(
-            "data-theme"
-        );
-
-    const newTheme =
-        currentTheme === "dark"
-            ? "light"
-            : "dark";
-
-    localStorage.setItem(
-        "digitalnyZositTheme",
-        newTheme
-    );
-
-    applyTheme(newTheme);
-
-}
-
-
-const savedTheme =
-    localStorage.getItem(
-        "digitalnyZositTheme"
-    );
-
-
-if (savedTheme === "dark") {
-
-    applyTheme("dark");
-
-} else {
-
-    applyTheme("light");
-
-}
-
-</script>
 
 
 </body>

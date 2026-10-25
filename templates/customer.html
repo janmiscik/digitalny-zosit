@@ -38,7 +38,7 @@
             type="button"
             class="theme-button"
             id="themeButton"
-            onclick="toggleTheme()"
+            data-action="toggle-theme"
             title="Prepnúť tému"
         >
             🌙
@@ -275,7 +275,7 @@
                         <div class="customer-note-time">{{ note.time }}</div>
                     </div>
 
-                    <form action="/customers/{{ customer.id }}/notes/{{ note.id }}/delete" method="post" onsubmit="return confirm('Zmazať túto poznámku?');">
+                    <form action="/customers/{{ customer.id }}/notes/{{ note.id }}/delete" method="post" data-confirm="Zmazať túto poznámku?">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                         <button type="submit" class="invoice-item-remove" title="Zmazať">×</button>
                     </form>
@@ -336,7 +336,7 @@
             <button
                 type="button"
                 class="new-customer-button"
-                onclick="openJobForm()"
+                data-action="open-job-form"
             >
                 + Nová zákazka
             </button>
@@ -415,7 +415,7 @@
 
                                 <select
                                     name="status"
-                                    onchange="this.form.submit()"
+                                    data-auto-submit
                                     class="job-status status-{{ job.status | lower | replace(' ', '-') }}"
                                 >
 
@@ -525,7 +525,7 @@
                     <button
                         type="button"
                         class="new-customer-button"
-                        onclick="openJobForm()"
+                        data-action="open-job-form"
                     >
                         + Pridať zákazku
                     </button>
@@ -823,7 +823,7 @@
             <button
                 type="button"
                 class="close-button"
-                onclick="closeJobForm()"
+                data-action="close-job-form"
             >
                 ×
             </button>
@@ -918,7 +918,7 @@
                 <button
                     type="button"
                     class="cancel-button"
-                    onclick="closeJobForm()"
+                    data-action="close-job-form"
                 >
                     Zrušiť
                 </button>
@@ -944,110 +944,8 @@
 </div>
 
 
-<script>
-
-
-function openJobForm() {
-
-    document
-        .getElementById("jobModal")
-        .classList.add("active");
-
-}
-
-
-function closeJobForm() {
-
-    document
-        .getElementById("jobModal")
-        .classList.remove("active");
-
-}
-
-
-document
-    .getElementById("jobModal")
-    .addEventListener(
-        "click",
-        function(event) {
-
-            if (event.target === this) {
-
-                closeJobForm();
-
-            }
-
-        }
-    );
-
-
-function applyTheme(theme) {
-
-    document.documentElement.setAttribute(
-        "data-theme",
-        theme
-    );
-
-
-    const button =
-        document.getElementById("themeButton");
-
-
-    if (theme === "dark") {
-
-        button.textContent = "☀️";
-
-    } else {
-
-        button.textContent = "🌙";
-
-    }
-
-}
-
-
-function toggleTheme() {
-
-    const currentTheme =
-        document.documentElement.getAttribute(
-            "data-theme"
-        );
-
-
-    const newTheme =
-        currentTheme === "dark"
-            ? "light"
-            : "dark";
-
-
-    localStorage.setItem(
-        "digitalnyZositTheme",
-        newTheme
-    );
-
-
-    applyTheme(newTheme);
-
-}
-
-
-const savedTheme =
-    localStorage.getItem(
-        "digitalnyZositTheme"
-    );
-
-
-if (savedTheme === "dark") {
-
-    applyTheme("dark");
-
-} else {
-
-    applyTheme("light");
-
-}
-
-</script>
+<script src="{{ url_for('static', path='js/app.js') }}"></script>
+<script src="{{ url_for('static', path='js/pages/customer.js') }}"></script>
 
 
 </body>

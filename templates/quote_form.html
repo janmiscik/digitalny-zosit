@@ -102,7 +102,7 @@
             type="button"
             class="theme-button"
             id="themeButton"
-            onclick="toggleTheme()"
+            data-action="toggle-theme"
             title="Prepnúť tému"
         >
             🌙
@@ -312,7 +312,7 @@
                                         <button
                                             type="button"
                                             class="invoice-item-remove"
-                                            onclick="removeItemRow(this)"
+                                            data-action="remove-item-row"
                                             title="Odstrániť položku"
                                         >
                                             ×
@@ -398,7 +398,7 @@
                                     <button
                                         type="button"
                                         class="invoice-item-remove"
-                                        onclick="removeItemRow(this)"
+                                        data-action="remove-item-row"
                                         title="Odstrániť položku"
                                     >
                                         ×
@@ -418,7 +418,7 @@
                 <button
                     type="button"
                     class="add-item-button"
-                    onclick="addItemRow()"
+                    data-action="add-item-row"
                 >
                     + Pridať položku
                 </button>
@@ -545,7 +545,7 @@
             <button
                 type="button"
                 class="invoice-item-remove"
-                onclick="removeItemRow(this)"
+                data-action="remove-item-row"
                 title="Odstrániť položku"
             >
                 ×
@@ -557,110 +557,8 @@
 </template>
 
 
-<script>
-
-/* =====================================
-   DYNAMICKÉ RIADKY POLOŽIEK
-   ===================================== */
-
-function addItemRow() {
-
-    const template =
-        document.getElementById("itemRowTemplate");
-
-    const clone =
-        template.content.cloneNode(true);
-
-    document
-        .getElementById("itemsBody")
-        .appendChild(clone);
-
-}
-
-
-function removeItemRow(button) {
-
-    const rows =
-        document.querySelectorAll(".invoice-item-row");
-
-    if (rows.length <= 1) {
-        return;
-    }
-
-    button
-        .closest("tr")
-        .remove();
-
-}
-
-
-/* =====================================
-   TÉMA
-   ===================================== */
-
-
-function applyTheme(theme) {
-
-    document.documentElement.setAttribute(
-        "data-theme",
-        theme
-    );
-
-    const button =
-        document.getElementById("themeButton");
-
-    if (theme === "dark") {
-
-        button.textContent = "☀️";
-
-    } else {
-
-        button.textContent = "🌙";
-
-    }
-
-}
-
-
-function toggleTheme() {
-
-    const currentTheme =
-        document.documentElement.getAttribute(
-            "data-theme"
-        );
-
-    const newTheme =
-        currentTheme === "dark"
-            ? "light"
-            : "dark";
-
-    localStorage.setItem(
-        "digitalnyZositTheme",
-        newTheme
-    );
-
-    applyTheme(newTheme);
-
-}
-
-
-const savedTheme =
-    localStorage.getItem(
-        "digitalnyZositTheme"
-    );
-
-
-if (savedTheme === "dark") {
-
-    applyTheme("dark");
-
-} else {
-
-    applyTheme("light");
-
-}
-
-</script>
+<script src="{{ url_for('static', path='js/app.js') }}"></script>
+<script src="{{ url_for('static', path='js/pages/quote_form.js') }}"></script>
 
 
 </body>

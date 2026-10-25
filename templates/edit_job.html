@@ -39,7 +39,7 @@
             type="button"
             class="theme-button"
             id="themeButton"
-            onclick="toggleTheme()"
+            data-action="toggle-theme"
         >
             🌙
         </button>
@@ -323,7 +323,7 @@
                                 <td data-label="Dátum">{{ cost.cost_date.strftime("%d.%m.%Y") }}</td>
                                 <td data-label="Suma" class="num">{{ "%.2f"|format(cost.amount) }} €</td>
                                 <td>
-                                    <form action="/jobs/{{ job.id }}/costs/{{ cost.id }}/delete" method="post" onsubmit="return confirm('Zmazať tento náklad?');">
+                                    <form action="/jobs/{{ job.id }}/costs/{{ cost.id }}/delete" method="post" data-confirm="Zmazať tento náklad?">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                                         <button type="submit" class="invoice-item-remove" title="Zmazať">×</button>
                                     </form>
@@ -389,40 +389,7 @@
 
         </div>
 
-        <script>
 
-        (function () {
-
-            const category = document.getElementById("costCategory");
-            const amount = document.getElementById("costAmount");
-            const hours = document.getElementById("costHours");
-            const rate = document.getElementById("costRate");
-            const total = document.getElementById("costTotal");
-
-            function refresh() {
-
-                const isWork = category.value === "praca";
-
-                document.querySelectorAll('#costForm [data-for="praca"]').forEach(function (el) { el.hidden = !isWork; });
-                document.querySelector('#costForm [data-for="amount"]').hidden = isWork;
-
-                amount.required = !isWork;
-                hours.required = isWork;
-                rate.required = isWork;
-
-                const value = (parseFloat(hours.value) || 0) * (parseFloat(rate.value) || 0);
-
-                total.textContent = value.toFixed(2).replace(".", ",") + " €";
-
-            }
-
-            [category, hours, rate].forEach(function (el) { el.addEventListener("input", refresh); });
-
-            refresh();
-
-        })();
-
-        </script>
 
 
         <!-- =====================================
@@ -447,7 +414,7 @@
 
                             <div style="position: relative;">
                                 <img src="/jobs/photos/{{ photo.filename }}" style="width: 120px; height: 120px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border);">
-                                <form action="/jobs/{{ job.id }}/photos/{{ photo.id }}/delete" method="post" onsubmit="return confirm('Zmazať túto fotku?');" style="position: absolute; top: 4px; right: 4px;">
+                                <form action="/jobs/{{ job.id }}/photos/{{ photo.id }}/delete" method="post" data-confirm="Zmazať túto fotku?" style="position: absolute; top: 4px; right: 4px;">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                                     <button type="submit" style="background: rgba(0,0,0,0.6); color: white; border: none; border-radius: 50%; width: 22px; height: 22px; cursor: pointer;">×</button>
                                 </form>
@@ -477,7 +444,7 @@
 
                             <div style="position: relative;">
                                 <img src="/jobs/photos/{{ photo.filename }}" style="width: 120px; height: 120px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border);">
-                                <form action="/jobs/{{ job.id }}/photos/{{ photo.id }}/delete" method="post" onsubmit="return confirm('Zmazať túto fotku?');" style="position: absolute; top: 4px; right: 4px;">
+                                <form action="/jobs/{{ job.id }}/photos/{{ photo.id }}/delete" method="post" data-confirm="Zmazať túto fotku?" style="position: absolute; top: 4px; right: 4px;">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                                     <button type="submit" style="background: rgba(0,0,0,0.6); color: white; border: none; border-radius: 50%; width: 22px; height: 22px; cursor: pointer;">×</button>
                                 </form>
@@ -506,77 +473,12 @@
 
 </main>
 
-
-<script>
-
-
-function applyTheme(theme) {
-
-    document.documentElement.setAttribute(
-        "data-theme",
-        theme
-    );
+<script src="{{ url_for('static', path='js/app.js') }}"></script>
+<script src="{{ url_for('static', path='js/pages/edit_job.js') }}"></script>
 
 
-    const button =
-        document.getElementById("themeButton");
 
 
-    if (theme === "dark") {
-
-        button.textContent = "☀️";
-
-    } else {
-
-        button.textContent = "🌙";
-
-    }
-
-}
-
-
-function toggleTheme() {
-
-    const currentTheme =
-        document.documentElement.getAttribute(
-            "data-theme"
-        );
-
-
-    const newTheme =
-        currentTheme === "dark"
-            ? "light"
-            : "dark";
-
-
-    localStorage.setItem(
-        "digitalnyZositTheme",
-        newTheme
-    );
-
-
-    applyTheme(newTheme);
-
-}
-
-
-const savedTheme =
-    localStorage.getItem(
-        "digitalnyZositTheme"
-    );
-
-
-if (savedTheme === "dark") {
-
-    applyTheme("dark");
-
-} else {
-
-    applyTheme("light");
-
-}
-
-</script>
 
 
 </body>

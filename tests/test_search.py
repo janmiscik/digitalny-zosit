@@ -280,4 +280,5 @@ def test_customers_page_exposes_searchable_fields_for_client_filter():
     text = client.get("/zakaznici").text
 
     assert 'data-customer-ico="12345008"' in text
-    assert "foldText" in text
+    assert "js/pages/customers_list.js" in text
+    assert "foldText" in client.get("/static/js/pages/customers_list.js").text

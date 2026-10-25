@@ -180,13 +180,11 @@ app.add_middleware(
 # BEZPEČNOSTNÉ HLAVIČKY
 #
 # Pridané ku každej odpovedi. Content-Security-Policy sa posiela len k HTML
-# stránkam. Je "praktická", nie striktná: šablóny majú inline skripty,
-# onclick handlery a inline štýly, preto je povolené 'unsafe-inline'.
-# Chráni pred načítaním skriptov/štýlov/obrázkov z cudzích domén,
-# odoslaním formulára inam, vložením do cudzieho rámu, <object> a <base>.
+# stránkam. Je striktná pre skripty: žiadne inline <script> ani onclick
+# handlery (všetko je v static/js/), povolené sú len skripty z vlastnej domény.
+# Inline štýly ostávajú povolené (nižšie riziko). Chráni aj pred cudzími
+# doménami, odoslaním formulára inam, vložením do rámu, <object> a <base>.
 # Jediný povolený externý zdroj sú písma Google Fonts (static/style.css).
-# Striktná CSP (bez 'unsafe-inline') by vyžadovala presun všetkých
-# inline skriptov a handlerov do súborov v static/.
 # =========================================
 
 SECURITY_HEADERS = {
@@ -202,27 +200,7 @@ if SESSION_HTTPS_ONLY:
 
 CONTENT_SECURITY_POLICY = "; ".join([
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline'",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' https://fonts.gstatic.com data:",
-    "img-src 'self' data: blob:",
-    "connect-src 'self'",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "frame-ancestors 'none'",
-])
-
-
-# Sprísnená politika, zatiaľ LEN V REŽIME HLÁSENIA (Content-Security-Policy-Report-Only):
-# prehliadač nič neblokuje, len pošle hlásenie na /csp-report, ak by niečo
-# porušovalo pravidlá. Hlavný zisk je zákaz inline skriptov (script-src bez
-# 'unsafe-inline' a zákaz onclick/onsubmit... cez script-src-attr 'none'):
-# vložený <script> alebo handler potom v prehliadači nepobeží. Inline štýly
-# ostávajú povolené (nižšie riziko). Po presune všetkých skriptov do static/
-# sa táto politika stane hlavnou (etapa 3).
-CSP_REPORT_ONLY_POLICY = "; ".join([
-    "default-src 'self'",
+    # žiadne inline skripty ani handlery (onclick...): všetko je v static/js/
     "script-src 'self'",
     "script-src-attr 'none'",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
@@ -233,8 +211,10 @@ CSP_REPORT_ONLY_POLICY = "; ".join([
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
+    # porušenia (napr. vložený skript) sa hlásia do logu ako [CSP]
     "report-uri /csp-report",
 ])
+
 
 CSP_REPORT_MAX_BYTES = 8 * 1024
 CSP_REPORTS_PER_MINUTE = 30
@@ -308,7 +288,6 @@ async def add_security_headers(request: Request, call_next):
 
     if response.headers.get("content-type", "").startswith("text/html"):
         response.headers.setdefault("Content-Security-Policy", CONTENT_SECURITY_POLICY)
-        response.headers.setdefault("Content-Security-Policy-Report-Only", CSP_REPORT_ONLY_POLICY)
 
     return response
 

@@ -25,18 +25,16 @@ def reset_rate_limit():
     main._csp_report_times.clear()
 
 
-def test_report_only_policy_is_sent_with_html_and_is_strict_for_scripts():
+def test_enforced_policy_is_strict_for_scripts_and_reports():
 
     response = client.get("/login")
 
-    report_only = response.headers["content-security-policy-report-only"]
+    csp = response.headers["content-security-policy"]
 
-    assert "script-src 'self'" in report_only and "script-src 'self' 'unsafe-inline'" not in report_only
-    assert "script-src-attr 'none'" in report_only
-    assert "report-uri /csp-report" in report_only
-
-    # hlavná (vynucovaná) politika sa zatiaľ nemení
-    assert "script-src 'self' 'unsafe-inline'" in response.headers["content-security-policy"]
+    assert "script-src 'self'" in csp and "script-src 'self' 'unsafe-inline'" not in csp
+    assert "script-src-attr 'none'" in csp
+    assert "report-uri /csp-report" in csp
+    assert "content-security-policy-report-only" not in response.headers
 
 
 def test_report_only_header_is_not_sent_with_non_html():

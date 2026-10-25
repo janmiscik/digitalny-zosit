@@ -97,7 +97,7 @@
             type="button"
             class="theme-button"
             id="themeButton"
-            onclick="toggleTheme()"
+            data-action="toggle-theme"
             title="Prepnúť tému"
         >
             🌙
@@ -161,7 +161,7 @@
                     <form
                         action="/invoices/{{ invoice.id }}/delete"
                         method="post"
-                        onsubmit="return confirm('Naozaj chceš zmazať túto faktúru? Táto akcia sa nedá vrátiť späť.');"
+                        data-confirm="Naozaj chceš zmazať túto faktúru? Táto akcia sa nedá vrátiť späť."
                         style="display: inline;"
                     >
                 <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
@@ -249,7 +249,7 @@
                         <select
                             name="status"
                             data-current="{{ invoice.status }}"
-                            onchange="submitStatusChange(this)"
+                            data-change-action="submit-status-change"
                             class="job-status status-{{ invoice.status | lower | replace(' ', '-') }}"
                         >
 
@@ -371,7 +371,7 @@
                                 name="paid_date"
                                 value="{{ invoice.paid_date.isoformat() if invoice.paid_date else '' }}"
                                 max="{{ today.isoformat() }}"
-                                onchange="this.form.submit()"
+                                data-auto-submit
                                 style="padding: 2px 6px; font-size: 0.95em;"
                             >
                         </form>
@@ -492,94 +492,8 @@
 </main>
 
 
-<script>
-
-function submitStatusChange(select) {
-
-    const form = select.form;
-
-    if (select.value === "Stornovaná") {
-
-        const reason = (window.prompt(
-            "Dôvod stornovania faktúry (povinné, zapíše sa do histórie zmien):"
-        ) || "").trim();
-
-        if (reason.length < 3) {
-
-            // bez dôvodu sa stav nezmení
-            select.value = select.dataset.current;
-            return;
-        }
-
-        form.elements["reason"].value = reason;
-    }
-
-    form.submit();
-}
-
-
-function applyTheme(theme) {
-
-    document.documentElement.setAttribute(
-        "data-theme",
-        theme
-    );
-
-    const button =
-        document.getElementById("themeButton");
-
-    if (theme === "dark") {
-
-        button.textContent = "☀️";
-
-    } else {
-
-        button.textContent = "🌙";
-
-    }
-
-}
-
-
-function toggleTheme() {
-
-    const currentTheme =
-        document.documentElement.getAttribute(
-            "data-theme"
-        );
-
-    const newTheme =
-        currentTheme === "dark"
-            ? "light"
-            : "dark";
-
-    localStorage.setItem(
-        "digitalnyZositTheme",
-        newTheme
-    );
-
-    applyTheme(newTheme);
-
-}
-
-
-const savedTheme =
-    localStorage.getItem(
-        "digitalnyZositTheme"
-    );
-
-
-if (savedTheme === "dark") {
-
-    applyTheme("dark");
-
-} else {
-
-    applyTheme("light");
-
-}
-
-</script>
+<script src="{{ url_for('static', path='js/app.js') }}"></script>
+<script src="{{ url_for('static', path='js/pages/invoice_detail.js') }}"></script>
 
 
 </body>

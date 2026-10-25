@@ -132,7 +132,7 @@
             type="button"
             class="theme-button"
             id="themeButton"
-            onclick="toggleTheme()"
+            data-action="toggle-theme"
         >
             🌙
         </button>
@@ -242,35 +242,8 @@
 </main>
 
 
-<script>
-
-function applyTheme(theme) {
-
-    document.documentElement.setAttribute("data-theme", theme);
-
-    const button = document.getElementById("themeButton");
-
-    button.textContent = theme === "dark" ? "☀️" : "🌙";
-
-}
-
-
-function toggleTheme() {
-
-    const currentTheme = document.documentElement.getAttribute("data-theme");
-    const newTheme = currentTheme === "dark" ? "light" : "dark";
-
-    localStorage.setItem("digitalnyZositTheme", newTheme);
-    applyTheme(newTheme);
-
-}
-
-
-const savedTheme = localStorage.getItem("digitalnyZositTheme");
-
-applyTheme(savedTheme === "dark" ? "dark" : "light");
-
-</script>
+<script src="{{ url_for('static', path='js/app.js') }}"></script>
+<script src="{{ url_for('static', path='js/pages/jobs_calendar.js') }}"></script>
 
 
 </body>

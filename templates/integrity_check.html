@@ -73,7 +73,7 @@
             type="button"
             class="theme-button"
             id="themeButton"
-            onclick="toggleTheme()"
+            data-action="toggle-theme"
             title="Prepnúť tému"
         >
             🌙
@@ -250,7 +250,7 @@
                         method="post"
                         action="/settings/integrity-check/cleanup"
                         style="margin-top: 12px;"
-                        onsubmit="return confirm('Naozaj zmazať všetky osirotené súbory? Táto akcia sa nedá vrátiť späť.');"
+                        data-confirm="Naozaj zmazať všetky osirotené súbory? Táto akcia sa nedá vrátiť späť."
                     >
                         <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
 
@@ -271,70 +271,7 @@
 </main>
 
 
-<script>
-
-function applyTheme(theme) {
-
-    document.documentElement.setAttribute(
-        "data-theme",
-        theme
-    );
-
-    const button =
-        document.getElementById("themeButton");
-
-    if (theme === "dark") {
-
-        button.textContent = "☀️";
-
-    } else {
-
-        button.textContent = "🌙";
-
-    }
-
-}
-
-
-function toggleTheme() {
-
-    const currentTheme =
-        document.documentElement.getAttribute(
-            "data-theme"
-        );
-
-    const newTheme =
-        currentTheme === "dark"
-            ? "light"
-            : "dark";
-
-    localStorage.setItem(
-        "digitalnyZositTheme",
-        newTheme
-    );
-
-    applyTheme(newTheme);
-
-}
-
-
-const savedTheme =
-    localStorage.getItem(
-        "digitalnyZositTheme"
-    );
-
-
-if (savedTheme === "dark") {
-
-    applyTheme("dark");
-
-} else {
-
-    applyTheme("light");
-
-}
-
-</script>
+<script src="{{ url_for('static', path='js/app.js') }}"></script>
 
 
 </body>

@@ -34,7 +34,7 @@
             type="button"
             class="theme-button"
             id="themeButton"
-            onclick="toggleTheme()"
+            data-action="toggle-theme"
             title="Prepnúť tému"
         >
             🌙
@@ -93,7 +93,7 @@
                     </span>
                 {% endif %}
 
-                <button type="button" class="edit-job-button" onclick="copyReminder()">
+                <button type="button" class="edit-job-button" data-action="copy-reminder">
                     📋 Kopírovať text
                 </button>
 
@@ -128,122 +128,10 @@
 </main>
 
 
-<script>
-
-function copyReminder() {
-
-    const text =
-        document.getElementById("reminderSubject").value + "\n\n" +
-        document.getElementById("reminderBody").value;
-
-    const hint = document.getElementById("copyHint");
-
-    const done = () => { hint.hidden = false; setTimeout(() => { hint.hidden = true; }, 2000); };
-
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-
-        navigator.clipboard.writeText(text).then(done);
-
-    } else {
-
-        const area = document.getElementById("reminderBody");
-        area.select();
-        document.execCommand("copy");
-        done();
-
-    }
-
-}
-
-// mailto odkaz sa pri úprave textu zostaví nanovo
-(function () {
-
-    const link = document.getElementById("mailtoLink");
-
-    if (!link) { return; }
-
-    const email = link.getAttribute("href").split("?")[0];
-
-    function rebuild() {
-
-        link.setAttribute(
-            "href",
-            email + "?subject=" + encodeURIComponent(document.getElementById("reminderSubject").value) +
-            "&body=" + encodeURIComponent(document.getElementById("reminderBody").value)
-        );
-
-    }
-
-    document.getElementById("reminderBody").addEventListener("input", rebuild);
-
-})();
-
-</script>
-
-<script>
-
-function applyTheme(theme) {
-
-    document.documentElement.setAttribute(
-        "data-theme",
-        theme
-    );
-
-    const button =
-        document.getElementById("themeButton");
-
-    if (theme === "dark") {
-
-        button.textContent = "☀️";
-
-    } else {
-
-        button.textContent = "🌙";
-
-    }
-
-}
+<script src="{{ url_for('static', path='js/app.js') }}"></script>
+<script src="{{ url_for('static', path='js/pages/reminder_detail.js') }}"></script>
 
 
-function toggleTheme() {
-
-    const currentTheme =
-        document.documentElement.getAttribute(
-            "data-theme"
-        );
-
-    const newTheme =
-        currentTheme === "dark"
-            ? "light"
-            : "dark";
-
-    localStorage.setItem(
-        "digitalnyZositTheme",
-        newTheme
-    );
-
-    applyTheme(newTheme);
-
-}
-
-
-const savedTheme =
-    localStorage.getItem(
-        "digitalnyZositTheme"
-    );
-
-
-if (savedTheme === "dark") {
-
-    applyTheme("dark");
-
-} else {
-
-    applyTheme("light");
-
-}
-
-</script>
 
 
 </body>
