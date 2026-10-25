@@ -1,8 +1,8 @@
 {
-  "last_attempt_at": "2026-10-24T13:44:21.027764+00:00",
+  "last_attempt_at": "2026-10-25T12:17:09.580533+00:00",
   "verification": {
-    "at": "2026-10-24T13:44:21.181420+00:00",
-    "file": "rucne-20261024-134421.zip",
+    "at": "2026-10-25T12:17:09.721437+00:00",
+    "file": "rucne-20261025-121709.zip",
     "ok": true,
     "problems": [],
     "counts": {
@@ -14,11 +14,11 @@
       "job_photos": 1
     },
     "files_checked": 2,
-    "revision": "a1b2c3d4e5f6",
+    "revision": "b2c3d4e5f607",
     "schema_current": true
   },
-  "last_success_at": "2026-10-24T13:44:21.181452+00:00",
-  "last_file": "rucne-20261024-134421.zip",
+  "last_success_at": "2026-10-25T12:17:09.721465+00:00",
+  "last_file": "rucne-20261025-121709.zip",
   "last_kind": "manual",
   "last_error": null
 }

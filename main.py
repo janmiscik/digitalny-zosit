@@ -1,4 +1,7 @@
+import json
 import logging
+import time
+from collections import deque
 import os
 from contextlib import asynccontextmanager
 from datetime import date, timedelta
@@ -6,7 +9,7 @@ from decimal import Decimal
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy import func, inspect, text
@@ -211,6 +214,80 @@ CONTENT_SECURITY_POLICY = "; ".join([
 ])
 
 
+# Sprísnená politika, zatiaľ LEN V REŽIME HLÁSENIA (Content-Security-Policy-Report-Only):
+# prehliadač nič neblokuje, len pošle hlásenie na /csp-report, ak by niečo
+# porušovalo pravidlá. Hlavný zisk je zákaz inline skriptov (script-src bez
+# 'unsafe-inline' a zákaz onclick/onsubmit... cez script-src-attr 'none'):
+# vložený <script> alebo handler potom v prehliadači nepobeží. Inline štýly
+# ostávajú povolené (nižšie riziko). Po presune všetkých skriptov do static/
+# sa táto politika stane hlavnou (etapa 3).
+CSP_REPORT_ONLY_POLICY = "; ".join([
+    "default-src 'self'",
+    "script-src 'self'",
+    "script-src-attr 'none'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com data:",
+    "img-src 'self' data: blob:",
+    "connect-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+    "report-uri /csp-report",
+])
+
+CSP_REPORT_MAX_BYTES = 8 * 1024
+CSP_REPORTS_PER_MINUTE = 30
+_csp_report_times: deque = deque(maxlen=CSP_REPORTS_PER_MINUTE)
+
+
+def _clean_for_log(value, limit: int = 200) -> str:
+    """Hodnota z hlásenia prehliadača pre log: len tlačiteľné znaky, bez query/fragmentu, skrátená."""
+
+    text = str(value or "").split("?")[0].split("#")[0]
+    text = "".join(ch for ch in text if ch.isprintable())
+
+    return text[:limit]
+
+
+@app.post("/csp-report", include_in_schema=False)
+async def csp_report(request: Request):
+    """
+    Príjem hlásení o porušení CSP od prehliadača (verejné, bez prihlásenia - prehliadač
+    ich posiela automaticky). Nič neukladá, len zapíše riadok do logu; veľkosť aj
+    počet sú obmedzené a hodnoty sa čistia (žiadne nové riadky ani query s tokenmi).
+    """
+
+    now = time.monotonic()
+
+    if len(_csp_report_times) == _csp_report_times.maxlen and now - _csp_report_times[0] < 60:
+        return Response(status_code=204)
+
+    _csp_report_times.append(now)
+
+    body = await request.body()
+
+    if len(body) <= CSP_REPORT_MAX_BYTES:
+
+        try:
+
+            data = json.loads(body or b"{}")
+            report = data.get("csp-report", data) if isinstance(data, dict) else {}
+
+            logger.warning(
+                "[CSP] %s | blokované: %s | stránka: %s | riadok: %s",
+                _clean_for_log(report.get("violated-directive") or report.get("effective-directive")),
+                _clean_for_log(report.get("blocked-uri")),
+                _clean_for_log(report.get("document-uri")),
+                _clean_for_log(report.get("line-number"), 10),
+            )
+
+        except (ValueError, AttributeError):
+            pass
+
+    return Response(status_code=204)
+
+
 SENSITIVE_URL_PREFIXES = ("/reset-password/", "/forgot-password")
 
 
@@ -231,6 +308,7 @@ async def add_security_headers(request: Request, call_next):
 
     if response.headers.get("content-type", "").startswith("text/html"):
         response.headers.setdefault("Content-Security-Policy", CONTENT_SECURITY_POLICY)
+        response.headers.setdefault("Content-Security-Policy-Report-Only", CSP_REPORT_ONLY_POLICY)
 
     return response
 

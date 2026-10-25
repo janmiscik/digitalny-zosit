@@ -26,7 +26,12 @@ PUBLIC_ROUTES = {
     ("GET", "/forgot-password"), ("POST", "/forgot-password"),
     ("GET", "/reset-password/{token}"), ("POST", "/reset-password/{token}"),
     ("GET", "/health"), ("GET", "/health/details"),
+    # príjem hlásení o porušení CSP od prehliadača (nič nemení, len loguje; obmedzený počet a veľkosť)
+    ("POST", "/csp-report"),
 }
+
+# Verejné POST trasy, ktoré zámerne nemajú CSRF token (prehliadač ho do hlásení nepridáva).
+CSRF_EXEMPT_ROUTES = {"/csp-report"}
 
 
 def dependency_calls(dependant, found=None):
@@ -73,6 +78,9 @@ def test_every_state_changing_route_has_csrf_protection():
     missing = []
 
     for route in all_routes():
+
+        if route.path in CSRF_EXEMPT_ROUTES:
+            continue
 
         if route.methods - {"GET", "HEAD", "OPTIONS"} and verify_csrf not in dependency_calls(route.dependant):
             missing.append((sorted(route.methods), route.path))

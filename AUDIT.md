@@ -129,3 +129,8 @@ SQLite engine kont aj `accounts.db` teraz používa `journal_mode=WAL` a `synchr
 - **Obnova šifrovanej zálohy v appke:** `.zip.enc` sa dá nahrať priamo v Nastaveniach; rozpozná sa podľa obsahu, dešifruje sa mimo hlavného vlákna, pri zlom hesle sa dáta nezmenia a heslo sa nezobrazuje (testy v `tests/test_backup.py`).
 
 - **Audit stopa, dokončenie:** loguje sa aj úprava konceptu faktúry, vytvorenie zákazníka a zmena zákazníka (len názvy zmenených polí, nie osobné údaje). Detail faktúry má sekciu „História zmien" s jej udalosťami (storno s dôvodom, úhrada, úprava) a odkaz na celý prehľad; prehľad má filter „Zákazníci".
+
+## CSP po etapách
+1. **Etapa 1 (hotová):** vynucovaná politika sa nemení. Popri nej sa posiela `Content-Security-Policy-Report-Only` so sprísneným `script-src 'self'` a `script-src-attr 'none'`; prehliadač nič neblokuje a porušenia hlási na `/csp-report` (riadky `[CSP]` v logu). Inventúra: 28 inline `<script>` blokov, 59 inline handlerov (47 `onclick`, 8 `onsubmit`, 4 `onchange`), 182 inline `style=` atribútov. Test `test_csp_inline_budget.py` stráži, aby sa tieto počty nezvyšovali.
+2. **Etapa 2:** presun spoločného skriptu témy a handlerov do `static/` (delegované obsluhy cez `data-` atribúty), znižovanie limitov v teste.
+3. **Etapa 3:** keď sú limity 0 a v logu nie sú hlásenia `[CSP]`, sprísnená politika sa stane vynucovanou. Inline štýly (`style-src 'unsafe-inline'`) ostávajú povolené - nižšie riziko.

@@ -326,7 +326,7 @@ pip install -r requirements-dev.txt   # raz, pytest sa do produkčného obrazu n
 python -m pytest tests/ -q
 ```
 
-Aktuálne **1393 testov**, rozdelených podľa oblasti:
+Aktuálne **1403 testov**, rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|
@@ -366,6 +366,8 @@ Aktuálne **1393 testov**, rozdelených podľa oblasti:
 | `test_session_invalidation.py` | Odhlásenie ostatných zariadení po zmene hesla, zmazané konto, cookie bez odtlačku |
 | `test_change_password.py` | Zmena hesla: úspech, nové prihlásenie, zlé súčasné heslo, validácia, limit pokusov, CSRF, vyžaduje prihlásenie, izolácia kont, audit log |
 | `test_hosting_and_offsite_restore.py` | `docker-compose.yml` (production, dôvera proxy len v internej sieti), Caddyfile, CLI `offsite_restore.py`: zoznam, stiahnutie a rozšifrovanie zálohy, zlé heslo, neprepisovanie, nebezpečné názvy |
+| `test_csp_report.py` | CSP v režime hlásenia: hlavička len pri HTML, príjem hlásení (čistenie hodnôt, limit veľkosti a počtu, odolnosť voči nezmyslom) |
+| `test_csp_inline_budget.py` | Počet inline skriptov a handlerov v šablónach sa nesmie zvyšovať (postupný presun do `static/`) |
 | `test_route_policy.py` | Každá trasa vyžaduje prihlásenie (okrem zoznamu verejných) a každá meniaca trasa má CSRF; vypnutie/strop registrácie; slabé heslá |
 | `test_totals_property.py` | Náhodné kontroly súm faktúry (DPH po sadzbách, zaokrúhľovanie, dobropis = presný opak) |
 | `test_issued_invoice_protection.py` | Vystavenú faktúru nemožno zmazať ani cez cascade |
