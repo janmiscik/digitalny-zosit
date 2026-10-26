@@ -347,6 +347,16 @@ def login_submit(
             status_code=401
         )
 
+    if not account.is_active:
+
+        # heslo je správne, takže prezradiť stav konta už nič neprezrádza cudzím
+        return templates.TemplateResponse(
+            request=request,
+            name="login.html",
+            context={"error": "Toto konto je vypnuté. Kontaktuj správcu servera."},
+            status_code=403
+        )
+
     register_successful_login(request, username)
 
     # Starý (slabší) hash sa pri úspešnom prihlásení potichu nahradí

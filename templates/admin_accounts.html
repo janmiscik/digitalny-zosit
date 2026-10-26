@@ -56,6 +56,11 @@
             color: var(--text);
         }
 
+        .account-off {
+            color: var(--danger, #b00020);
+            font-weight: 700;
+        }
+
         .account-error {
             color: var(--danger, #b00020);
             margin: 8px 0;
@@ -170,6 +175,7 @@
 
                     <strong>{{ row.username }}</strong>
                     {% if row.slug == admin_slug %}<span class="account-meta"> (tvoje konto)</span>{% endif %}
+                    {% if not row.is_active %}<span class="account-meta account-off"> · VYPNUTÉ</span>{% endif %}
 
                     <div class="account-meta">
                         {{ row.slug }}
@@ -195,6 +201,18 @@
                                    required autocomplete="new-password">
 
                             <button type="submit" class="save-button">Nastaviť heslo</button>
+
+                        </form>
+
+                        <form method="post" action="/admin/accounts/{{ row.slug }}/active" class="account-form" style="margin-top: 8px;"
+                              {% if row.is_active %}data-confirm="Vypnúť konto {{ row.username }}? Nebude sa vedieť prihlásiť, dáta ostanú."{% endif %}>
+
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                            <input type="hidden" name="active" value="{{ 'false' if row.is_active else 'true' }}">
+
+                            <button type="submit" class="back-button" style="cursor: pointer;">
+                                {{ "Vypnúť konto" if row.is_active else "Zapnúť konto" }}
+                            </button>
 
                         </form>
 

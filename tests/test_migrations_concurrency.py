@@ -370,5 +370,8 @@ def test_accounts_db_migration_adds_email_and_keeps_accounts(tmp_path):
     conn = sqlite3.connect(str(db_path))
 
     assert conn.execute("SELECT username, slug, email FROM accounts").fetchall() == [("jano", "jano", None)]
+
+    # existujúce kontá ostanú po migrácii zapnuté (nikto sa nezamkne)
+    assert conn.execute("SELECT is_active FROM accounts").fetchall() == [(1,)]
     assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     conn.close()

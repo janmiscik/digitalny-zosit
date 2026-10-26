@@ -112,3 +112,17 @@ def set_password(accounts_db: Session, slug: str, password: str) -> Result:
     accounts_db.commit()
 
     return Result(account=account)
+
+
+def set_active(accounts_db: Session, slug: str, active: bool) -> Result:
+    """Vypne alebo zapne konto. Dáta a zálohy ostávajú; vypnuté konto sa nevie prihlásiť."""
+
+    account = accounts_db.query(Account).filter(Account.slug == slug).first()
+
+    if account is None:
+        return Result(error="Konto neexistuje.")
+
+    account.is_active = active
+    accounts_db.commit()
+
+    return Result(account=account)

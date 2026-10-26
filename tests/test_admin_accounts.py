@@ -207,3 +207,92 @@ def test_admin_does_not_see_other_accounts_data(owner):
 
     assert "TAJNY-ZAKAZNIK-X" not in owner.get("/admin/accounts").text
     assert "TAJNY-ZAKAZNIK-X" not in owner.get("/zakaznici").text
+
+
+# ---------- vypnutie / zapnutie konta ----------
+
+def switch(owner, slug, active):
+
+    return owner.post(f"/admin/accounts/{slug}/active", data={
+        "csrf_token": _csrf_token(owner, "/admin/accounts"), "active": active}, follow_redirects=False)
+
+
+def test_disabled_account_cannot_log_in_and_existing_session_stops_working(owner):
+
+    assert create(owner, "novy-zivnostnik").status_code == 303
+
+    live, response = login("novy-zivnostnik", NEW_PASSWORD)
+    assert response.status_code == 303 and live.get("/zakaznici").status_code == 200
+
+    off = switch(owner, "novy-zivnostnik", "false")
+
+    assert off.status_code == 303 and off.headers["location"] == "/admin/accounts?ok=disabled"
+
+    assert live.get("/zakaznici", follow_redirects=False).status_code == 303          # staré prihlásenie neplatí
+    _, blocked = login("novy-zivnostnik", NEW_PASSWORD)
+    assert blocked.status_code == 403 and "vypnuté" in blocked.text
+
+    # zlé heslo prezradí len bežnú chybu (stav konta sa cudzím neukazuje)
+    _, wrong = login("novy-zivnostnik", "zle-heslo-vobec-1")
+    assert wrong.status_code == 401 and "vypnuté" not in wrong.text
+
+    assert "VYPNUTÉ" in owner.get("/admin/accounts").text
+
+    on = switch(owner, "novy-zivnostnik", "true")
+    assert on.status_code == 303 and on.headers["location"] == "/admin/accounts?ok=enabled"
+    assert login("novy-zivnostnik", NEW_PASSWORD)[1].status_code == 303
+
+
+def test_disabling_keeps_the_accounts_data(owner):
+
+    assert create(owner, "novy-zivnostnik").status_code == 303
+
+    client, _ = login("novy-zivnostnik", NEW_PASSWORD)
+    client.post("/customers", data={"csrf_token": _csrf_token(client, "/zakaznici"), "name": "ZAKAZNIK-OSTAVA"},
+                follow_redirects=False)
+
+    switch(owner, "novy-zivnostnik", "false")
+    switch(owner, "novy-zivnostnik", "true")
+
+    again, _ = login("novy-zivnostnik", NEW_PASSWORD)
+
+    assert "ZAKAZNIK-OSTAVA" in again.get("/zakaznici").text
+
+
+def test_cannot_disable_own_account_or_unknown_slug_or_with_bad_value(owner):
+
+    assert switch(owner, OWNER, "false").status_code == 422
+    assert switch(owner, "neexistuje", "false").status_code == 404
+    assert create(owner, "novy-zivnostnik").status_code == 303
+    assert switch(owner, "novy-zivnostnik", "mozno").status_code == 422
+    assert login(OWNER, PASSWORD)[1].status_code == 303
+
+
+def test_non_admin_cannot_switch_accounts(owner):
+
+    assert create(owner, "novy-zivnostnik").status_code == 303
+
+    other, _ = login("novy-zivnostnik", NEW_PASSWORD)
+
+    response = other.post(f"/admin/accounts/{OWNER}/active", data={
+        "csrf_token": _csrf_token(other, "/settings"), "active": "false"})
+
+    assert response.status_code == 404
+    assert login(OWNER, PASSWORD)[1].status_code == 303
+
+
+def test_switching_is_audited(owner):
+
+    assert create(owner, "novy-zivnostnik").status_code == 303
+    switch(owner, "novy-zivnostnik", "false")
+
+    session = sessionmaker(bind=tenancy.get_account_engine(OWNER))()
+
+    try:
+        tenancy.set_current_tenant(OWNER)
+        actions = [e.action for e in session.query(AuditLog).all()]
+
+    finally:
+        session.close()
+
+    assert "admin.account_disabled" in actions

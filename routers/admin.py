@@ -76,6 +76,7 @@ def _rows(accounts_db: Session) -> list[dict]:
             "username": account.username,
             "slug": account.slug,
             "created_at": account.created_at,
+            "is_active": account.is_active,
             "last_backup": status.get("last_success_at"),
             "size_mb": round(_directory_size(tenancy.account_dir(account.slug)) / (1024 * 1024), 1),
         })
@@ -105,6 +106,8 @@ def _render(request: Request, accounts_db: Session, admin: Account, *, error=Non
 MESSAGES = {
     "created": "Konto bolo založené.",
     "password": "Heslo konta bolo zmenené, doterajšie prihlásenia konta prestali platiť.",
+    "disabled": "Konto bolo vypnuté; nevie sa prihlásiť a jeho prihlásenia prestali platiť. Dáta a zálohy ostali.",
+    "enabled": "Konto bolo zapnuté.",
 }
 
 
@@ -184,3 +187,37 @@ def change_password(
     db.commit()
 
     return RedirectResponse(url="/admin/accounts?ok=password", status_code=303)
+
+
+@router.post("/admin/accounts/{slug}/active")
+def change_active(
+    slug: str,
+    request: Request,
+    active: str = Form(...),
+    admin: Account = Depends(require_server_admin),
+    accounts_db: Session = Depends(get_accounts_db),
+    db: Session = Depends(get_db),
+):
+
+    target = accounts_db.query(Account).filter(Account.slug == slug).first()
+
+    if target is None:
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    if target.slug == admin.slug:
+
+        return _render(request, accounts_db, admin, error_slug=slug, status_code=422,
+                       error="Vlastné konto nemožno vypnúť.")
+
+    if active not in ("true", "false"):
+        raise HTTPException(status_code=422, detail="Neplatná hodnota")
+
+    enable = active == "true"
+
+    account_service.set_active(accounts_db, slug, enable)
+
+    log_action(db, "admin.account_enabled" if enable else "admin.account_disabled", entity_type="account",
+               detail=f"{'Zapnuté' if enable else 'Vypnuté'} konto {target.username}")
+    db.commit()
+
+    return RedirectResponse(url=f"/admin/accounts?ok={'enabled' if enable else 'disabled'}", status_code=303)

@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, Integer, String, true
 
 from accounts_db import AccountsBase
 
@@ -49,6 +49,15 @@ class Account(AccountsBase):
     email = Column(
         String,
         nullable=True
+    )
+
+    # Vypnuté konto sa nevie prihlásiť (existujúce prihlásenia prestanú platiť),
+    # ale jeho dáta aj zálohy ostávajú. Vypína a zapína majiteľ servera.
+    is_active = Column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default=true()
     )
 
     created_at = Column(

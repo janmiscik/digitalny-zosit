@@ -172,12 +172,12 @@ def _session_is_current(
 
     account = (
         accounts_db
-        .query(Account.password_hash)
+        .query(Account.password_hash, Account.is_active)
         .filter(Account.slug == account_slug)
         .first()
     )
 
-    if account is None:
+    if account is None or not account.is_active:
         return False
 
     stored = request.session.get("pwv")
