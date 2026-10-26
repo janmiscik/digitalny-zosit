@@ -427,3 +427,7 @@ def test_startup_summary_reports_state_without_leaking_the_token(monkeypatch):
 
     assert "nastavený" in summary and "21" in summary
     assert "super-tajny" not in summary
+
+    import hashlib
+
+    assert hashlib.sha256(b"super-tajny-token-123").hexdigest()[:8] in summary

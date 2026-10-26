@@ -20,6 +20,7 @@ Problémy obsahujú len konto, druh a krátky pevný popis (žiadne cesty ani te
 výnimiek), aby sa dali bezpečne posielať do monitorovacích nástrojov.
 """
 
+import hashlib
 import hmac
 import logging
 import os
@@ -163,14 +164,18 @@ def startup_summary() -> str:
     if not token:
         return "MONITOR_TOKEN NIE JE nastavený - /health/details vracia 404"
 
-    return f"MONITOR_TOKEN nastavený (dĺžka {len(token)} znakov)"
+    fingerprint = hashlib.sha256(token.encode("utf-8")).hexdigest()[:8]
+
+    return f"MONITOR_TOKEN nastavený (dĺžka {len(token)} znakov, odtlačok sha256: {fingerprint})"
 
 
 def token_matches(provided: str | None) -> bool:
 
     expected = monitor_token()
 
-    return bool(expected) and bool(provided) and hmac.compare_digest(provided, expected)
+    provided = (provided or "").strip()
+
+    return bool(expected) and bool(provided) and hmac.compare_digest(provided.encode("utf-8"), expected.encode("utf-8"))
 
 
 def runtime_info() -> dict:
