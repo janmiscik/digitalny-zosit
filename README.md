@@ -305,6 +305,7 @@ Súbory sa ukladajú ako `<predpona>/<konto>/<názov zálohy>.zip`. Po nahratí 
 Ak sa stratí alebo prepíše `data/accounts.db` (prihlásenie hlási zlé meno/heslo), dáta samotných kont v `data/accounts/<konto>/` ostávajú. Pripoj ich k novému menu a heslu:
 
 ```bash
+python manage_accounts.py --create-account MENO               # nové konto (opýta sa na heslo); pre server s REGISTRATION_ENABLED=false
 python manage_accounts.py --list-orphans                       # ktoré priečinky nemajú konto
 python manage_accounts.py --reattach SLUG --username MENO      # opýta sa na nové heslo
 ```
@@ -452,7 +453,7 @@ digitalny-zosit/
 ├── .gitignore
 ├── accounts_db.py          # master databáza kont
 ├── accounts_models.py      # model Account
-├── manage_accounts.py      # --upgrade-all (migrácia všetkých kont), --list
+├── manage_accounts.py      # --upgrade-all (migrácia všetkých kont), --list, --create-account
 ├── tenancy.py              # cesty, provisioning a engine jednotlivých kont
 ├── start.sh                # štart kontajnera: migrácie + uvicorn na $PORT
 ├── Dockerfile
