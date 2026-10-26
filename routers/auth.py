@@ -49,7 +49,9 @@ _DUMMY_PASSWORD_HASH = hash_password(hash_password(""))
 MIN_USERNAME_LENGTH = 3
 MAX_USERNAME_LENGTH = 50
 MIN_PASSWORD_LENGTH = 8
-_registration_lock = threading.Lock()
+import account_service
+
+_registration_lock = account_service.creation_lock
 REGISTRATION_CLOSED_MESSAGE = "Registrácia nových kont je na tomto serveri vypnutá."
 
 

@@ -661,6 +661,31 @@
         </div>
 
 
+        {% if is_server_admin %}
+
+        <div class="edit-customer-card">
+
+            <h2 style="margin-top: 0;">
+                Správa kont servera
+            </h2>
+
+            <p style="color: var(--text-muted); font-size: 0.9em;">
+                Zoznam kont, založenie nového konta a nové heslo. Vidíš to len ty ako majiteľ servera.
+            </p>
+
+            <a
+                href="/admin/accounts"
+                class="save-button"
+                style="display: inline-block; text-decoration: none;"
+            >
+                👥 Spravovať kontá
+            </a>
+
+        </div>
+
+        {% endif %}
+
+
         <!-- =====================================
              KONTROLA INTEGRITY
              ===================================== -->

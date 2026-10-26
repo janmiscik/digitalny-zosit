@@ -267,21 +267,11 @@ def reattach(slug: str, username: str, password: str | None) -> None:
 def create_account(username: str, password: str | None = None) -> None:
     """
     Založí konto z príkazového riadku (pre server s REGISTRATION_ENABLED=false:
-    kontá zakladá majiteľ servera, nie živnostník). Platia rovnaké pravidlá ako
-    pri registrácii cez web (dĺžka mena, silné heslo, unikátne meno).
+    kontá zakladá majiteľ servera, nie živnostník). Rovnaké pravidlá ako pri
+    registrácii cez web (account_service).
     """
 
-    import shutil
-
-    from auth import password_problem
-    from routers.auth import MAX_USERNAME_LENGTH, MIN_PASSWORD_LENGTH, MIN_USERNAME_LENGTH
-
-    username = username.strip()
-
-    if not (MIN_USERNAME_LENGTH <= len(username) <= MAX_USERNAME_LENGTH):
-
-        print(f"Meno musí mať {MIN_USERNAME_LENGTH} až {MAX_USERNAME_LENGTH} znakov.")
-        sys.exit(1)
+    import account_service
 
     if password is None:
 
@@ -292,52 +282,21 @@ def create_account(username: str, password: str | None = None) -> None:
             print("Heslá sa nezhodujú.")
             sys.exit(1)
 
-    if len(password) < MIN_PASSWORD_LENGTH:
-
-        print(f"Heslo musí mať aspoň {MIN_PASSWORD_LENGTH} znakov.")
-        sys.exit(1)
-
-    weak = password_problem(password, username)
-
-    if weak:
-
-        print(weak)
-        sys.exit(1)
-
     db = AccountsSessionLocal()
 
     try:
-
-        if db.query(Account).filter(Account.username == username).first():
-
-            print(f"Meno '{username}' už existuje.")
-            sys.exit(1)
-
-        def slug_exists(candidate: str) -> bool:
-            return db.query(Account).filter(Account.slug == candidate).first() is not None
-
-        slug = tenancy.ensure_unique_slug(tenancy.slugify_username(username), slug_exists)
-        account = Account(username=username, slug=slug, password_hash=hash_password(password))
-
-        db.add(account)
-        db.commit()
-
-        try:
-            tenancy.provision_account(slug)
-
-        except Exception as exc:   # noqa: BLE001 - nedokončené konto sa vráti späť
-
-            db.delete(account)
-            db.commit()
-            shutil.rmtree(tenancy.account_dir(slug), ignore_errors=True)
-
-            print(f"Konto sa nepodarilo pripraviť: {exc}")
-            sys.exit(1)
+        result = account_service.create_account(db, username, password)
+        created = (result.account.username, result.account.slug) if result.account else None
 
     finally:
         db.close()
 
-    print(f"Hotovo: konto '{username}' (priečinok '{slug}') je pripravené, môže sa prihlásiť.")
+    if result.error:
+
+        print(result.error)
+        sys.exit(1)
+
+    print(f"Hotovo: konto '{created[0]}' (priečinok '{created[1]}') je pripravené, môže sa prihlásiť.")
 
 
 def main() -> None:

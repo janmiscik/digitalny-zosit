@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="sk">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Správa kont - Digitálny zošit</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', path='style.css') }}"
+    >
+
+    <style>
+
+        .account-row {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+            padding: 12px 16px;
+            background: var(--surface);
+            border: 1.5px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+
+        .account-meta {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .account-form {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .account-error {
+            color: var(--danger, #b00020);
+            margin: 8px 0;
+        }
+
+        .account-ok {
+            color: var(--success, #1b6e2d);
+            margin: 8px 0;
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+
+<header class="topbar">
+
+    <div class="logo">
+        <img src="/static/logo-icon.png" alt="" class="logo-icon"> Digitálny zošit
+    </div>
+
+    <div class="topbar-actions">
+
+        <button
+            type="button"
+            class="theme-button"
+            id="themeButton"
+            data-action="toggle-theme"
+            title="Prepnúť tému"
+        >
+            🌙
+        </button>
+
+        <a
+            href="/settings"
+            class="back-button"
+        >
+            ← Nastavenia
+        </a>
+
+    </div>
+
+</header>
+
+
+<main class="container">
+
+
+    <section class="customers-section">
+
+        <div class="section-heading">
+
+            <div>
+
+                <h2>
+                    Správa kont
+                </h2>
+
+                <p>
+                    {{ rows|length }} kont na tomto serveri. Kontá zakladáš len ty; živnostník sa sám zaregistrovať nemôže.
+                </p>
+
+            </div>
+
+        </div>
+
+        {% if message %}
+            <p class="account-ok" role="status">{{ message }}</p>
+        {% endif %}
+
+        {% if error and not error_slug %}
+            <p class="account-error" role="alert">{{ error }}</p>
+        {% endif %}
+
+        <div class="edit-customer-card">
+
+            <h3 style="margin-top: 0;">Nové konto</h3>
+
+            <form method="post" action="/admin/accounts" class="account-form" autocomplete="off">
+
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+
+                <input type="text" name="username" value="{{ form_username }}" placeholder="Prihlasovacie meno"
+                       aria-label="Prihlasovacie meno" required minlength="3" maxlength="50">
+
+                <input type="password" name="password" placeholder="Heslo (min. {{ min_password_length }} znakov)"
+                       aria-label="Heslo" required minlength="{{ min_password_length }}" autocomplete="new-password">
+
+                <input type="password" name="password_confirm" placeholder="Heslo znova"
+                       aria-label="Heslo znova" required autocomplete="new-password">
+
+                <button type="submit" class="save-button">Založiť konto</button>
+
+            </form>
+
+            <p style="color: var(--text-muted); font-size: 0.9em; margin-bottom: 0;">
+                Prihlasovacie meno a heslo odovzdaj živnostníkovi; heslo si môže zmeniť v Nastaveniach.
+            </p>
+
+        </div>
+
+
+        <h3>Kontá</h3>
+
+        {% for row in rows %}
+
+            <div class="account-row">
+
+                <div>
+
+                    <strong>{{ row.username }}</strong>
+                    {% if row.slug == admin_slug %}<span class="account-meta"> (tvoje konto)</span>{% endif %}
+
+                    <div class="account-meta">
+                        {{ row.slug }}
+                        · založené {{ row.created_at.strftime("%d.%m.%Y") if row.created_at else "?" }}
+                        · {{ row.size_mb }} MB
+                        · posledná záloha {{ row.last_backup[:16].replace("T", " ") if row.last_backup else "žiadna" }}
+                    </div>
+
+                </div>
+
+                {% if row.slug != admin_slug %}
+
+                    <div>
+
+                        <form method="post" action="/admin/accounts/{{ row.slug }}/password" class="account-form" autocomplete="off">
+
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+
+                            <input type="password" name="password" placeholder="Nové heslo" aria-label="Nové heslo pre {{ row.username }}"
+                                   required minlength="{{ min_password_length }}" autocomplete="new-password">
+
+                            <input type="password" name="password_confirm" placeholder="Heslo znova" aria-label="Nové heslo znova"
+                                   required autocomplete="new-password">
+
+                            <button type="submit" class="back-button">Nastaviť heslo</button>
+
+                        </form>
+
+                        {% if error and error_slug == row.slug %}
+                            <p class="account-error" role="alert">{{ error }}</p>
+                        {% endif %}
+
+                    </div>
+
+                {% endif %}
+
+            </div>
+
+        {% endfor %}
+
+    </section>
+
+
+</main>
+
+
+<script src="{{ url_for('static', path='js/app.js') }}"></script>
+
+
+</body>
+
+</html>

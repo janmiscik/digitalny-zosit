@@ -61,6 +61,7 @@ from invoice_utils import CLOSED_INVOICE_STATUSES, calculate_invoice_totals, is_
 from models import Customer, Invoice, Job, Quote
 from schemas import InvoiceStatus
 
+from routers.admin import router as admin_router
 from routers.auth import router as auth_router
 from routers.company import router as company_router
 from routers.customers import router as customers_router
@@ -474,6 +475,10 @@ app.include_router(
 
 app.include_router(
     company_router
+)
+
+app.include_router(
+    admin_router
 )
 
 

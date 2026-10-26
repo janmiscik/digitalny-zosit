@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse, RedirectResponse, Response
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+import account_service
 from accounts_db import get_accounts_db
 from accounts_models import Account
 from csrf import verify_csrf
@@ -131,9 +132,11 @@ def settings_form(
     try:
         account = accounts_db.query(Account).filter(Account.slug == user).first()
         account_email = account.email if account else None
+        is_server_admin = bool(account) and account_service.is_server_admin(account.username)
 
     except Exception:       # noqa: BLE001 - e-mail konta nesmie rozbiť stránku nastavení
         account_email = None
+        is_server_admin = False
 
 
     return templates.TemplateResponse(
@@ -147,6 +150,8 @@ def settings_form(
             "company": company,
 
             "account_email": account_email,
+
+            "is_server_admin": is_server_admin,
 
             "NON_VAT_PAYER_NOTICE": NON_VAT_PAYER_NOTICE,
 
