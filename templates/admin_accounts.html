@@ -45,6 +45,17 @@
             align-items: center;
         }
 
+        .account-row .account-form input {
+            width: 200px;
+            border: 1px solid var(--input-border);
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 15px;
+            font-family: inherit;
+            background: var(--input-background);
+            color: var(--text);
+        }
+
         .account-error {
             color: var(--danger, #b00020);
             margin: 8px 0;
@@ -183,7 +194,7 @@
                             <input type="password" name="password_confirm" placeholder="Heslo znova" aria-label="Nové heslo znova"
                                    required autocomplete="new-password">
 
-                            <button type="submit" class="back-button">Nastaviť heslo</button>
+                            <button type="submit" class="save-button">Nastaviť heslo</button>
 
                         </form>
 
