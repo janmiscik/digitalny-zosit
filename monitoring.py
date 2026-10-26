@@ -155,6 +155,17 @@ def monitor_token() -> str:
     return os.getenv("MONITOR_TOKEN", "").strip()
 
 
+def startup_summary() -> str:
+    """Jednoriadkový stav pre štartový log; token sa nikdy nevypisuje, len či a aký dlhý je."""
+
+    token = monitor_token()
+
+    if not token:
+        return "MONITOR_TOKEN NIE JE nastavený - /health/details vracia 404"
+
+    return f"MONITOR_TOKEN nastavený (dĺžka {len(token)} znakov)"
+
+
 def token_matches(provided: str | None) -> bool:
 
     expected = monitor_token()

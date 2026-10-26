@@ -415,3 +415,15 @@ def test_production_as_normal_user_and_dev_as_root_are_fine(client, monkeypatch)
     monkeypatch.setenv("APP_ENV", "development")
     monkeypatch.setattr(monitoring.os, "geteuid", lambda: 0, raising=False)
     assert not [p for p in get(client).json()["problems"] if p["kind"] == "runtime"]
+
+
+def test_startup_summary_reports_state_without_leaking_the_token(monkeypatch):
+
+    monkeypatch.delenv("MONITOR_TOKEN", raising=False)
+    assert "NIE JE" in monitoring.startup_summary()
+
+    monkeypatch.setenv("MONITOR_TOKEN", "super-tajny-token-123")
+    summary = monitoring.startup_summary()
+
+    assert "nastavený" in summary and "21" in summary
+    assert "super-tajny" not in summary

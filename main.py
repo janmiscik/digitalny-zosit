@@ -118,6 +118,9 @@ async def lifespan(app: FastAPI):
     # aktualizácii kódu; na Railway to robí aj start.sh).
     upgrade_accounts_on_startup()
 
+    # Stav konfigurácie, ktorý sa inak ťažko zisťuje z vonka (bez tajných údajov).
+    logger.info("Monitoring (/health/details): %s", monitoring.startup_summary())
+
     # Automatické zálohy kont na pozadí (viď auto_backup.py). Vypnuté v
     # testoch cez BACKUP_ENABLED=false (tests/conftest.py).
     start_scheduler()
