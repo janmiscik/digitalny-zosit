@@ -2,6 +2,32 @@
 
 Rozsah: bezpečnosť, databázy, trvalé úložisko, testy, závislosti. Pôvodný stav k 19. 10. 2026 (v čase auditu 723 testov). Odvtedy pribudli dodatky nižšie; aktuálny počet testov je v README. Odporúčania v tomto zozname, ktoré sa medzitým vyriešili, sú označené ako vyriešené.
 
+## Aktuálny stav (27. 10. 2026)
+
+Súhrn pre nového vlastníka. Podrobnosti a história sú v dodatkoch nižšie.
+
+| Oblasť | Stav |
+|---|---|
+| Testy | 1476 testov; 2 testy Docker entrypointu vyžadujú Linux a root (v CI bežia a nesmú sa preskočiť) |
+| Závislosti | `pip-audit` pri poslednej kontrole bez známych zraniteľností (pozri dodatok o závislostiach); CI ho spúšťa |
+| CSP | striktná pre skripty (žiadne inline skripty ani handlery), hlásenia na `/csp-report` |
+| Izolácia kont | sweep všetkých trás s platnými formulármi, databáza a súbory cudzieho konta ostanú bajt po bajte rovnaké |
+| Databáza | WAL, cudzie kľúče, triggery proti zmene vystavených faktúr a audit logu; ich prítomnosť kontroluje monitoring |
+| Zálohy | denné, šifrované (AES-GCM), off-site do S3/R2 s overením SHA-256 a skúškou obnovy; `offsite_restore.py --verify` |
+| Kontá | zakladá majiteľ servera (`/admin/accounts` alebo `manage_accounts.py --create-account`), verejná registrácia sa vypína `REGISTRATION_ENABLED=false` |
+| Monitoring | `/health/details` (token) hlási zálohy, off-site, migrácie, triggery, disk, plánovač, beh ako root; upozornenia e-mailom cez externý nástroj (UptimeRobot) |
+| Licencie | `LICENSE`, `THIRD_PARTY_NOTICES.md`, `third_party/licenses/`; čistý balík: `python tools/make_distribution.py` |
+
+**Otvorené body pre kupujúceho (nerieši kód):**
+
+1. **Účtovné pravidlá** (sadzby a režimy DPH, dobropisy, číslovanie) overiť s účtovníkom pred reálnym fakturovaním. Testy nie sú daňové potvrdenie.
+2. **Čiastočné úhrady** appka nepozná (faktúra je uhradená alebo nie).
+3. **Pôvod loga** (`static/logo-icon.png`) a doplnenie mena držiteľa práv v `LICENSE` pred odovzdaním (pozri `THIRD_PARTY_NOTICES.md`).
+4. **Jedna replika:** limity pokusov, zámok registrácie a plánovač sú v pamäti procesu; SQLite zvláda len jedného zapisovateľa. Pre viac replík treba zmeniť architektúru.
+5. **Zámok objektov a verzovanie v bucketi** (ochrana záloh pred zmazaním) je nastavenie u poskytovateľa záloh, appka ho vynútiť nevie.
+6. **Písma Google Fonts** sa načítavajú z Google (prenos IP návštevníka); pre prísnejšie GDPR ich treba hostovať lokálne.
+7. **Tajné kľúče** (`SECRET_KEY`, `BACKUP_ENCRYPTION_KEY`, `OFFSITE_BACKUP_*`, `MONITOR_TOKEN`) si kupujúci vygeneruje a uloží sám; po odovzdaní je vhodné ich všetky vymeniť.
+
 ## Opravené
 
 | Oblasť | Nález | Oprava |
@@ -11,7 +37,7 @@ Rozsah: bezpečnosť, databázy, trvalé úložisko, testy, závislosti. Pôvodn
 | Prihlásenie | Limit len podľa IP (za proxy sa dá obchádzať) | Pridaný limit podľa mena konta (20 pokusov / 15 min) |
 | Registrácia | Neobmedzené zakladanie kont (každé = databáza + drahé hashovanie) | Max. 5 kont / hodinu / IP |
 | Session | Pri prihlásení sa starý obsah session (aj CSRF token) preniesol | Session sa pri prihlásení vymení (session fixation) |
-| Hlavičky | Žiadne bezpečnostné hlavičky | `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, HSTS pri HTTPS, praktická CSP pri HTML stránkach |
+| Hlavičky | Žiadne bezpečnostné hlavičky | `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, HSTS pri HTTPS, CSP pri HTML stránkach (od 26. 10. 2026 striktná pre skripty, pozri „CSP po etapách“) |
 | Informácie | `/docs`, `/redoc`, `/openapi.json` boli verejné a vypisovali všetky trasy | Vypnuté; zapne ich `ENABLE_API_DOCS=true` |
 | SQLite | Bez `busy_timeout`: súbeh požiadavky a plánovača záloh mohol skončiť „database is locked“ | Timeout 15 s pre databázu kont aj pre databázy kont-firiem |
 | Testy | Limit registrácií by sa v testoch míňal naprieč súbormi | `conftest.py` vynuluje počítadlá pred každým testom |
@@ -32,7 +58,7 @@ Rozsah: bezpečnosť, databázy, trvalé úložisko, testy, závislosti. Pôvodn
 1. **Záloha mimo Railway** (vyriešené: pribudlo voliteľné nahrávanie do S3/R2 s kontrolou SHA-256, pozri dodatky). Pôvodný nález: zálohy ležia na tom istom Volume ako dáta. Pri strate Volume zmiznú spolu s dátami. Pravidelne si sťahuj zálohu v Nastaveniach, alebo doplň odosielanie do S3/Backblaze.
 2. **Overenie Volume.** V Railway logu hľadaj riadky `[ULOZISKE]`: musí tam byť „OK: /app/data je samostatný disk (Volume)“. Ak je tam VAROVANIE, dáta sa po redeployi stratia.
 3. **Jedna replika.** Limity pokusov a plánovač záloh sú v pamäti procesu; pri škálovaní na viac replík by sa nezdieľali (a SQLite na Volume by aj tak nezvládla viac zapisovateľov). Nechaj 1 repliku.
-4. **CSP.** Zavedená je praktická CSP (cudzie domény zakázané, výnimka Google Fonts), overená v prehliadači na 16 stránkach. Striktná verzia bez `'unsafe-inline'` vyžaduje prepísať 23 šablón (inline skripty) a 57 inline handlerov do súborov v `static/`; zatiaľ sa to neoplatí, lebo Jinja escapuje výstup a `|safe` sa nikde nepoužíva.
+4. **CSP** (vyriešené: skripty a handlery sú v `static/js/`, vynucuje sa `script-src 'self'` a `script-src-attr 'none'`, pozri „CSP po etapách“). Pôvodný nález: praktická CSP s `'unsafe-inline'`, lebo šablóny mali 23 inline skriptov a 57 inline handlerov. Inline štýly ostávajú povolené (nižšie riziko).
 5. **Zmena hesla** v Nastaveniach pribudla. **Obnova zabudnutého hesla cez e-mail** pribudla ako voliteľná (zapne sa nastavením `SMTP_*` a `APP_BASE_URL`); konto bez nastaveného e-mailu sa obnovuje manuálne cez `manage_accounts.py`. Zmena aj obnova hesla odhlásia ostatné zariadenia (pozri dodatok o platnosti prihlásení).
 6. **WAL režim SQLite** (vyriešené: zapnutý, pozri Dodatok: WAL a upratanie). Pôvodný nález: by zlepšil súbeh čítania a zápisu, ale mení správanie záloh a obnovy (súbory `-wal`/`-shm`), preto som ho nezapínal bez samostatného testu na Railway.
 7. Osamotený `invoice_detail.html` (vyriešené: zmazaný, pozri Dodatok: WAL a upratanie). Pôvodný nález: v koreni projektu ležal (starý duplikát `templates/invoice_detail.html`); appka ho nepoužíva, dá sa zmazať.
@@ -100,13 +126,13 @@ SQLite engine kont aj `accounts.db` teraz používa `journal_mode=WAL` a `synchr
 
 - **Produkčný režim** určuje `APP_ENV` (nenastavené = `production`), nie `SESSION_HTTPS_ONLY`. V produkcii sa vždy vynucuje silný `SECRET_KEY` a zapnuté HTTPS cookie; `SESSION_HTTPS_ONLY=false` už kontrolu kľúča neobíde. Lokálne: `APP_ENV=development`. Na Railway nastav `APP_ENV=production`.
 - **Audit stopa:** storno faktúry vyžaduje dôvod, zmena dátumu úhrady sa loguje, `/audit-log` má filter podľa typu, hľadanie a stránkovanie. Tabuľka `audit_log` má triggery proti UPDATE/DELETE. Nejde o nemenný archív ani náhradu zákonných povinností: kto má priamy prístup k súboru databázy, vie triggery zrušiť.
-- **Nerobí sa bez Railway:** reálna obnova zo zálohy z R2, test non-root na skutočnom Volume, šifrovanie záloh pred nahratím a ochrana proti zmazaniu v R2 (Object Lock) sú prevádzkové kroky, nie kód.
+- **Nerobí sa bez Railway:** reálna obnova zo zálohy z R2 a test non-root na skutočnom Volume (obe sa odvtedy overili, pozri nižšie) a ochrana proti zmazaniu v R2 (Object Lock) sú prevádzkové kroky, nie kód. Šifrovanie záloh pred nahratím je už implementované (`BACKUP_ENCRYPTION_KEY`).
 
 
 ## Dodatok: päť auditov (24. 10. 2026)
 
 1. **Preskočené testy:** dva testy Docker entrypointu vyžadujú root a na GitHub Actions by sa potichu preskočili. Workflow ich teraz spúšťa cez sudo a zlyhá, ak sa preskočia; pribudla aj kontrola, že Docker obraz beží pod používateľom `app`.
-2. **Bezpečnosť:** test prejde všetky trasy a vyžaduje prihlásenie (okrem 11 verejných) a CSRF pri každej meniacej trase. Pridané: `REGISTRATION_ENABLED` a `MAX_ACCOUNTS` (verejná registrácia mohla plniť disk), odmietnutie bežných hesiel a hesla rovnakého ako meno. Upload, izolácia kont, session a CSP sa nemenili. (CSP je od etapy 3 striktná pre skripty.)
+2. **Bezpečnosť:** test prejde všetky trasy a vyžaduje prihlásenie (okrem 12 verejných, ktoré sú vymenované v teste) a CSRF pri každej meniacej trase. Pridané: `REGISTRATION_ENABLED` a `MAX_ACCOUNTS` (verejná registrácia mohla plniť disk), odmietnutie bežných hesiel a hesla rovnakého ako meno. Upload, izolácia kont, session a CSP sa nemenili. (CSP je od etapy 3 striktná pre skripty.)
 3. **Fakturácia:** všetky súčty (PDF, export, dashboard, pripomienky, Peppol) idú cez jednu funkciu; zálohové faktúry sa do tržieb nezapočítavajú. Pridané náhodné testy invariantov (DPH po sadzbách, dobropis je presný opak). Čiastočné úhrady appka nepozná (faktúra je buď uhradená, alebo nie).
 4. **Databáza:** cudzie kľúče sú zapnuté, zápisy serializované, migrácie bežia pri štarte. Pridané: vystavenú faktúru nemožno zmazať ani cez cascade (ochrana na úrovni modelu). Appka nemá žiadnu trasu na mazanie zákazníkov ani zákaziek.
 5. **Prevádzka:** `/health/details` hlási aj veľa chýb 500 za hodinu, málo miesta na disku a nebežiaci plánovač záloh. Chyby sa logujú s tracebackom (Railway Deploy Logs). Notifikácie e-mailom appka neposiela; na upozornenia slúži externý monitoring (UptimeRobot).
@@ -141,3 +167,11 @@ SQLite engine kont aj `accounts.db` teraz používa `journal_mode=WAL` a `synchr
 3. **Obnova zálohy:** 8 druhov chybného vstupu (zlé heslo, poškodený a skrátený `.enc`, odpad, skrátený zip, pokazená DB, cesta mimo adresára, prázdny súbor) nezmení živú DB ani uploads a nezanechá súbory; úspešná šifrovaná obnova dáta nahradí a vytvorí poistnú kópiu.
 4. **Súbežná registrácia:** nájdená a opravená chyba - súbežná registrácia rovnakého mena končila 500 (kontrola mena bola mimo zámku). Testy: 12 súbežných registrácií nad limitom 3 dajú presne 3 úplné kontá bez sirotských priečinkov a bez 5xx.
 5. **Monitoring:** `/health/details` hlási aj ochranné triggery a beh ako root v produkcii a vracia `runtime` (používateľ, prostredie).
+
+## Dodatok: správa kont a overenie na ostrej prevádzke (26. 10. 2026)
+
+- **Správa kont majiteľom servera:** `/admin/accounts` (len kontá v `SERVER_ADMINS`, ostatným 404): zoznam, založenie konta, nové heslo (zneplatní staré prihlásenia), vypnutie a zapnutie konta (dáta a zálohy ostávajú). Zakladanie používa jednu logiku (`account_service.py`) aj pre CLI a verejnú registráciu pod rovnakým zámkom. Pri testovaní sa našla a opravila chyba: súbežná registrácia rovnakého mena končila chybou 500.
+- **Overené na Railway:** štartový log potvrdzuje beh pod používateľom `app` (nie root), samostatný Volume, migrácie všetkých kont vrátane novej databázy kont; `/health/details` vracia `status: ok`, 3 kontá, `runtime.user: app`.
+- **Overené mimo kódu:** šifrovaná záloha v R2 sa dá stiahnuť a rozšifrovať; `offsite_restore.py --verify` prešiel (OK) pre všetky kontá v bucketi.
+- **Diagnostika monitoringu:** štartový log vypíše, či je `MONITOR_TOKEN` nastavený, jeho dĺžku a odtlačok SHA-256 (token sa nikdy nevypíše), aby sa dala porovnať hodnota na serveri s tou, ktorú zadáva nástroj na monitoring.
+

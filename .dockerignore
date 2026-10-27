@@ -52,3 +52,4 @@ server-errors.log
 docker-compose.yml
 Caddyfile
 obnova/
+dist/

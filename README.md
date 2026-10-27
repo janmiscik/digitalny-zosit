@@ -55,6 +55,8 @@ Potom v `.env` nastav:
 
 - **`ACCOUNTS_DATA_DIR`** – priečinok s dátami jednotlivých kont (predvolené `./data/accounts`).
 
+- **Ďalšie voliteľné premenné** (predvolené hodnoty zvyčajne stačia): `APP_TIMEZONE` (zobrazovanie časov, predvolene `Europe/Bratislava`), `LOG_LEVEL` (predvolene `INFO`), `ENABLE_API_DOCS=true` (zapne `/docs` a `/redoc`; v produkcii nechaj vypnuté), `BACKUP_ENABLED` (automatické zálohy, predvolene zapnuté), `BACKUP_START_DELAY_SECONDS` (oneskorenie prvej zálohy po štarte, predvolene 60), `AUTO_MIGRATE_ACCOUNTS=false` (vypne migráciu kont pri štarte appky), `FORWARDED_ALLOW_IPS` (dôveryhodné adresy proxy; mimo Railway nastav na IP/CIDR svojej proxy).
+
 Appka už **nepoužíva** `ADMIN_USERNAME` ani `ADMIN_PASSWORD_HASH` - používatelia sa registrujú cez `/register` a ich prihlasovacie údaje sú v `accounts.db`.
 
 ### 3. Spusti databázové migrácie
@@ -328,7 +330,7 @@ pip install -r requirements-dev.txt   # raz, pytest sa do produkčného obrazu n
 python -m pytest tests/ -q
 ```
 
-Aktuálne **1403 testov**, rozdelených podľa oblasti:
+Aktuálne **1476 testov** (na Windowse sa 2 testy Docker entrypointu preskočia, lebo vyžadujú Linux a root; v CI bežia), rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|
@@ -363,14 +365,23 @@ Aktuálne **1403 testov**, rozdelených podľa oblasti:
 | `test_secret_key.py` | Kontrola SECRET_KEY: chýbajúci, krátky, predvolený, nenáhodný; skutočný štart appky v produkcii a lokálne |
 | `test_concurrent_numbering.py` | 20 súbežných požiadaviek na vytvorenie faktúr/ponúk dostane jedinečné čísla bez chyby |
 | `test_gap_warnings.py` | Medzery v číslovaní ako upozornenie: preverenie s dôvodom, audit, izolácia kont |
-| `test_account_isolation.py` | Izolácia kont: dve skutočné kontá, konto B skúša KAŽDÚ trasu s ID a názvami súborov konta A (faktúry, ponuky, zákazky, fotky, logo, zálohy, exporty), path traversal, obnova cudzej zálohy; A ostáva nezmenené |
+| `test_account_isolation.py` | Izolácia kont: dve skutočné kontá, konto B skúša KAŽDÚ trasu s ID a názvami súborov konta A s platnými formulármi aj trasy bez ID; databáza, súbory a zálohy A ostanú bajt po bajte rovnaké a audit log A sa nezmení; path traversal, obnova cudzej zálohy; A ostáva nezmenené |
 | `test_monitoring.py` | `/health/details`: token, zastaraná/chýbajúca záloha, zlyhanie, off-site, migrácie, ochranné triggery, beh ako root, žiadny únik textov chýb |
 | `test_session_invalidation.py` | Odhlásenie ostatných zariadení po zmene hesla, zmazané konto, cookie bez odtlačku |
 | `test_change_password.py` | Zmena hesla: úspech, nové prihlásenie, zlé súčasné heslo, validácia, limit pokusov, CSRF, vyžaduje prihlásenie, izolácia kont, audit log |
 | `test_hosting_and_offsite_restore.py` | `docker-compose.yml` (production, dôvera proxy len v internej sieti), Caddyfile, CLI `offsite_restore.py`: zoznam, stiahnutie a rozšifrovanie zálohy, zlé heslo, neprepisovanie, nebezpečné názvy |
-| `test_csp_report.py` | CSP v režime hlásenia: hlavička len pri HTML, príjem hlásení (čistenie hodnôt, limit veľkosti a počtu, odolnosť voči nezmyslom) |
-| `test_csp_inline_budget.py` | Počet inline skriptov a handlerov v šablónach sa nesmie zvyšovať (postupný presun do `static/`) |
+| `test_csp_report.py` | Vynucovaná striktná CSP (`script-src 'self'`, `script-src-attr 'none'`, `report-uri`): hlavička len pri HTML, príjem hlásení na `/csp-report` (čistenie hodnôt, limit veľkosti a počtu, odolnosť voči nezmyslom) |
+| `test_csp_inline_budget.py` | Šablóny nemajú inline skripty ani handlery (`onclick`...); každý `data-action` má obsluhu v `static/js`, každý odkazovaný `.js` existuje |
 | `test_route_policy.py` | Každá trasa vyžaduje prihlásenie (okrem zoznamu verejných) a každá meniaca trasa má CSRF; vypnutie/strop registrácie; slabé heslá |
+| `test_admin_accounts.py` | Správa kont majiteľom servera (`/admin/accounts`, `SERVER_ADMINS`): kto smie (ostatní dostanú 404), založenie konta, pravidlá hesla, nové heslo (zneplatní staré prihlásenia), vypnutie a zapnutie konta, audit bez hesiel, CSRF |
+| `test_db_guards_migration.py` | Ochranné triggery sa nainštalujú do už existujúcich databáz po migrácii aj po obnove starej zálohy; chýbajúci alebo oslabený trigger sa zistí |
+| `test_manage_accounts.py` | `manage_accounts.py`: pripojenie osirelých dát ku kontu, `--create-account` (pravidlá, duplicita, vrátenie pri zlyhaní) |
+| `test_migration_lock.py` | Migrácie v jednom procese bežia jedna po druhej (Alembic nie je bezpečný pre súbežný beh vo vláknach) |
+| `test_photo_file_deletion.py` | Súbor fotky sa maže až po úspešnom commite, nie pri rollbacku |
+| `test_sensitive_routes_http.py` | Skutočné HTTP požiadavky na citlivé trasy (nie len kontrola závislostí v definícii) |
+| `test_audit_trail.py` | Audit stopa účtovných zmien: dôvod storna, dátum úhrady, filter, história zmien na faktúre |
+| `test_multi_tenant.py` | Registrácia kont a oddelenie dát medzi nimi (vlastná databáza a priečinok každého konta) |
+| `test_distribution.py` | Čistý distribučný balík (bez dát, tajomstiev a artefaktov), licencie a súpis komponentov tretích strán |
 | `test_totals_property.py` | Náhodné kontroly súm faktúry (DPH po sadzbách, zaokrúhľovanie, dobropis = presný opak) |
 | `test_issued_invoice_protection.py` | Vystavenú faktúru nemožno zmazať ani cez cascade |
 | `test_backup_crypto.py` | Šifrovanie záloh: rozšifrovanie, zlé heslo, upravený/odrezaný/prehodený súbor, test obnovy nad rozšifrovanou kópiou, nič sa nenahrá pri zlom hesle, CLI `decrypt_backup.py` |
@@ -400,15 +411,19 @@ digitalny-zosit/
 │   └── ...
 │
 ├── routers/
-│   ├── auth.py          # /login, /logout, rate limiting
+│   ├── admin.py         # /admin/accounts - správa kont majiteľom servera (SERVER_ADMINS)
+│   ├── auth.py          # /login, /logout, rate limiting, registrácia
 │   ├── company.py       # /settings - fakturačné údaje, záloha/obnova DB, /audit-log, /settings/integrity-check
 │   ├── customers.py     # CRUD zákazníkov, auto-doplnenie podľa IČO
 │   ├── invoices.py      # CRUD faktúr, PDF, Peppol XML, kopírovanie, vyhľadávanie
 │   ├── jobs.py           # CRUD zákaziek, fotky, náklady, kalendár
-│   └── quotes.py        # CRUD cenových ponúk, konverzia na faktúru
+│   ├── quotes.py        # CRUD cenových ponúk, konverzia na faktúru
+│   ├── reminders.py     # pripomienky platieb
+│   └── export.py        # export pre účtovníka
 │
 ├── static/
 │   ├── fonts/            # DejaVu Sans (diakritika v PDF)
+│   ├── js/               # všetok JavaScript (app.js + pages/*.js); šablóny nemajú inline skripty (striktná CSP)
 │   ├── logo-icon.png
 │   └── style.css
 │
@@ -419,9 +434,24 @@ digitalny-zosit/
 │
 ├── alembic_accounts/     # migrácie master databázy kont (accounts.db)
 │
+├── docs/                 # HOSTING.md (iný hosting), OBNOVA.md (obnova zo zálohy), PREVADZKA.md (poplachy a postupy)
+├── tools/                # make_distribution.py (čistý balík), generate_notices.py (súpis licencií)
+├── third_party/licenses/ # texty licencií priložených fontov
+│
 ├── data/                 # accounts.db + dáta kont (uploads, backups) - negituje sa; na Railway = Volume
 │
+├── account_service.py      # zakladanie kont, nové heslo, vypnutie konta (admin stránka aj CLI)
 ├── auth.py                 # hashovanie hesla, session, rate limiting
+├── db_guards.py            # databázové triggery (audit log, vystavené faktúry) a ich kontrola
+├── backup_crypto.py        # šifrovanie záloh (AES-GCM) pred nahratím mimo servera
+├── offsite_backup.py       # nahrávanie záloh do S3/R2 s overením
+├── offsite_restore.py      # sťahovanie, rozšifrovanie a skúška obnovy záloh z bucketu
+├── decrypt_backup.py       # rozšifrovanie zálohy z príkazového riadku
+├── monitoring.py           # /health/details: stav záloh, migrácií, triggerov, disku
+├── security_config.py      # APP_ENV a kontrola SECRET_KEY
+├── mailer.py               # SMTP, len na obnovu hesla
+├── log_filters.py          # skrytie tokenov v prístupových logoch
+├── diagnose_storage.py     # výpis [ULOZISKE] pri štarte
 ├── audit_log.py             # zápis do audit logu (história zmien)
 ├── backup_utils.py         # záloha/obnova cez SQLite backup API
 ├── export_utils.py         # export pre účtovníka: obdobia, CSV, Excel
@@ -452,6 +482,11 @@ digitalny-zosit/
 │
 ├── .env.example
 ├── .gitignore
+├── LICENSE                 # licencia diela (proprietárna)
+├── THIRD_PARTY_NOTICES.md  # licencie a pôvod komponentov tretích strán
+├── AUDIT.md                # technický audit a stav bezpečnosti
+├── docker-compose.yml      # beh mimo Railway (app + Caddy)
+├── Caddyfile
 ├── accounts_db.py          # master databáza kont
 ├── accounts_models.py      # model Account
 ├── manage_accounts.py      # --upgrade-all (migrácia všetkých kont), --list, --create-account

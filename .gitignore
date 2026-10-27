@@ -14,3 +14,4 @@ server-errors.log
 
 # stiahnuté zálohy z bucketu (obsahujú dáta zákazníkov)
 obnova/
+dist/
