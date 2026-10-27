@@ -59,6 +59,8 @@ Potom v `.env` nastav:
 
 Appka už **nepoužíva** `ADMIN_USERNAME` ani `ADMIN_PASSWORD_HASH` - používatelia sa registrujú cez `/register` a ich prihlasovacie údaje sú v `accounts.db`.
 
+Pred ostrou prevádzkou skontroluj konfiguráciu: `python tools/check_config.py --profile managed --env-file .env` (profily `managed`, `self-service`, `single`; popis v `docs/KONFIGURACIA.md`).
+
 ### 3. Spusti databázové migrácie
 
 Appka má dva oddelené reťazce migrácií:
@@ -330,7 +332,7 @@ pip install -r requirements-dev.txt   # raz, pytest sa do produkčného obrazu n
 python -m pytest tests/ -q
 ```
 
-Aktuálne **1476 testov** (na Windowse sa 2 testy Docker entrypointu preskočia, lebo vyžadujú Linux a root; v CI bežia), rozdelených podľa oblasti:
+Aktuálne **1488 testov** (na Windowse sa 2 testy Docker entrypointu preskočia, lebo vyžadujú Linux a root; v CI bežia), rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|
@@ -381,6 +383,7 @@ Aktuálne **1476 testov** (na Windowse sa 2 testy Docker entrypointu preskočia,
 | `test_sensitive_routes_http.py` | Skutočné HTTP požiadavky na citlivé trasy (nie len kontrola závislostí v definícii) |
 | `test_audit_trail.py` | Audit stopa účtovných zmien: dôvod storna, dátum úhrady, filter, história zmien na faktúre |
 | `test_multi_tenant.py` | Registrácia kont a oddelenie dát medzi nimi (vlastná databáza a priečinok každého konta) |
+| `test_check_config.py` | Kontrola produkčnej konfigurácie (`tools/check_config.py`): profily `managed`, `self-service` a `single`, chyby a varovania, žiadny únik tajných hodnôt, návratový kód |
 | `test_distribution.py` | Čistý distribučný balík (bez dát, tajomstiev a artefaktov), licencie a súpis komponentov tretích strán |
 | `test_totals_property.py` | Náhodné kontroly súm faktúry (DPH po sadzbách, zaokrúhľovanie, dobropis = presný opak) |
 | `test_issued_invoice_protection.py` | Vystavenú faktúru nemožno zmazať ani cez cascade |
@@ -434,8 +437,8 @@ digitalny-zosit/
 │
 ├── alembic_accounts/     # migrácie master databázy kont (accounts.db)
 │
-├── docs/                 # HOSTING.md (iný hosting), OBNOVA.md (obnova zo zálohy), PREVADZKA.md (poplachy a postupy)
-├── tools/                # make_distribution.py (čistý balík), generate_notices.py (súpis licencií)
+├── docs/                 # KONFIGURACIA.md (premenné podľa spôsobu používania), HOSTING.md (iný hosting), OBNOVA.md (obnova zo zálohy), PREVADZKA.md (poplachy a postupy)
+├── tools/                # make_distribution.py (čistý balík), generate_notices.py (súpis licencií), check_config.py (kontrola produkčnej konfigurácie)
 ├── third_party/licenses/ # texty licencií priložených fontov
 │
 ├── data/                 # accounts.db + dáta kont (uploads, backups) - negituje sa; na Railway = Volume

@@ -8,7 +8,7 @@ Súhrn pre nového vlastníka. Podrobnosti a história sú v dodatkoch nižšie.
 
 | Oblasť | Stav |
 |---|---|
-| Testy | 1476 testov; 2 testy Docker entrypointu vyžadujú Linux a root (v CI bežia a nesmú sa preskočiť) |
+| Testy | 1488 testov; 2 testy Docker entrypointu vyžadujú Linux a root (v CI bežia a nesmú sa preskočiť) |
 | Závislosti | `pip-audit` pri poslednej kontrole bez známych zraniteľností (pozri dodatok o závislostiach); CI ho spúšťa |
 | CSP | striktná pre skripty (žiadne inline skripty ani handlery), hlásenia na `/csp-report` |
 | Izolácia kont | sweep všetkých trás s platnými formulármi, databáza a súbory cudzieho konta ostanú bajt po bajte rovnaké |
@@ -16,6 +16,7 @@ Súhrn pre nového vlastníka. Podrobnosti a história sú v dodatkoch nižšie.
 | Zálohy | denné, šifrované (AES-GCM), off-site do S3/R2 s overením SHA-256 a skúškou obnovy; `offsite_restore.py --verify` |
 | Kontá | zakladá majiteľ servera (`/admin/accounts` alebo `manage_accounts.py --create-account`), verejná registrácia sa vypína `REGISTRATION_ENABLED=false` |
 | Monitoring | `/health/details` (token) hlási zálohy, off-site, migrácie, triggery, disk, plánovač, beh ako root; upozornenia e-mailom cez externý nástroj (UptimeRobot) |
+| Konfigurácia | `python tools/check_config.py --profile managed\|self-service\|single` skontroluje premenné prostredia (tajné kľúče, registrácia, správca, zálohy, e-mail); popis v `docs/KONFIGURACIA.md` |
 | Licencie | `LICENSE`, `THIRD_PARTY_NOTICES.md`, `third_party/licenses/`; čistý balík: `python tools/make_distribution.py` |
 
 **Otvorené body pre kupujúceho (nerieši kód):**
