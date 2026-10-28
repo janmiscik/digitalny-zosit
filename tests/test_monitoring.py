@@ -431,3 +431,20 @@ def test_startup_summary_reports_state_without_leaking_the_token(monkeypatch):
     import hashlib
 
     assert hashlib.sha256(b"super-tajny-token-123").hexdigest()[:8] in summary
+
+
+def test_startup_logs_runtime_user_and_warns_about_root_in_production(monkeypatch, caplog):
+
+    import logging
+
+    import main
+
+    monkeypatch.setattr(monitoring, "runtime_info", lambda: {"user": "root", "uid": 0, "environment": "production"})
+
+    with caplog.at_level(logging.INFO):
+        main.log_runtime_user()
+
+    text = "\n".join(f"{r.levelname} {r.getMessage()}" for r in caplog.records)
+
+    assert "Beh appky: používateľ=root uid=0 prostredie=production" in text
+    assert "WARNING Beh appky: aplikácia beží ako root" in text

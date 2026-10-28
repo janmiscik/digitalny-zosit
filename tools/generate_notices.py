@@ -128,15 +128,13 @@ def build() -> str:
         "## Fonty\n",
         "| Font | Použitie | Licencia | Spôsob dodania |", "|---|---|---|---|",
         "| DejaVu Sans, DejaVu Sans Bold | PDF dokumenty (`static/fonts/`) | Bitstream Vera / DejaVu (voľná, povoľuje predaj ako súčasť balíka) | priložené v balíku, text: `third_party/licenses/DEJAVU-FONTS-LICENSE.txt` |",
-        "| Space Grotesk | webové rozhranie | SIL OFL 1.1 | NIE JE v balíku, načíta sa zo služby Google Fonts (`static/style.css`) |",
-        "| Inter | webové rozhranie | SIL OFL 1.1 | NIE JE v balíku, načíta sa zo služby Google Fonts |",
-        "| IBM Plex Mono | webové rozhranie | SIL OFL 1.1 | NIE JE v balíku, načíta sa zo služby Google Fonts |",
+        "| Space Grotesk 5.3.0 | webové rozhranie (`static/fonts/web/`) | SIL OFL 1.1 | priložené v balíku (woff2, latin + latin-ext, zdroj: balík @fontsource), text: `third_party/licenses/FONT-space-grotesk-LICENSE.txt` |",
+        "| Inter 5.3.0 | webové rozhranie (`static/fonts/web/`) | SIL OFL 1.1 | priložené v balíku, text: `third_party/licenses/FONT-inter-LICENSE.txt` |",
+        "| IBM Plex Mono 5.3.0 | webové rozhranie (`static/fonts/web/`) | SIL OFL 1.1 | priložené v balíku, text: `third_party/licenses/FONT-ibm-plex-mono-LICENSE.txt` |",
         "",
-        "Poznámky k fontom z Google Fonts: pri každom načítaní stránky sa prehliadač pripája na servery Google "
-        "(prenáša sa IP adresa návštevníka), čo môže byť problém z hľadiska ochrany osobných údajov (GDPR). "
-        "Odporúčanie pre produkčné nasadenie: fonty stiahnuť a servírovať z `static/` (a zároveň upraviť CSP, "
-        "z ktorej potom odpadne výnimka pre `fonts.googleapis.com` a `fonts.gstatic.com`). Text OFL 1.1: "
-        "`third_party/licenses/OFL-1.1.txt`.\n",
+        "Webové písma sa servírujú z vlastného servera, prehliadač nekontaktuje Google (žiadny prenos IP adresy "
+        "návštevníka tretej strane, CSP nepúšťa cudzie servery). Súbory sú nezmenené kópie; OFL vyžaduje ponechať "
+        "licenciu s fontmi a nepredávať ich samostatne. Všeobecný text OFL 1.1: `third_party/licenses/OFL-1.1.txt`.\n",
         "## Logo a grafika\n",
         "| Súbor | Pôvod | Stav |", "|---|---|---|",
         "| `static/logo-icon.png` | logo vygenerované AI nástrojom Google Gemini (podľa autora projektu) | **Pred odovzdaním doplniť:** dátum vzniku a verziu/službu Gemini (bezplatná alebo platená), uschovať zadanie (prompt) a overiť v aktuálnych podmienkach Google pre túto službu, že výstup možno komerčne použiť a previesť na kupujúceho. Logo nie je registrovaná ochranná známka; pri AI výstupe nemusí vzniknúť autorské právo, kupujúci ho teda nemusí vedieť vymáhať voči kopírovaniu. |",

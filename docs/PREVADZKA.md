@@ -59,9 +59,16 @@ konzistentná databáza.
 
 ## Kontajner, proxy a logy
 - **Používateľ:** kontajner štartuje ako root len na opravu vlastníka `/app/data` a potom beží ako `app`.
-  V logu hľadaj `[SPUSTENIE] Appka beží pod používateľom app`. Ak tam je `VAROVANIE ... beží ako root`,
-  platforma zakázala `chown` na Volume; nastav na Railway `RAILWAY_RUN_UID=0`/skontroluj práva Volume, alebo
-  nechaj appku bežať ako root a ber to ako známe obmedzenie. S `REQUIRE_NON_ROOT=true` sa taká appka nespustí.
+  Ak by appka nemala zápis do Volume ani po oprave, **pobeží ako root s varovaním** (deploy sa radšej nerozbije),
+  pokiaľ nie je nastavené `REQUIRE_NON_ROOT=true`.
+- **Ako overiť, pod kým appka skutočne beží** (urob pri každom novom hostingu a pred odovzdaním):
+  1. V logu štartu hľadaj `[SPUSTENIE] Appka beží pod používateľom app` (zlé: `VAROVANIE ... beží ako root`).
+  2. Riadok `Beh appky: používateľ=app uid=...` v logu appky a `/health/details` (s tokenom) pole `runtime.user`;
+     root v produkcii je hlásený ako problém `runtime` (a varovanie v logu).
+  3. Až keď je overené, že `app` zapisuje do Volume, nastav `REQUIRE_NON_ROOT=true`. Na existujúcom nasadení ho
+     **nezapínaj naslepo**: ak by práva Volume nesedeli, deploy sa nespustí. Vtedy premennú zmaž (alebo oprav práva
+     Volume) a redeployni.
+  Na Railway to bolo overené (beží `app`, Volume zapisovateľný); pri inom hostingu overenie zopakuj.
 - **Proxy:** `FORWARDED_ALLOW_IPS=*` je v poriadku len za Railway proxy. Mimo Railway nastav IP/CIDR proxy,
   inak sa dá podvrhnutím `X-Forwarded-For` obísť limit pokusov o prihlásenie.
 - **Tokeny v logoch:** odkaz na obnovu hesla appka z vlastných logov skrýva; logy reverse proxy platformy

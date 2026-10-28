@@ -99,6 +99,18 @@ from templates_config import templates
 # nevie, koľko ich bude.
 # =========================================
 
+def log_runtime_user() -> None:
+    """Do logu štartu zapíše, pod akým používateľom appka beží (root v produkcii je varovanie)."""
+
+    runtime = monitoring.runtime_info()
+    logger.info("Beh appky: používateľ=%s uid=%s prostredie=%s", runtime["user"], runtime["uid"], runtime["environment"])
+
+    runtime_issue = monitoring.runtime_problem(runtime)
+
+    if runtime_issue:
+        logger.warning("Beh appky: %s", runtime_issue)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
 
@@ -120,6 +132,8 @@ async def lifespan(app: FastAPI):
 
     # Stav konfigurácie, ktorý sa inak ťažko zisťuje z vonka (bez tajných údajov).
     logger.info("Monitoring (/health/details): %s", monitoring.startup_summary())
+
+    log_runtime_user()
 
     # Automatické zálohy kont na pozadí (viď auto_backup.py). Vypnuté v
     # testoch cez BACKUP_ENABLED=false (tests/conftest.py).
@@ -207,8 +221,8 @@ CONTENT_SECURITY_POLICY = "; ".join([
     # žiadne inline skripty ani handlery (onclick...): všetko je v static/js/
     "script-src 'self'",
     "script-src-attr 'none'",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' https://fonts.gstatic.com data:",
+    "style-src 'self' 'unsafe-inline'",
+    "font-src 'self' data:",
     "img-src 'self' data: blob:",
     "connect-src 'self'",
     "object-src 'none'",

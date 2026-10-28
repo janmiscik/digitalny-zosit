@@ -153,3 +153,12 @@ def test_cli_reads_env_file_exits_with_code_and_never_prints_secrets(tmp_path, c
     assert SECRET not in capsys.readouterr().out
 
     assert check_config.main(["x", "--profile", "managed", "--env-file", str(tmp_path / "nie.env")]) == 2
+
+
+def test_require_non_root_is_reported_with_verification_hint():
+
+    off = [f for f in check_config.check_config(good_env(), "managed") if f.name == "REQUIRE_NON_ROOT"]
+    on = [f for f in check_config.check_config(good_env(REQUIRE_NON_ROOT="true"), "managed") if f.name == "REQUIRE_NON_ROOT"]
+
+    assert len(off) == 1 and off[0].level == "OK" and "Najprv over" in off[0].message
+    assert len(on) == 1 and on[0].level == "OK" and "zapnuté" in on[0].message

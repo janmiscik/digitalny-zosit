@@ -268,9 +268,11 @@ def test_csp_is_sent_with_html_pages_only():
     csp = html.headers["content-security-policy"]
 
     for directive in ("default-src 'self'", "object-src 'none'", "base-uri 'self'",
-                      "form-action 'self'", "frame-ancestors 'none'",
-                      "https://fonts.googleapis.com", "https://fonts.gstatic.com"):
+                      "form-action 'self'", "frame-ancestors 'none'"):
         assert directive in csp
+
+    # fonty sú lokálne: CSP nepúšťa žiadny cudzí server
+    assert "googleapis" not in csp and "gstatic" not in csp and "https:" not in csp
 
     assert "http:" not in csp and "*" not in csp.replace("'unsafe-inline'", "")
     script_src = [d for d in csp.split("; ") if d.startswith("script-src ")][0]
@@ -278,3 +280,28 @@ def test_csp_is_sent_with_html_pages_only():
 
     # JSON a ostatné odpovede CSP nenesú (PDF viewer v prehliadači by mohol zlyhať)
     assert "content-security-policy" not in client.get("/health").headers
+
+
+def test_web_fonts_are_served_locally_with_licenses():
+
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    css = (root / "static" / "style.css").read_text(encoding="utf-8")
+
+    assert "googleapis" not in css and "gstatic" not in css and "@import" not in css
+
+    files = re.findall(r"url\('(/static/fonts/web/[^']+)'\)", css)
+
+    assert len(files) >= 16
+
+    for path in files:
+        assert (root / path.lstrip("/")).is_file(), path
+
+    for name in ("inter", "space-grotesk", "ibm-plex-mono"):
+        assert (root / "third_party" / "licenses" / f"FONT-{name}-LICENSE.txt").is_file()
+
+    client = TestClient(app)
+
+    assert client.get(files[0]).status_code == 200

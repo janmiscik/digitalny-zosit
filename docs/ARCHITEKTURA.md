@@ -125,5 +125,4 @@ Session cookie (podpísaná, `SameSite=Lax`, HTTPS-only v produkcii), CSRF na ka
 - **Jedna replika.** Limity pokusov, zámok registrácie, počítadlo chýb a plánovač sú v pamäti procesu; SQLite zvláda jedného zapisovateľa. Škálovanie na viac replík vyžaduje zmenu architektúry (zdieľaná databáza, externý plánovač a limity).
 - **Čiastočné úhrady** nie sú podporované.
 - **IČO lookup** ide cez tretiu stranu (ORSF, bez SLA), appka kvôli nemu nikdy nepadá.
-- **Písma** z Google Fonts sa načítavajú z Google (GDPR); dajú sa hostovať lokálne.
 - **Ochrana proti priamemu zásahu do súboru databázy** (triggery sa dajú zrušiť) a zámok objektov v bucketi sú nastavenia prevádzky, nie kód.

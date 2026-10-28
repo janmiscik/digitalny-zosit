@@ -230,6 +230,14 @@ def check_config(env, profile: str) -> list[Finding]:
     if _get(env, "FORWARDED_ALLOW_IPS") == "*" and not on_railway:
         add("WARN", "FORWARDED_ALLOW_IPS", "* dôveruje hlavičkám proxy zo všetkých zdrojov; nastav IP/CIDR svojej proxy")
 
+    # ---- používateľ kontajnera ----
+    if _get(env, "REQUIRE_NON_ROOT").lower() == "true":
+        add("OK", "REQUIRE_NON_ROOT", "zapnuté: kontajner sa nespustí, ak by appka musela bežať ako root")
+    else:
+        add("OK", "REQUIRE_NON_ROOT", "nezapnuté: ak appka nemá zápis do Volume, pobeží ako root s varovaním. "
+            "Najprv over v logu `[SPUSTENIE] Appka beží pod používateľom app` a v /health/details (runtime.user), "
+            "až potom zapni true (pozri docs/PREVADZKA.md)")
+
     return findings
 
 
