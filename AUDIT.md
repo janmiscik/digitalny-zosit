@@ -24,7 +24,7 @@ Súhrn pre nového vlastníka. Podrobnosti a história sú v dodatkoch nižšie.
 
 1. **Účtovné pravidlá** (sadzby a režimy DPH, dobropisy, číslovanie) overiť s účtovníkom pred reálnym fakturovaním. Testy nie sú daňové potvrdenie.
 2. **Čiastočné úhrady** appka nepozná (faktúra je uhradená alebo nie).
-3. **Pôvod loga** (`static/logo-icon.png`) a doplnenie mena držiteľa práv v `LICENSE` pred odovzdaním (pozri `THIRD_PARTY_NOTICES.md`).
+3. **Pôvod loga** (`static/logo-icon.png`, generované v Google Gemini: doplniť dátum, verziu služby a overiť podmienky použitia) a doplnenie mena držiteľa práv v `LICENSE` pred odovzdaním (pozri `THIRD_PARTY_NOTICES.md`).
 4. **Jedna replika:** limity pokusov, zámok registrácie a plánovač sú v pamäti procesu; SQLite zvláda len jedného zapisovateľa. Pre viac replík treba zmeniť architektúru.
 5. **Zámok objektov a verzovanie v bucketi** (ochrana záloh pred zmazaním) je nastavenie u poskytovateľa záloh, appka ho vynútiť nevie.
 6. **Písma Google Fonts** sa načítavajú z Google (prenos IP návštevníka); pre prísnejšie GDPR ich treba hostovať lokálne.

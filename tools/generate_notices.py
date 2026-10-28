@@ -139,7 +139,7 @@ def build() -> str:
         "`third_party/licenses/OFL-1.1.txt`.\n",
         "## Logo a grafika\n",
         "| Súbor | Pôvod | Stav |", "|---|---|---|",
-        "| `static/logo-icon.png` | vygenerované nástrojom (názov nástroja a jeho podmienky použitia treba doplniť) | **DOPLNIŤ PRED ODOVZDANÍM:** názov nástroja, dátum vzniku a overenie, že jeho podmienky povoľujú komerčné použitie a prevod |",
+        "| `static/logo-icon.png` | logo vygenerované AI nástrojom Google Gemini (podľa autora projektu) | **Pred odovzdaním doplniť:** dátum vzniku a verziu/službu Gemini (bezplatná alebo platená), uschovať zadanie (prompt) a overiť v aktuálnych podmienkach Google pre túto službu, že výstup možno komerčne použiť a previesť na kupujúceho. Logo nie je registrovaná ochranná známka; pri AI výstupe nemusí vzniknúť autorské právo, kupujúci ho teda nemusí vedieť vymáhať voči kopírovaniu. |",
         "",
         "Iné obrázky, ikony ani skripty tretích strán (jQuery, CDN a pod.) aplikácia neobsahuje; všetok JavaScript je vlastný (`static/js/`).\n",
         "## Nástroje na vývoj\n",
