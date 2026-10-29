@@ -19,6 +19,7 @@ Súhrn pre nového vlastníka. Podrobnosti a história sú v dodatkoch nižšie.
 | Konfigurácia | `python tools/check_config.py --profile managed\|self-service\|single` skontroluje premenné prostredia (tajné kľúče, registrácia, správca, zálohy, e-mail); popis v `docs/KONFIGURACIA.md` |
 | Architektúra | `docs/ARCHITEKTURA.md`: vrstvy, izolácia kont, životný cyklus požiadavky, migrácie, zálohy, testy, postupy „ako pridať…“ a známe limity pre nového vývojára. |
 | Odovzdanie | `docs/ODOVZDANIE.md`: protokol s obsahom odovzdania, kontrolným zoznamom, úlohami predávajúceho, odovzdaním prístupov a tajných hodnôt a potvrdením. |
+| Po nasadení | `docs/PO_NASADENI.md`: kontrola logov, `/health`, `/health/details`, funkčná skúška, CSP hlásenia, off-site záloha a návrat pri chybe. |
 | Licencie | `LICENSE`, `THIRD_PARTY_NOTICES.md`, `third_party/licenses/`; čistý balík: `python tools/make_distribution.py` |
 
 **Otvorené body pre kupujúceho (nerieši kód):**
