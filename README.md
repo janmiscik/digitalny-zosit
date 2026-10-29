@@ -6,7 +6,7 @@ Aplikácia je vytvorená v Pythone pomocou FastAPI, SQLAlchemy, Jinja2 a SQLite.
 
 ---
 
-Technický prehľad architektúry pre nového vývojára: `docs/ARCHITEKTURA.md`.
+Technický prehľad architektúry pre nového vývojára: `docs/ARCHITEKTURA.md`. Pri predaji alebo odovzdaní projektu: `docs/ODOVZDANIE.md`.
 
 ## 🛠️ Použité technológie
 
@@ -444,7 +444,7 @@ digitalny-zosit/
 │
 ├── alembic_accounts/     # migrácie master databázy kont (accounts.db)
 │
-├── docs/                 # ARCHITEKTURA.md (technický prehľad), INSTALACIA.md (čistá inštalácia), KONFIGURACIA.md (premenné podľa spôsobu používania), HOSTING.md (iný hosting), OBNOVA.md (obnova zo zálohy), PREVADZKA.md (poplachy a postupy)
+├── docs/                 # ARCHITEKTURA.md (technický prehľad), ODOVZDANIE.md (odovzdávací protokol), INSTALACIA.md (čistá inštalácia), KONFIGURACIA.md (premenné podľa spôsobu používania), HOSTING.md (iný hosting), OBNOVA.md (obnova zo zálohy), PREVADZKA.md (poplachy a postupy)
 ├── tools/                # make_distribution.py (čistý balík), generate_notices.py (súpis licencií), check_config.py (kontrola produkčnej konfigurácie)
 ├── third_party/licenses/ # texty licencií priložených fontov
 │
