@@ -673,6 +673,48 @@ class Invoice(Base):
         cascade="all, delete-orphan"
     )
 
+    payments = relationship(
+        "InvoicePayment",
+        back_populates="invoice",
+        cascade="all, delete-orphan",
+        order_by="InvoicePayment.payment_date, InvoicePayment.id"
+    )
+
+
+class InvoicePayment(Base):
+    """
+    Jedna (aj čiastočná) úhrada bežnej faktúry. Faktúra sa sama nemení:
+    zostatok = suma faktúry - súčet úhrad (viď invoice_utils.invoice_balance).
+    Úhrady sa evidujú len pri faktúre v stave "Odoslaná"; zostatok 0 ju
+    prepne na "Uhradená". Staršie faktúry "Uhradená" bez riadkov v tejto
+    tabuľke sa berú ako uhradené celé.
+    """
+
+    __tablename__ = "invoice_payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    invoice_id = Column(
+        Integer,
+        ForeignKey("invoices.id"),
+        nullable=False,
+        index=True
+    )
+
+    payment_date = Column(Date, nullable=False)
+
+    amount = Column(Numeric(10, 2), nullable=False)
+
+    note = Column(String, nullable=True)
+
+    created_at = Column(
+        DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+
+    invoice = relationship("Invoice", back_populates="payments")
+
 
 class InvoiceItem(Base):
 

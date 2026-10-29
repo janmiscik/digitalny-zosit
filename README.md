@@ -198,6 +198,7 @@ Mobilné pravidlá sú na konci `static/style.css` (sekcia „MOBIL - OVLÁDANIE
 5. **Číslovanie** – automatické, samostatné rady pre ostré faktúry (`RRRRPPP`, napr. `2026001`), zálohové faktúry (`ZFRRRRPPP`) a cenové ponuky (`CPRRRRPPP`).
 6. **Stavy faktúry** – Návrh → Odoslaná → Uhradená/Stornovaná, s explicitne vymenovanými povolenými prechodmi (nedá sa napr. vrátiť odoslanú faktúru späť na návrh). "Po splatnosti" sa **nikdy neukladá** – počíta sa vždy za behu z dátumu splatnosti.
 7. **Dátum skutočnej úhrady** – zaznamenáva sa automaticky pri prechode na "Uhradená", dá sa aj ručne opraviť. Tržby na dashboarde sa počítajú podľa tohto dátumu.
+7a. **Čiastočné úhrady** – pri odoslanej bežnej faktúre sa dá zapísať aj časť sumy (dátum, suma, poznámka). Zostatok = suma faktúry − súčet úhrad; keď klesne na 0, faktúra sa sama prepne na „Uhradená" s dátumom poslednej úhrady. Faktúra ostáva „Odoslaná" a detail aj zoznam ukážu „zostáva X €". Pravidlá: len bežná faktúra (nie zálohová ani dobropis), preplatok sa nedá zapísať, úhradu možno zmazať len kým je faktúra Odoslaná, ručné „Uhradená" doplní chýbajúci zostatok ako úhradu. Upomienky, dashboard a prehľad zákazníka počítajú zostatok; QR platba a PDF ostávajú na plnú sumu. Úhrady sa zapisujú do histórie zmien.
 8. **Kopírovanie faktúry** – vytvorí nový návrh s rovnakými položkami a dnešným dátumom (napr. na opakovanú mesačnú fakturáciu).
 9. **Vyhľadávanie a filtrovanie** – podľa čísla faktúry, mena zákazníka, poznámky, stavu aj obdobia vystavenia.
 10. **PDF export** – faktúra aj dodací list (položky bez cien, s podpisovými riadkami), podpora slovenskej diakritiky.
@@ -348,6 +349,7 @@ Aktuálne **1496 testov** (na Windowse sa 2 testy Docker entrypointu preskočia,
 | `test_validators.py` | Validácia e-mailu, IBAN (mod-97), IČO (mod-11), DIČ, IČ DPH – formát, kontrolné súčty, normalizácia |
 | `test_peppol_validation.py` | Validácia vygenerovaného Peppol XML – povinné polia, súčty, elektronická adresa (schéma + Endpoint ID), prenesenie daňovej povinnosti, nulová sadzba DPH – správne aj úmyselne pokazené scenáre |
 | `test_peppol_scheme_validator.py` | `validators.validate_peppol_scheme_id()` – formát, zhoda schémy s krajinou (napr. že `9946` nie je slovenská schéma) |
+| `test_invoice_payments.py` | Čiastočné úhrady: zostatok, automatické „Uhradená", validácia sumy a dátumu, ručné „Uhradená" s doplatkom, mazanie úhrady, upomienky a dashboard so zostatkom, zoznam faktúr, audit |
 | `test_invoices.py` | Fakturácia, DPH režim, stavy, PDF, Peppol XML, country_code/Endpoint ID zákazníka, nálezy validácie na detaile faktúry, dátum úhrady, kopírovanie, vyhľadávanie/filter |
 | `test_quotes.py` | Cenové ponuky, konverzia na faktúru (aj z odoslanej), ochrana pred dvojitým kliknutím, odkazy ponuka ↔ faktúra, rýchle tlačidlo v zozname, proforma |
 | `test_jobs_extras.py` | Fotodokumentácia, náklady/zisk (vrátane odmietnutia NaN/Infinity v sume nákladu), kalendár |

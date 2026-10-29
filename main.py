@@ -56,7 +56,7 @@ from dashboard_utils import (
     revenue_paid_date,
 )
 from database import Base, get_db
-from invoice_utils import CLOSED_INVOICE_STATUSES, calculate_invoice_totals, is_invoice_overdue, signed_invoice_total
+from invoice_utils import CLOSED_INVOICE_STATUSES, calculate_invoice_totals, invoice_balance, is_invoice_overdue, signed_invoice_total
 
 from models import Customer, Invoice, Job, Quote
 from schemas import InvoiceStatus
@@ -635,7 +635,7 @@ def home(
     collection_invoices = (
         db
         .query(Invoice)
-        .options(joinedload(Invoice.items), joinedload(Invoice.customer))
+        .options(joinedload(Invoice.items), joinedload(Invoice.customer), joinedload(Invoice.payments))
         .filter(
             Invoice.status == InvoiceStatus.SENT.value,
             Invoice.is_proforma.is_(False)
@@ -643,9 +643,10 @@ def home(
         .all()
     )
 
+    # Zostatok na úhradu (po čiastočných úhradách), nie celá suma faktúry.
     collection_total = sum(
         (
-            signed_invoice_total(invoice)
+            invoice_balance(invoice)
             for invoice in collection_invoices
         ),
         Decimal("0")
@@ -661,7 +662,7 @@ def home(
 
     overdue_total = sum(
         (
-            calculate_invoice_totals(invoice.items)["total_gross"]
+            invoice_balance(invoice)
             for invoice in overdue_collection_invoices
         ),
         Decimal("0")

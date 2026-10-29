@@ -33,7 +33,7 @@ def _get_remindable_invoice(db: Session, invoice_id: int) -> Invoice:
     invoice = (
         db
         .query(Invoice)
-        .options(joinedload(Invoice.items), joinedload(Invoice.customer))
+        .options(joinedload(Invoice.items), joinedload(Invoice.customer), joinedload(Invoice.payments))
         .filter(Invoice.id == invoice_id)
         .first()
     )
@@ -68,7 +68,7 @@ def reminders_page(
     invoices = (
         db
         .query(Invoice)
-        .options(joinedload(Invoice.items), joinedload(Invoice.customer))
+        .options(joinedload(Invoice.items), joinedload(Invoice.customer), joinedload(Invoice.payments))
         .filter(
             Invoice.status == "Odoslaná",
             Invoice.is_proforma.is_(False),

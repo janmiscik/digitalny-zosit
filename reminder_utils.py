@@ -8,7 +8,7 @@ from datetime import date
 from decimal import Decimal
 from urllib.parse import quote
 
-from invoice_utils import calculate_invoice_totals
+from invoice_utils import invoice_balance
 
 # Koľko dní pred splatnosťou už faktúru ukázať v "Čoskoro splatné".
 UPCOMING_DAYS = 3
@@ -66,7 +66,7 @@ def reminder_rows(invoices, today: date) -> dict:
         if not is_remindable(invoice):
             continue
 
-        total = calculate_invoice_totals(invoice.items)["total_gross"]
+        total = invoice_balance(invoice)
 
         row = {
             "invoice": invoice,
@@ -105,7 +105,7 @@ def reminder_rows(invoices, today: date) -> dict:
 def build_reminder_message(invoice, company, today: date) -> dict:
     """Predmet a telo správy so zákazníkom, podľa stupňa omeškania."""
 
-    total = money(calculate_invoice_totals(invoice.items)["total_gross"])
+    total = money(invoice_balance(invoice))
     due = invoice.due_date.strftime("%d.%m.%Y")
     days = days_overdue(invoice, today)
     level = reminder_level(days)

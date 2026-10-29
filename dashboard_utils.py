@@ -7,7 +7,7 @@ HTTP požiadavky a aby route handler zostal čitateľný.
 from datetime import date
 from decimal import Decimal
 
-from invoice_utils import calculate_invoice_totals, signed_invoice_total
+from invoice_utils import invoice_balance, signed_invoice_total
 
 
 SK_MONTH_SHORT = [
@@ -99,7 +99,7 @@ def overdue_invoice_rows(overdue_invoices, today: date, limit: int = 5) -> list[
             "id": invoice.id,
             "number": invoice.invoice_number,
             "customer_name": invoice.customer.name if invoice.customer else "",
-            "total": calculate_invoice_totals(invoice.items)["total_gross"],
+            "total": invoice_balance(invoice),
             "due_date": invoice.due_date,
             "days_overdue": (today - invoice.due_date).days,
         })

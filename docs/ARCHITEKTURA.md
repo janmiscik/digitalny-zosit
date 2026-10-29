@@ -60,10 +60,10 @@ Webová appka na faktúry, ponuky, zákazníkov a zákazky pre živnostníkov. S
 
 ## Doménový model (business databáza konta)
 
-`Customer` (+ `CustomerNote`) → `Job` (+ `JobPhoto`, `JobCost`) → `Invoice` (+ `InvoiceItem`) a `Quote` (+ `QuoteItem`); `Company` je jediný riadok s fakturačnými údajmi (singleton, `id = 1`); `AuditLog` je história zmien.
+`Customer` (+ `CustomerNote`) → `Job` (+ `JobPhoto`, `JobCost`) → `Invoice` (+ `InvoiceItem`, `InvoicePayment`) a `Quote` (+ `QuoteItem`); `Company` je jediný riadok s fakturačnými údajmi (singleton, `id = 1`); `AuditLog` je história zmien.
 
 - **Doklady v jednej tabuľke:** `Invoice` pokrýva faktúru, zálohovú faktúru (`is_proforma`) aj dobropis (`is_credit_note`, `original_invoice_id`). Ponuka sa konvertuje na faktúru (`quote_id`).
-- **Stavy faktúry:** Návrh → Odoslaná → Uhradená, kedykoľvek Stornovaná (konečný stav). Povolené prechody sú v `invoice_utils.ALLOWED_INVOICE_STATUS_TRANSITIONS`. Čiastočné úhrady appka nepozná.
+- **Stavy faktúry:** Návrh → Odoslaná → Uhradená, kedykoľvek Stornovaná (konečný stav). Povolené prechody sú v `invoice_utils.ALLOWED_INVOICE_STATUS_TRANSITIONS`. Čiastočné úhrady sú v samostatnej tabuľke `InvoicePayment` (faktúra sa nemení): zostatok = suma − súčet úhrad (`invoice_utils.invoice_balance`), zostatok 0 prepne faktúru na Uhradená. Len bežné faktúry.
 - **Číslovanie:** `next_invoice_number` a súrodenci počítajú číselne podľa roka; ukladanie je serializované po kontách a `UNIQUE` s opakovaním pri kolízii.
 - **Súčty:** všetky idú cez jednu funkciu v `invoice_utils.py` (DPH sa zaokrúhľuje zo súčtu základov danej sadzby, nie po riadkoch, kvôli Peppol BR-CO-17). PDF, export, dashboard aj Peppol ju zdieľajú.
 - **Ochrana vystavených faktúr:** na troch vrstvách. Aplikačná logika (prechody stavov), ORM hook v `models.py` a **databázové triggery** v `db_guards.py` (vystavenú faktúru nemožno zmazať, vrátiť do návrhu ani meniť jej položky; `audit_log` je append-only). Triggery sa inštalujú migráciou aj pri `create_all` a ich prítomnosť kontroluje monitoring.
@@ -123,6 +123,6 @@ Session cookie (podpísaná, `SameSite=Lax`, HTTPS-only v produkcii), CSRF na ka
 ## Známe limity
 
 - **Jedna replika.** Limity pokusov, zámok registrácie, počítadlo chýb a plánovač sú v pamäti procesu; SQLite zvláda jedného zapisovateľa. Škálovanie na viac replík vyžaduje zmenu architektúry (zdieľaná databáza, externý plánovač a limity).
-- **Čiastočné úhrady** nie sú podporované.
+- **Čiastočné úhrady** sú len pri bežných faktúrach (bez preplatkov, zálohová faktúra a dobropis ich nemajú).
 - **IČO lookup** ide cez tretiu stranu (ORSF, bez SLA), appka kvôli nemu nikdy nepadá.
 - **Ochrana proti priamemu zásahu do súboru databázy** (triggery sa dajú zrušiť) a zámok objektov v bucketi sú nastavenia prevádzky, nie kód.

@@ -23,7 +23,12 @@ from invoice_utils import (
     allowed_next_invoice_statuses,
     calculate_invoice_totals,
     commit_with_number_retry,
+    invoice_balance,
     is_invoice_overdue,
+    is_partially_paid,
+    paid_amount,
+    payment_error,
+    supports_payments,
     is_valid_invoice_status_transition,
     next_credit_note_number,
     next_invoice_number,
@@ -31,7 +36,7 @@ from invoice_utils import (
     signed_invoice_total,
     validate_invoice_vat,
 )
-from models import AuditLog, Company, Customer, Invoice, InvoiceItem, Job, Quote
+from models import AuditLog, Company, Customer, Invoice, InvoiceItem, InvoicePayment, Job, Quote
 from routers.company import get_or_create_company
 from peppol_xml import generate_peppol_xml
 from peppol_validation import validate_peppol_invoice_xml
@@ -114,7 +119,8 @@ def invoices_list_page(
         .query(Invoice)
         .options(
             joinedload(Invoice.items),
-            joinedload(Invoice.customer)
+            joinedload(Invoice.customer),
+            joinedload(Invoice.payments)
         )
 
     )
@@ -196,6 +202,13 @@ def invoices_list_page(
 
     }
 
+    # Čiastočne uhradené faktúry: v zozname sa ukáže, koľko ešte zostáva.
+    partial_balances = {
+        invoice.id: invoice_balance(invoice)
+        for invoice in invoices
+        if is_partially_paid(invoice)
+    }
+
     # Presne tá istá definícia "po splatnosti" ako všade inde v appke
     # (viď invoice_utils.is_invoice_overdue) - šablóna len kontroluje
     # členstvo v tejto množine, nepočíta si podmienku znova sama.
@@ -252,6 +265,8 @@ def invoices_list_page(
             "invoices": invoices,
 
             "invoice_totals": invoice_totals,
+
+            "partial_balances": partial_balances,
 
             "overdue_invoice_ids": overdue_invoice_ids,
 
@@ -560,7 +575,8 @@ def invoice_detail(
         .query(Invoice)
         .options(
             joinedload(Invoice.items),
-            joinedload(Invoice.customer)
+            joinedload(Invoice.customer),
+            joinedload(Invoice.payments)
         )
         .filter(
             Invoice.id == invoice_id
@@ -641,6 +657,16 @@ def invoice_detail(
             "is_overdue": is_invoice_overdue(invoice),
 
             "today": date.today(),
+
+            "supports_payments": supports_payments(invoice),
+
+            "paid_amount": paid_amount(invoice),
+
+            "balance": invoice_balance(invoice),
+
+            "is_partially_paid": is_partially_paid(invoice),
+
+            "can_add_payment": supports_payments(invoice) and invoice.status == InvoiceStatus.SENT.value,
 
             "peppol_issues": peppol_issues,
 
@@ -1597,6 +1623,21 @@ def update_invoice_status(
 
     old_status = invoice.status
 
+    # Ručné "Uhradená" pri odoslanej bežnej faktúre: chýbajúci zostatok sa
+    # zapíše ako úhrada, nech súčet úhrad sedí so sumou faktúry.
+    if new_status == InvoiceStatus.PAID.value and old_status == InvoiceStatus.SENT.value and supports_payments(invoice):
+
+        remaining = invoice_balance(invoice)
+
+        if remaining > 0:
+
+            db.add(InvoicePayment(
+                invoice_id=invoice.id,
+                payment_date=date.today(),
+                amount=remaining,
+                note="Doplatok pri zmene stavu na Uhradená"
+            ))
+
     invoice.status = new_status
 
     # Pri prechode na "Uhradená" nastavíme dátum úhrady na dnešok, ak
@@ -1630,6 +1671,158 @@ def update_invoice_status(
         status_code=303
 
     )
+
+
+MAX_PAYMENT_NOTE_LENGTH = 200
+
+
+def _parse_payment_amount(raw: str) -> Decimal:
+
+    text = (raw or "").strip().replace(" ", "").replace(",", ".")
+
+    try:
+        amount = Decimal(text)
+
+    except Exception:   # noqa: BLE001 - neplatný text
+        raise HTTPException(status_code=422, detail="Suma úhrady nie je platné číslo.")
+
+    if not amount.is_finite():
+        raise HTTPException(status_code=422, detail="Suma úhrady nie je platné číslo.")
+
+    return amount
+
+
+@router.post("/invoices/{invoice_id}/payments")
+def add_invoice_payment(
+
+    invoice_id: int,
+
+    payment_date: str = Form(""),
+
+    amount: str = Form(""),
+
+    note: str = Form(""),
+
+    db: Session = Depends(get_db),
+
+    user: str = Depends(require_login_page)
+
+):
+    """
+    Zápis (aj čiastočnej) úhrady odoslanej faktúry. Keď zostatok klesne na
+    0, faktúra sa sama prepne na "Uhradená" s dátumom poslednej úhrady.
+    """
+
+    invoice = (
+        db.query(Invoice)
+        .options(joinedload(Invoice.items), joinedload(Invoice.payments))
+        .filter(Invoice.id == invoice_id)
+        .first()
+    )
+
+    if invoice is None:
+        raise HTTPException(status_code=404, detail="Faktúra neexistuje")
+
+    parsed_date = parse_optional_date(payment_date) or date.today()
+    parsed_amount = _parse_payment_amount(amount)
+    note = " ".join((note or "").split())[:MAX_PAYMENT_NOTE_LENGTH]
+
+    error = payment_error(invoice, parsed_amount, parsed_date, date.today())
+
+    if error:
+        raise HTTPException(status_code=422, detail=error)
+
+    db.add(InvoicePayment(
+        invoice_id=invoice.id,
+        payment_date=parsed_date,
+        amount=parsed_amount,
+        note=note or None
+    ))
+
+    db.flush()
+    db.refresh(invoice)
+
+    balance = invoice_balance(invoice)
+
+    log_action(
+        db,
+        "invoice.payment_added",
+        entity_type="invoice",
+        entity_id=invoice.id,
+        detail=(
+            f"Faktúra {invoice.invoice_number}: úhrada {parsed_amount} EUR "
+            f"({parsed_date.strftime('%d.%m.%Y')}), zostatok {balance} EUR"
+        )
+    )
+
+    if balance == 0:
+
+        invoice.status = InvoiceStatus.PAID.value
+        invoice.paid_date = max(payment.payment_date for payment in invoice.payments)
+
+        log_action(
+            db,
+            "invoice.status_change",
+            entity_type="invoice",
+            entity_id=invoice.id,
+            detail=f"Faktúra {invoice.invoice_number}: {InvoiceStatus.SENT.value} -> {InvoiceStatus.PAID.value} (uhradená po úhradách)"
+        )
+
+    db.commit()
+
+    return RedirectResponse(url=f"/invoices/{invoice_id}", status_code=303)
+
+
+@router.post("/invoices/{invoice_id}/payments/{payment_id}/delete")
+def delete_invoice_payment(
+
+    invoice_id: int,
+
+    payment_id: int,
+
+    db: Session = Depends(get_db),
+
+    user: str = Depends(require_login_page)
+
+):
+    """Oprava omylom zapísanej úhrady - len kým je faktúra Odoslaná."""
+
+    invoice = (
+        db.query(Invoice)
+        .options(joinedload(Invoice.payments))
+        .filter(Invoice.id == invoice_id)
+        .first()
+    )
+
+    if invoice is None:
+        raise HTTPException(status_code=404, detail="Faktúra neexistuje")
+
+    payment = next((item for item in invoice.payments if item.id == payment_id), None)
+
+    if payment is None:
+        raise HTTPException(status_code=404, detail="Úhrada neexistuje")
+
+    if invoice.status != InvoiceStatus.SENT.value:
+        raise HTTPException(
+            status_code=409,
+            detail="Úhradu možno zmazať len pri faktúre v stave Odoslaná."
+        )
+
+    log_action(
+        db,
+        "invoice.payment_deleted",
+        entity_type="invoice",
+        entity_id=invoice.id,
+        detail=(
+            f"Faktúra {invoice.invoice_number}: zmazaná úhrada {payment.amount} EUR "
+            f"({payment.payment_date.strftime('%d.%m.%Y')})"
+        )
+    )
+
+    db.delete(payment)
+    db.commit()
+
+    return RedirectResponse(url=f"/invoices/{invoice_id}", status_code=303)
 
 
 @router.post("/invoices/{invoice_id}/paid-date")

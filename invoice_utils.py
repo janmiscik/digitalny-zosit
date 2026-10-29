@@ -92,6 +92,96 @@ def signed_invoice_total(invoice) -> Decimal:
     return -gross if invoice.is_credit_note else gross
 
 
+# =========================================
+# ČIASTOČNÉ ÚHRADY
+# Zostatok = suma faktúry - súčet úhrad (tabuľka invoice_payments).
+# Platí len pre bežné faktúry; dobropis a zálohová faktúra úhrady nemajú.
+# Staršie faktúry "Uhradená" bez riadkov úhrad sa berú ako uhradené celé.
+# =========================================
+
+CENT = Decimal("0.01")
+
+
+def supports_payments(invoice) -> bool:
+    """Úhrady sa evidujú len pri bežnej faktúre (nie zálohová, nie dobropis)."""
+
+    return not invoice.is_proforma and not invoice.is_credit_note
+
+
+def invoice_gross(invoice) -> Decimal:
+
+    return calculate_invoice_totals(invoice.items)["total_gross"].quantize(CENT, ROUND_HALF_UP)
+
+
+def paid_amount(invoice) -> Decimal:
+    """Koľko z faktúry je uhradené (uhradená faktúra = celá suma)."""
+
+    if not supports_payments(invoice):
+        return Decimal("0.00")
+
+    gross = invoice_gross(invoice)
+
+    if invoice.status == InvoiceStatus.PAID.value:
+        return gross
+
+    total = sum((Decimal(payment.amount) for payment in invoice.payments), Decimal("0"))
+
+    return min(total.quantize(CENT, ROUND_HALF_UP), gross) if gross > 0 else total.quantize(CENT, ROUND_HALF_UP)
+
+
+def invoice_balance(invoice) -> Decimal:
+    """
+    Zostatok na úhradu. Uhradená a stornovaná faktúra má 0; zálohová
+    faktúra a dobropis majú celú (so znamienkom) sumu ako doteraz.
+    """
+
+    if not supports_payments(invoice):
+        return signed_invoice_total(invoice)
+
+    if invoice.status in CLOSED_INVOICE_STATUSES:
+        return Decimal("0.00")
+
+    return (invoice_gross(invoice) - paid_amount(invoice)).quantize(CENT, ROUND_HALF_UP)
+
+
+def is_partially_paid(invoice) -> bool:
+
+    return (
+        supports_payments(invoice)
+        and invoice.status == InvoiceStatus.SENT.value
+        and paid_amount(invoice) > 0
+    )
+
+
+def payment_error(invoice, amount: Decimal, payment_date: date, today: date) -> str | None:
+    """Prečo sa úhrada nedá zapísať (None = je v poriadku)."""
+
+    if not supports_payments(invoice):
+        return "Úhrady sa evidujú len pri bežnej faktúre (nie pri zálohovej faktúre ani dobropise)."
+
+    if invoice.status != InvoiceStatus.SENT.value:
+        return "Úhradu možno zapísať len pri faktúre v stave Odoslaná."
+
+    if amount <= 0:
+        return "Suma úhrady musí byť kladná."
+
+    if amount != amount.quantize(CENT):
+        return "Suma úhrady môže mať najviac 2 desatinné miesta."
+
+    if payment_date > today:
+        return "Dátum úhrady nemôže byť v budúcnosti."
+
+    if payment_date < invoice.issue_date:
+        return "Dátum úhrady nemôže byť pred dátumom vystavenia faktúry."
+
+    balance = invoice_balance(invoice)
+
+    if amount > balance:
+        return f"Suma úhrady presahuje zostatok faktúry ({balance} EUR). Preplatky appka neeviduje."
+
+    return None
+
+
 def calculate_item_totals(quantity: Decimal, unit_price: Decimal, vat_rate: int) -> dict:
     """
     Vráti základ dane, DPH a sumu s DPH pre jednu položku faktúry.

@@ -117,6 +117,9 @@ class FakeInvoice:
         self.paid_date = paid_date
         self.issue_date = paid_date
         self.is_credit_note = False
+        self.is_proforma = False
+        self.status = "Odoslaná"
+        self.payments = []
         self.invoice_number = number
         self.id = 1
         self.due_date = paid_date

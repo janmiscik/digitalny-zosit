@@ -10,7 +10,7 @@ from csrf import verify_csrf
 from auth import require_login_api, require_login_page
 from database import get_db
 from ico_lookup import lookup_company_by_ico
-from invoice_utils import calculate_invoice_totals, signed_invoice_total
+from invoice_utils import calculate_invoice_totals, invoice_balance, signed_invoice_total
 from customer_history import (
     MAX_NOTE_LENGTH,
     build_timeline,
@@ -180,7 +180,7 @@ def customer_detail(
 
     total_unpaid = sum(
         (
-            signed_invoice_total(invoice)
+            invoice_balance(invoice)
             for invoice in unpaid_invoices
         ),
         Decimal("0")

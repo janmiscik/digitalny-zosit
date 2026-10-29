@@ -279,6 +279,14 @@
 
                     {% endif %}
 
+                    {% if is_partially_paid %}
+
+                        <span style="color: var(--text-secondary); font-weight: 600;">
+                            · čiastočne uhradená ({{ "%.2f"|format(paid_amount) }} z {{ "%.2f"|format(totals.total_gross) }} €)
+                        </span>
+
+                    {% endif %}
+
                     {% if is_overdue %}
 
                         <span class="invoice-row-overdue" style="color: var(--danger);">
@@ -450,6 +458,67 @@
             <div class="invoice-total-line">
                 Celkom: {{ "%.2f"|format(totals.total_gross) }} €
             </div>
+
+
+            {% if supports_payments and (invoice.payments or can_add_payment) %}
+
+                <div class="invoice-payments" style="max-width: 520px; margin-left: auto; margin-top: 16px;">
+
+                    <h3 style="margin: 0 0 8px;">Úhrady</h3>
+
+                    {% if invoice.payments %}
+
+                        <table class="invoice-view-table">
+                            <thead>
+                                <tr><th>Dátum</th><th>Suma</th><th>Poznámka</th><th></th></tr>
+                            </thead>
+                            <tbody>
+                                {% for payment in invoice.payments %}
+                                    <tr>
+                                        <td data-label="Dátum">{{ payment.payment_date.strftime("%d.%m.%Y") }}</td>
+                                        <td data-label="Suma">{{ "%.2f"|format(payment.amount) }} €</td>
+                                        <td data-label="Poznámka">{{ payment.note or "" }}</td>
+                                        <td>
+                                            {% if can_add_payment %}
+                                                <form action="/invoices/{{ invoice.id }}/payments/{{ payment.id }}/delete" method="post" data-confirm="Zmazať túto úhradu?" style="display: inline;">
+                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                                                    <button type="submit" class="edit-job-button" title="Zmazať úhradu">🗑️</button>
+                                                </form>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+
+                    {% endif %}
+
+                    <div style="display: flex; justify-content: space-between; margin-top: 8px;">
+                        <span>Uhradené: {{ "%.2f"|format(paid_amount) }} €</span>
+                        <strong>Zostatok: {{ "%.2f"|format(balance) }} €</strong>
+                    </div>
+
+                    {% if can_add_payment %}
+
+                        <form action="/invoices/{{ invoice.id }}/payments" method="post" style="display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin-top: 12px;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                            <label>Dátum
+                                <input type="date" name="payment_date" value="{{ today.isoformat() }}" min="{{ invoice.issue_date.isoformat() }}" max="{{ today.isoformat() }}" required>
+                            </label>
+                            <label>Suma (€)
+                                <input type="text" name="amount" inputmode="decimal" value="{{ '%.2f'|format(balance) }}" required style="width: 110px;">
+                            </label>
+                            <label>Poznámka
+                                <input type="text" name="note" maxlength="200" style="width: 160px;">
+                            </label>
+                            <button type="submit" class="save-button">Zapísať úhradu</button>
+                        </form>
+
+                    {% endif %}
+
+                </div>
+
+            {% endif %}
 
 
             {% if invoice.note %}
