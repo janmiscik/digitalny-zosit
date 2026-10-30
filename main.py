@@ -40,7 +40,7 @@ import log_filters
 import monitoring
 from auth import check_registration_config
 from security_config import validate_environment
-from accounts_db import accounts_engine, get_accounts_db
+from accounts_db import accounts_engine, get_accounts_db, upgrade_accounts_database
 from accounts_models import Account
 from auto_backup import (
     recover_interrupted_restores_on_startup,
@@ -121,6 +121,10 @@ async def lifespan(app: FastAPI):
             "alembic_version). Pred spustením appky spusti migrácie:\n\n"
             "    alembic -c alembic_accounts.ini upgrade head\n"
         )
+
+    # Lokálny beh po aktualizácii kódu: accounts.db bez nových stĺpcov sa
+    # doplní sama (na Railway to robí start.sh, tu už nie je čo robiť).
+    upgrade_accounts_database(logger)
 
     # Najprv vrátiť konto po prípadne prerušenej obnove (pád procesu
     # uprostred výmeny dát), až potom migrovať.

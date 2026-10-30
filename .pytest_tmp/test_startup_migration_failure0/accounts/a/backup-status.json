@@ -1,8 +1,8 @@
 {
-  "last_attempt_at": "2026-10-25T18:59:48.979529+00:00",
+  "last_attempt_at": "2026-10-29T20:02:07.385729+00:00",
   "verification": {
-    "at": "2026-10-25T18:59:49.064064+00:00",
-    "file": "pred-aktualizaciou-20261025-185948.zip",
+    "at": "2026-10-29T20:02:07.565105+00:00",
+    "file": "pred-aktualizaciou-20261029-200207.zip",
     "ok": true,
     "problems": [],
     "counts": {
@@ -17,8 +17,8 @@
     "revision": "d7f9b1c3e546",
     "schema_current": false
   },
-  "last_success_at": "2026-10-25T18:59:49.064090+00:00",
-  "last_file": "pred-aktualizaciou-20261025-185948.zip",
+  "last_success_at": "2026-10-29T20:02:07.565152+00:00",
+  "last_file": "pred-aktualizaciou-20261029-200207.zip",
   "last_kind": "pre-upgrade",
   "last_error": null
 }

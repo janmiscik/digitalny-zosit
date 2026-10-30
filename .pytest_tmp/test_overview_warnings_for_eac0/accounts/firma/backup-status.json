@@ -1,8 +1,8 @@
 {
-  "last_attempt_at": "2026-10-25T19:01:38.728143+00:00",
+  "last_attempt_at": "2026-10-29T20:04:17.720852+00:00",
   "verification": {
-    "at": "2026-10-25T19:01:38.876771+00:00",
-    "file": "rucne-20261025-190138-2.zip",
+    "at": "2026-10-29T20:04:17.879245+00:00",
+    "file": "rucne-20261029-200417-2.zip",
     "ok": true,
     "problems": [],
     "counts": {
@@ -14,17 +14,17 @@
       "job_photos": 0
     },
     "files_checked": 0,
-    "revision": "b2c3d4e5f607",
+    "revision": "c3d5e7f9a1b2",
     "schema_current": true
   },
-  "last_success_at": "2026-10-25T19:01:38.876813+00:00",
-  "last_file": "rucne-20261025-190138-2.zip",
+  "last_success_at": "2026-10-29T20:04:17.879288+00:00",
+  "last_file": "rucne-20261029-200417-2.zip",
   "last_kind": "manual",
   "last_error": null,
   "offsite": {
-    "at": "2026-10-25T19:01:38.882015+00:00",
+    "at": "2026-10-29T20:04:17.883784+00:00",
     "ok": false,
-    "file": "rucne-20261025-190138-2.zip",
+    "file": "rucne-20261029-200417-2.zip",
     "error": "ConnectionError: sieť nedostupná",
     "sha256": null,
     "verified": false,

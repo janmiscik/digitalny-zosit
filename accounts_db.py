@@ -84,3 +84,75 @@ def get_accounts_db() -> Generator:
 
     finally:
         db.close()
+
+
+# =========================================
+# MIGRÁCIA accounts.db PRI ŠTARTE
+# Na Railway ju robí start.sh pred appkou. Lokálne (`uvicorn main:app`) by
+# po aktualizácii kódu ostala databáza kont bez nových stĺpcov
+# ("no such column: accounts.is_active"), preto ju appka doplní sama.
+# =========================================
+
+_ACCOUNTS_ALEMBIC_INI = Path(__file__).resolve().parent / "alembic_accounts.ini"
+
+
+def accounts_schema_state() -> str:
+    """'ok' | 'outdated' | 'uninitialized' - či je accounts.db na poslednej migrácii."""
+
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+    from sqlalchemy import inspect
+
+    if not inspect(accounts_engine).has_table("alembic_version"):
+        return "uninitialized"
+
+    head = ScriptDirectory.from_config(Config(str(_ACCOUNTS_ALEMBIC_INI))).get_current_head()
+
+    with accounts_engine.connect() as connection:
+        current = connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar()
+
+    return "ok" if current == head else "outdated"
+
+
+def upgrade_accounts_database(logger=None) -> bool:
+    """
+    Dotiahne accounts.db na poslednú migráciu (idempotentné). Pred zmenou
+    schémy odloží kópiu súboru (len SQLite). Vráti True, ak sa migrovalo.
+    Vypnúť sa dá cez AUTO_MIGRATE_ACCOUNTS=false (vtedy appka s chybou skončí).
+    """
+
+    if accounts_schema_state() != "outdated":
+        return False
+
+    if os.getenv("AUTO_MIGRATE_ACCOUNTS", "true").strip().lower() in ("false", "0", "no"):
+        raise RuntimeError(
+            "Databáza kont je staršia než kód a AUTO_MIGRATE_ACCOUNTS je vypnuté. "
+            "Spusti migrácie:\n\n    alembic -c alembic_accounts.ini upgrade head\n"
+        )
+
+    from datetime import datetime
+
+    from alembic import command
+    from alembic.config import Config
+
+    if accounts_engine.dialect.name == "sqlite" and _accounts_db_path.exists():
+
+        import shutil
+
+        with accounts_engine.connect() as connection:
+            connection.exec_driver_sql("PRAGMA wal_checkpoint(TRUNCATE)")
+
+        copy = _accounts_db_path.with_name(
+            f"{_accounts_db_path.name}.pre-upgrade-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+        )
+        shutil.copy2(_accounts_db_path, copy)
+
+        if logger:
+            logger.info("accounts.db: poistná kópia pred migráciou: %s", copy.name)
+
+    command.upgrade(Config(str(_ACCOUNTS_ALEMBIC_INI)), "head")
+
+    if logger:
+        logger.info("accounts.db: schéma doplnená na poslednú migráciu.")
+
+    return True

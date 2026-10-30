@@ -1,8 +1,8 @@
 {
-  "last_attempt_at": "2026-10-25T19:01:44.994041+00:00",
+  "last_attempt_at": "2026-10-29T20:04:27.008453+00:00",
   "verification": {
-    "at": "2026-10-25T19:01:45.156402+00:00",
-    "file": "rucne-20261025-190144.zip",
+    "at": "2026-10-29T20:04:27.174829+00:00",
+    "file": "rucne-20261029-200427.zip",
     "ok": true,
     "problems": [],
     "counts": {
@@ -14,19 +14,19 @@
       "job_photos": 0
     },
     "files_checked": 0,
-    "revision": "b2c3d4e5f607",
+    "revision": "c3d5e7f9a1b2",
     "schema_current": true
   },
-  "last_success_at": "2026-10-25T19:01:45.156437+00:00",
-  "last_file": "rucne-20261025-190144.zip",
+  "last_success_at": "2026-10-29T20:04:27.174884+00:00",
+  "last_file": "rucne-20261029-200427.zip",
   "last_kind": "manual",
   "last_error": null,
   "offsite": {
-    "at": "2026-10-25T19:01:45.175062+00:00",
+    "at": "2026-10-29T20:04:27.195679+00:00",
     "ok": false,
-    "file": "rucne-20261025-190144.zip",
+    "file": "rucne-20261029-200427.zip",
     "error": "Obsah zálohy v úložisku sa nezhoduje s lokálnym súborom (iný SHA-256).",
-    "sha256": "2c34c8efaa90c5887be0d48f97138fd68f6d23aa8e2845b72c2a0376f66714c6",
+    "sha256": "0355f3f52fc853e01d17cd7458224ac639590cefa4ae495b6f1039c83216d68d",
     "verified": false,
     "warning": null,
     "encrypted": false

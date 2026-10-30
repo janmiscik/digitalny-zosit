@@ -282,7 +282,7 @@ Pri každom štarte (`start.sh`) sa kontám, ktorým čaká migrácia schémy, s
 | `BACKUP_KEEP` | `7` | koľko automatických záloh držať |
 | `BACKUP_CHECK_MINUTES` | `30` | ako často plánovač kontroluje, či je záloha na rade |
 | `BACKUP_MIN_FREE_MB` | `200` | minimálna rezerva voľného miesta |
-| `AUTO_MIGRATE_ACCOUNTS` | `true` | pri štarte appky doplní kontám chýbajúce migrácie schémy (s poistnou zálohou); `false` vypne |
+| `AUTO_MIGRATE_ACCOUNTS` | `true` | pri štarte appky doplní chýbajúce migrácie schémy databáze kont (`accounts.db`, s kópiou súboru) aj databázam jednotlivých kont (s poistnou zálohou); `false` vypne a appka pri staršej schéme skončí s návodom |
 
 CLI (Railway shell alebo lokálne):
 
@@ -349,6 +349,7 @@ Aktuálne **1496 testov** (na Windowse sa 2 testy Docker entrypointu preskočia,
 | `test_validators.py` | Validácia e-mailu, IBAN (mod-97), IČO (mod-11), DIČ, IČ DPH – formát, kontrolné súčty, normalizácia |
 | `test_peppol_validation.py` | Validácia vygenerovaného Peppol XML – povinné polia, súčty, elektronická adresa (schéma + Endpoint ID), prenesenie daňovej povinnosti, nulová sadzba DPH – správne aj úmyselne pokazené scenáre |
 | `test_peppol_scheme_validator.py` | `validators.validate_peppol_scheme_id()` – formát, zhoda schémy s krajinou (napr. že `9946` nie je slovenská schéma) |
+| `test_accounts_startup_migration.py` | Štart appky so starou `accounts.db`: schéma sa doplní sama, vznikne kópia súboru, vypnutie cez `AUTO_MIGRATE_ACCOUNTS=false` skončí jasnou chybou |
 | `test_invoice_payments.py` | Čiastočné úhrady: zostatok, automatické „Uhradená", validácia sumy a dátumu, ručné „Uhradená" s doplatkom, mazanie úhrady, upomienky a dashboard so zostatkom, zoznam faktúr, audit |
 | `test_invoices.py` | Fakturácia, DPH režim, stavy, PDF, Peppol XML, country_code/Endpoint ID zákazníka, nálezy validácie na detaile faktúry, dátum úhrady, kopírovanie, vyhľadávanie/filter |
 | `test_quotes.py` | Cenové ponuky, konverzia na faktúru (aj z odoslanej), ochrana pred dvojitým kliknutím, odkazy ponuka ↔ faktúra, rýchle tlačidlo v zozname, proforma |

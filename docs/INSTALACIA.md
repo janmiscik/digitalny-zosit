@@ -100,4 +100,4 @@ Na Windowse pridaj `--basetemp=.pytest_tmp`, inak pytest môže pri upratovaní 
 | `Databáza kont nie je inicializovaná` | Spusti krok 3 |
 | `Neplatná hodnota APP_ENV / REGISTRATION_ENABLED / MAX_ACCOUNTS` | Preklep v premennej; appka radšej nenaštartuje, než by sa spustila v zlom režime |
 | `Address already in use` | Port 8000 používa iný program: `uvicorn main:app --port 8001` |
-| Po aktualizácii kódu chýba stĺpec alebo tabuľka | `python manage_accounts.py --upgrade-all` (na Docker/Railway to robí `start.sh` sám) |
+| Po aktualizácii kódu chýba stĺpec alebo tabuľka (`no such column`) | Appka si od tejto verzie doplní schému `accounts.db` aj databáz kont pri štarte sama. Ak je `AUTO_MIGRATE_ACCOUNTS=false` alebo ide o staršiu verziu: `alembic -c alembic_accounts.ini upgrade head` a `python manage_accounts.py --upgrade-all` (na Docker/Railway to robí `start.sh` sám) |

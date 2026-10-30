@@ -74,7 +74,7 @@ Dva samostatné reťazce Alembic:
 
 | Reťazec | Konfigurácia | Čo migruje | Kedy beží |
 |---|---|---|---|
-| `alembic_accounts/` | `alembic_accounts.ini` | `accounts.db` | `start.sh` pri štarte; ručne `alembic -c alembic_accounts.ini upgrade head` |
+| `alembic_accounts/` | `alembic_accounts.ini` | `accounts.db` | `start.sh` pri štarte; pri lokálnom `uvicorn main:app` ju v `lifespan` doplní appka sama (`accounts_db.upgrade_accounts_database`, s kópiou súboru); ručne `alembic -c alembic_accounts.ini upgrade head` |
 | `alembic/` | `alembic.ini` | `database.db` **každého konta** | pri založení konta; `manage_accounts.py --upgrade-all` (štart kontajnera) a pri štarte appky (`AUTO_MIGRATE_ACCOUNTS`) |
 
 Pravidlá: appka nikdy nevolá `create_all()` (schému spravuje len Alembic). Migrácie sú idempotentné. Pred migráciou kont s čakajúcou zmenou sa spraví poistná záloha (`--kind pre-upgrade`). Alembic nie je bezpečný pre súbežný beh vo vláknach, preto všetky migrácie v procese idú cez `tenancy._migration_lock`. Pri novej migrácii pridaj test, že dáta zo starej revízie prežijú (`tests/test_migrations_concurrency.py`).
