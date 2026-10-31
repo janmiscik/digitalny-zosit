@@ -82,7 +82,7 @@ pip install -r requirements-dev.txt
 python -m pytest -q
 ```
 
-Na Windowse pridaj `--basetemp=.pytest_tmp`, inak pytest môže pri upratovaní dočasného priečinka skončiť chybou prístupu. Dva testy Docker entrypointu sa mimo Linuxu s rootom preskočia a to je v poriadku.
+Dočasné súbory testov idú do `.pytest_tmp` v projekte (nastavené v `pytest.ini`), takže Windows nehlási na konci chybu prístupu (`PermissionError ... pytest-current`) aj po úspešnom behu. Dva testy Docker entrypointu sa mimo Linuxu s rootom preskočia a to je v poriadku.
 
 ## 7. Ostrá prevádzka
 
