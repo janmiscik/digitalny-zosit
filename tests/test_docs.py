@@ -70,3 +70,11 @@ def test_license_names_the_rights_holder_without_open_todo():
     text = (ROOT / "LICENSE").read_text(encoding="utf-8")
 
     assert "Ján Miščik" in text and "doplň" not in text.lower() and "JanMi" not in text
+
+
+def test_no_author_footer_in_the_interface_and_author_in_readme():
+
+    css = (ROOT / "static" / "style.css").read_text(encoding="utf-8")
+
+    assert "Created by" not in css and "body::after" not in css
+    assert "Ján Miščik" in (ROOT / "README.md").read_text(encoding="utf-8")

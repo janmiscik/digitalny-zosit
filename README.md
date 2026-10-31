@@ -517,3 +517,7 @@ digitalny-zosit/
 
 Appka sa dá spustiť aj na vlastnom serveri (`docker-compose.yml` + Caddy s automatickým HTTPS) a dáta obnoviť
 zo zálohy v R2 (`python offsite_restore.py --download --account <konto>`). Celý postup: `docs/HOSTING.md`.
+
+## Autor
+
+Pôvodný autor: Ján Miščik. Práva a podmienky používania určuje `LICENSE` a zmluva medzi autorom a nadobúdateľom.

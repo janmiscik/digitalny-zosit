@@ -31,8 +31,14 @@ Každý riadok sa odškrtne po vlastnom spustení, nie z pamäte.
 
 | Úloha | Stav |
 |---|---|
-| `LICENSE` má držiteľa práv Ján Miščik. Na každej stránke je však nápis „Created by ©JanMi 2026“ (`static/style.css`, pravidlo `body::after`, časť AUTORSKÝ ODKAZ). Zosúladiť meno s `LICENSE` alebo ho podľa dohody s kupujúcim odstrániť | ☐ |
+| Nápis „Created by ©JanMi 2026“ z päty aplikácie je odstránený; autorstvo ostáva v `LICENSE` a v README (časť Autor). Logo je vlastné dielo autora a ostáva | hotovo |
 | Po zmene súborov v bode vyššie znova vygenerovať `python tools/generate_notices.py` a balík | ☐ |
+
+Mimo kódu (rieši zmluva a web, nie appka), odporúčané dohodnúť v kúpnej zmluve:
+
+- Predávajúci smie projekt uvádzať vo svojom portfóliu (výslovné právo v zmluve).
+- Ak sa na `janmi.sk` ponechá odkaz na projekt, zmluva určí, ako sa po predaji uvádza.
+- Zachovať informáciu o pôvodnom autorovi v README a dokumentácii (už je).
 
 ## 4. Odovzdanie prístupov a tajných hodnôt (predávajúci → kupujúci)
 
