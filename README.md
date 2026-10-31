@@ -337,7 +337,7 @@ pip install -r requirements-dev.txt   # raz, pytest sa do produkčného obrazu n
 python -m pytest tests/ -q
 ```
 
-Aktuálne **1496 testov** (na Windowse sa 2 testy Docker entrypointu preskočia, lebo vyžadujú Linux a root; v CI bežia), rozdelených podľa oblasti:
+Aktuálne **vyše 1 500 testov** (presný počet: `python -m pytest --collect-only -q`; na Windowse sa 2 testy Docker entrypointu preskočia, lebo vyžadujú Linux a root; v CI bežia), rozdelených podľa oblasti:
 
 | Súbor | Pokrýva |
 |---|---|

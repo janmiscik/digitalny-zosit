@@ -67,7 +67,7 @@ Webové písma sa servírujú z vlastného servera, prehliadač nekontaktuje Goo
 
 | Súbor | Pôvod | Stav |
 |---|---|---|
-| `static/logo-icon.png` | logo vygenerované AI nástrojom Google Gemini (podľa autora projektu) | **Pred odovzdaním doplniť:** dátum vzniku a verziu/službu Gemini (bezplatná alebo platená), uschovať zadanie (prompt) a overiť v aktuálnych podmienkach Google pre túto službu, že výstup možno komerčne použiť a previesť na kupujúceho. Logo nie je registrovaná ochranná známka; pri AI výstupe nemusí vzniknúť autorské právo, kupujúci ho teda nemusí vedieť vymáhať voči kopírovaniu. |
+| `static/logo-icon.png` | vlastné dielo autora projektu (Ján Miščik) | Nie je odvodené z diela tretej strany a nepodlieha licencii tretej strany; práva k nemu prechádzajú na kupujúceho spolu s ostatnými právami podľa zmluvy |
 
 Iné obrázky, ikony ani skripty tretích strán (jQuery, CDN a pod.) aplikácia neobsahuje; všetok JavaScript je vlastný (`static/js/`).
 

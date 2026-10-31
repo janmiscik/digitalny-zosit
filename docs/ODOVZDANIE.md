@@ -12,7 +12,7 @@ Kontrolný súčet SHA-256: ____________________________________________
 | Zdrojový kód (čistý balík) | `python tools/make_distribution.py` | bez databáz, `.env`, záloh a cache; vytvorí `.sha256` |
 | Dokumentácia | `README.md`, `AUDIT.md`, `docs/` | architektúra: `docs/ARCHITEKTURA.md`; inštalácia: `docs/INSTALACIA.md` |
 | Licencie a pôvod | `LICENSE`, `THIRD_PARTY_NOTICES.md`, `third_party/licenses/` | písma sú priložené (SIL OFL), logo pozri bod 3 |
-| Testy | `tests/` (spustenie: `python -m pytest -q`) | stav k odovzdaniu: 1526 prešlo |
+| Testy | `tests/` (spustenie: `python -m pytest -q`) | všetky prechádzajú; na Windowse sa 2 testy Docker entrypointu preskočia (vyžadujú Linux a root, v CI bežia) |
 | Repozitár a nasadenie | GitHub `janmiscik/digitalny-zosit`, Railway projekt | prístup sa prevádza oddelene (bod 4) |
 | Dáta zákazníkov | **neodovzdávajú sa** | produkčné databázy a zálohy sú dáta prevádzkovateľa; prevod len osobitnou dohodou a podľa GDPR |
 
@@ -31,9 +31,7 @@ Každý riadok sa odškrtne po vlastnom spustení, nie z pamäte.
 
 | Úloha | Stav |
 |---|---|
-| V `LICENSE` nahradiť „JanMi" skutočným právnym menom držiteľa práv | ☐ |
-| Logo `static/logo-icon.png` je vygenerované v Google Gemini: doplniť dátum a typ služby, uschovať zadanie (prompt), overiť podmienky použitia (komerčné použitie a prevod). Autorské právo k AI výstupu nemusí vzniknúť; kupujúci to má vedieť. Alternatíva: logo nahradiť vlastným | ☐ |
-| Na každej stránke je nápis „Created by ©JanMi 2026“ (`static/style.css`, pravidlo `body::after`, časť AUTORSKÝ ODKAZ). Podľa dohody s kupujúcim ho ponechať alebo nahradiť či odstrániť | ☐ |
+| `LICENSE` má držiteľa práv Ján Miščik. Na každej stránke je však nápis „Created by ©JanMi 2026“ (`static/style.css`, pravidlo `body::after`, časť AUTORSKÝ ODKAZ). Zosúladiť meno s `LICENSE` alebo ho podľa dohody s kupujúcim odstrániť | ☐ |
 | Po zmene súborov v bode vyššie znova vygenerovať `python tools/generate_notices.py` a balík | ☐ |
 
 ## 4. Odovzdanie prístupov a tajných hodnôt (predávajúci → kupujúci)

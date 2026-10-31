@@ -108,7 +108,7 @@ Session cookie (podpísaná, `SameSite=Lax`, HTTPS-only v produkcii), CSRF na ka
 
 ## Testy
 
-`tests/` (pytest, ~1500 testov, `conftest.py` izoluje databázy, vypína zálohy a nuluje limity). Dôležité „poistky“, ktoré zlyhajú pri nedbalej zmene: `test_route_policy.py` (každá trasa chránená, každá meniaca trasa má CSRF), `test_account_isolation.py` (konto B nemôže nič z konta A), `test_csp_inline_budget.py` (žiadne inline skripty), `test_db_guards_migration.py` (triggery v starých databázach), `test_distribution.py` (čistý balík a licencie). Zoznam všetkých: README, sekcia Testy. CI: `.github/workflows/tests.yml` (inštalácia z čista, `pip-audit`, Docker build).
+`tests/` (pytest, vyše 1 500 testov, `conftest.py` izoluje databázy, vypína zálohy a nuluje limity). Dôležité „poistky“, ktoré zlyhajú pri nedbalej zmene: `test_route_policy.py` (každá trasa chránená, každá meniaca trasa má CSRF), `test_account_isolation.py` (konto B nemôže nič z konta A), `test_csp_inline_budget.py` (žiadne inline skripty), `test_db_guards_migration.py` (triggery v starých databázach), `test_distribution.py` (čistý balík a licencie). Zoznam všetkých: README, sekcia Testy. CI: `.github/workflows/tests.yml` (inštalácia z čista, `pip-audit`, Docker build).
 
 ## Ako pridať…
 

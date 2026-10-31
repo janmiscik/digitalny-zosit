@@ -8,7 +8,7 @@ Súhrn pre nového vlastníka. Podrobnosti a história sú v dodatkoch nižšie.
 
 | Oblasť | Stav |
 |---|---|
-| Testy | 1496 testov; 2 testy Docker entrypointu vyžadujú Linux a root (v CI bežia a nesmú sa preskočiť) |
+| Testy | vyše 1 500 testov, všetky prechádzajú; 2 testy Docker entrypointu vyžadujú Linux a root (v CI bežia a nesmú sa preskočiť) |
 | Závislosti | `pip-audit` pri poslednej kontrole bez známych zraniteľností (pozri dodatok o závislostiach); CI ho spúšťa |
 | CSP | striktná pre skripty (žiadne inline skripty ani handlery), hlásenia na `/csp-report` |
 | Izolácia kont | sweep všetkých trás s platnými formulármi, databáza a súbory cudzieho konta ostanú bajt po bajte rovnaké |
@@ -26,11 +26,10 @@ Súhrn pre nového vlastníka. Podrobnosti a história sú v dodatkoch nižšie.
 
 1. **Účtovné pravidlá** (sadzby a režimy DPH, dobropisy, číslovanie) overiť s účtovníkom pred reálnym fakturovaním. Testy nie sú daňové potvrdenie.
 2. **Čiastočné úhrady** sú podporované len pri bežných faktúrach (nie zálohová faktúra a dobropis, žiadne preplatky); pravidlá overiť s účtovníkom (napr. započítanie zálohy).
-3. **Pôvod loga** (`static/logo-icon.png`, generované v Google Gemini: doplniť dátum, verziu služby a overiť podmienky použitia) a doplnenie mena držiteľa práv v `LICENSE` pred odovzdaním (pozri `THIRD_PARTY_NOTICES.md`).
-4. **Jedna replika:** limity pokusov, zámok registrácie a plánovač sú v pamäti procesu; SQLite zvláda len jedného zapisovateľa. Pre viac replík treba zmeniť architektúru.
-5. **Zámok objektov a verzovanie v bucketi** (ochrana záloh pred zmazaním) je nastavenie u poskytovateľa záloh, appka ho vynútiť nevie.
-6. **Písma** sú od 28. 10. 2026 súčasťou balíka (`static/fonts/web/`, SIL OFL 1.1), žiadne spojenie na Google; nič na riešenie.
-7. **Tajné kľúče** (`SECRET_KEY`, `BACKUP_ENCRYPTION_KEY`, `OFFSITE_BACKUP_*`, `MONITOR_TOKEN`) si kupujúci vygeneruje a uloží sám; po odovzdaní je vhodné ich všetky vymeniť.
+3. **Jedna replika:** limity pokusov, zámok registrácie a plánovač sú v pamäti procesu; SQLite zvláda len jedného zapisovateľa. Pre viac replík treba zmeniť architektúru.
+4. **Zámok objektov a verzovanie v bucketi** (ochrana záloh pred zmazaním) je nastavenie u poskytovateľa záloh, appka ho vynútiť nevie.
+5. **Písma** sú od 28. 10. 2026 súčasťou balíka (`static/fonts/web/`, SIL OFL 1.1), žiadne spojenie na Google; nič na riešenie.
+6. **Tajné kľúče** (`SECRET_KEY`, `BACKUP_ENCRYPTION_KEY`, `OFFSITE_BACKUP_*`, `MONITOR_TOKEN`) si kupujúci vygeneruje a uloží sám; po odovzdaní je vhodné ich všetky vymeniť.
 
 ## Opravené
 

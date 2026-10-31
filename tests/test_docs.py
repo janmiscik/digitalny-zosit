@@ -44,3 +44,29 @@ def test_install_guide_commands_reference_real_scripts():
 
     for script in re.findall(r"python (?:\S*/)?([A-Za-z_]+\.py)", text):
         assert (ROOT / script).exists() or (ROOT / "tools" / script).exists(), script
+
+
+def test_docs_do_not_pin_an_exact_test_count():
+
+    """Presný počet testov by sa v dokumentoch rozchádzal pri každej zmene; píše sa "vyše 1 500"."""
+
+    pattern = re.compile(r"\b\d[\d  ]{2,6}\s*(?:testov|testy|passed|prešlo)\b")
+    offenders = []
+
+    for doc in ["README.md", "AUDIT.md", *sorted(str(p.relative_to(ROOT)) for p in (ROOT / "docs").glob("*.md"))]:
+
+        for number, line in enumerate((ROOT / doc).read_text(encoding="utf-8").splitlines(), start=1):
+
+            match = pattern.search(line)
+
+            if match and not match.group(0).startswith(("1 500", "1500", "723")):  # 723 = historický stav auditu
+                offenders.append(f"{doc}:{number}: {match.group(0)}")
+
+    assert offenders == []
+
+
+def test_license_names_the_rights_holder_without_open_todo():
+
+    text = (ROOT / "LICENSE").read_text(encoding="utf-8")
+
+    assert "Ján Miščik" in text and "doplň" not in text.lower() and "JanMi" not in text
