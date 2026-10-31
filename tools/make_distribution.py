@@ -55,6 +55,7 @@ def is_excluded(relative: Path) -> bool:
         name in EXCLUDED_NAMES
         or name.endswith(EXCLUDED_SUFFIXES)
         or name.startswith(EXCLUDED_PREFIXES)
+        or ".db.pre-upgrade-" in name   # kópie accounts.db pred migráciou
     )
 
 

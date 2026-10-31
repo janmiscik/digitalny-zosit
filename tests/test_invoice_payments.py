@@ -372,3 +372,54 @@ def test_invoice_list_shows_remaining_balance_for_partial_payment():
     pay(invoice_id, "70")
 
     assert "zostáva 30.00 €" in client.get("/faktury").text
+
+
+def test_payment_routes_hold_the_process_lock():
+
+    """Úhrady a zmena stavu sa serializujú (inak by dve súčasné úhrady presiahli zostatok)."""
+
+    from routers import invoices as invoices_router
+
+    wanted = {
+        ("/invoices/{invoice_id}/payments", "POST"),
+        ("/invoices/{invoice_id}/payments/{payment_id}/delete", "POST"),
+        ("/invoices/{invoice_id}/status", "POST"),
+    }
+    found = set()
+
+    for route in invoices_router.router.routes:
+
+        key = (route.path, next(iter(route.methods)))
+
+        if key in wanted:
+            assert any(dep.call is invoices_router.payment_lock for dep in route.dependant.dependencies), key
+            found.add(key)
+
+    assert found == wanted
+
+
+def test_concurrent_payments_cannot_exceed_the_invoice_amount():
+
+    from decimal import Decimal
+
+    import threading
+
+    invoice_id = make_invoice(price="100.00")
+    results = []
+
+    def send():
+        results.append(pay(invoice_id, "60").status_code)
+
+    threads = [threading.Thread(target=send) for _ in range(4)]
+
+    for thread in threads:
+        thread.start()
+
+    for thread in threads:
+        thread.join()
+
+    db = TestingSessionLocal()
+    total = sum(payment.amount for payment in db.query(InvoicePayment).filter(InvoicePayment.invoice_id == invoice_id))
+    db.close()
+
+    assert total == Decimal("60.00") and results.count(303) == 1

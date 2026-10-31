@@ -15,3 +15,6 @@ server-errors.log
 # stiahnuté zálohy z bucketu (obsahujú dáta zákazníkov)
 obnova/
 dist/
+*.db-wal
+*.db-shm
+*.db.pre-upgrade-*

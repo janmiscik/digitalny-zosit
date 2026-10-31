@@ -50,7 +50,7 @@ def test_package_excludes_artifacts_and_keeps_sources(tmp_path):
         "a.db": b"x", "a.db-wal": b"x", "__pycache__/m.pyc": b"x", "pkg/__pycache__/m.pyc": b"x",
         ".pytest_cache/v": "x", ".pytest_tmp/t": "x", ".venv/lib/x.py": "x", ".git/config": "x",
         "obnova/admin-z.zip": b"x", "server-errors.log": "x", "old.zip": b"x", "htmlcov/index.html": "x",
-        "backup.zip.enc": b"x", ".coverage": b"x", ".env.local": "SECRET=1", "dist/old.zip": b"x",
+        "backup.zip.enc": b"x", "accounts.db.pre-upgrade-20261030-065119": b"x", ".coverage": b"x", ".env.local": "SECRET=1", "dist/old.zip": b"x",
     })
 
     out = tmp_path / "out" / "balik.zip"

@@ -1,3 +1,4 @@
+import threading
 from decimal import Decimal
 from datetime import date, timedelta
 
@@ -1531,7 +1532,21 @@ def invoice_peppol_xml(
 # ZMENA STAVU FAKTÚRY
 # =========================================
 
-@router.post("/invoices/{invoice_id}/status")
+# Zápis úhrady je "prečítaj zostatok -> skontroluj -> zapíš". Pri dvoch súčasných
+# požiadavkách (dvojklik, dve karty) by obe videli ten istý zostatok a súčet
+# úhrad by presiahol sumu faktúry. Appka beží v jednom procese (jedna replika),
+# preto stačí zámok v procese; drží sa od začiatku obsluhy po commit. Zámok je
+# závislosť, aby sa nadobudol pred prvým čítaním databázy v obsluhe.
+_payment_lock = threading.Lock()
+
+
+def payment_lock():
+
+    with _payment_lock:
+        yield
+
+
+@router.post("/invoices/{invoice_id}/status", dependencies=[Depends(payment_lock)])
 def update_invoice_status(
 
     invoice_id: int,
@@ -1692,7 +1707,7 @@ def _parse_payment_amount(raw: str) -> Decimal:
     return amount
 
 
-@router.post("/invoices/{invoice_id}/payments")
+@router.post("/invoices/{invoice_id}/payments", dependencies=[Depends(payment_lock)])
 def add_invoice_payment(
 
     invoice_id: int,
@@ -1773,7 +1788,7 @@ def add_invoice_payment(
     return RedirectResponse(url=f"/invoices/{invoice_id}", status_code=303)
 
 
-@router.post("/invoices/{invoice_id}/payments/{payment_id}/delete")
+@router.post("/invoices/{invoice_id}/payments/{payment_id}/delete", dependencies=[Depends(payment_lock)])
 def delete_invoice_payment(
 
     invoice_id: int,
